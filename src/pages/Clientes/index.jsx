@@ -140,14 +140,21 @@ export default function Clientes() {
         />
       </div>
 
-      <div className="filtros-clientes" style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-        <button onClick={() => setFiltro('todos')} className={`btn-aba ${filtro === 'todos' ? 'active-todos' : ''}`}>
-          Todos ({listaFinalClientes.length})
-        </button>
-        <button onClick={() => setFiltro('pendentes')} className={`btn-aba ${filtro === 'pendentes' ? 'active-alert' : ''}`}>
-          ⚠️ Inadimplentes
-        </button>
-      </div>
+      <div className="filtros-clientes">
+  <button 
+    onClick={() => setFiltro('todos')} 
+    className={`btn-filtro ${filtro === 'todos' ? 'active' : ''}`}
+  >
+    👥 Todos ({listaFinalClientes.length})
+  </button>
+  
+  <button 
+    onClick={() => setFiltro('pendentes')} 
+    className={`btn-filtro ${filtro === 'pendentes' ? 'active-alert' : ''}`}
+  >
+    ⚠️ Inadimplentes
+  </button>
+</div>
 
       <table className="clientes-table">
         <thead>

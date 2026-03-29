@@ -8,31 +8,57 @@
   align-items: center;
 }
 
-/* --- FILTROS (TODOS / INADIMPLENTES) --- */
+/* --- SEÇÃO DE FILTROS (ESTILO PREMIUM) --- */
 .filtros-clientes {
   display: flex;
   justify-content: center;
-  gap: 15px;
-  margin-bottom: 25px;
-  width: 100%;
+  align-items: center;
+  gap: 0; /* Vamos grudar os botões ou deixá-los como pílulas isoladas */
+  margin-bottom: 30px;
+  background: rgba(74, 93, 78, 0.05); /* Fundo bem suave verde */
+  padding: 8px;
+  border-radius: 50px; /* Formato de pílula para o container */
+  max-width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  border: 1px solid rgba(74, 93, 78, 0.1);
 }
 
 .btn-filtro {
-  background-color: white;
-  border: 2px solid var(--primary);
+  background-color: transparent;
+  border: none !important;
   color: var(--primary);
-  padding: 10px 25px !important;
-  font-size: 0.9rem !important;
-  font-weight: bold !important;
+  padding: 12px 28px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
   cursor: pointer;
-  border-radius: 30px !important;
-  transition: all 0.2s ease;
-  min-width: 140px;
+  border-radius: 40px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
+/* Estado Ativo: O botão ganha destaque total */
 .btn-filtro.active {
-  background-color: var(--primary);
+  background-color: var(--primary) !important; /* Verde Musgo */
   color: white !important;
+  box-shadow: 0 4px 15px rgba(74, 93, 78, 0.3);
+  transform: scale(1.05);
+}
+
+/* Efeito ao passar o mouse (PC) */
+.btn-filtro:hover:not(.active) {
+  background-color: rgba(74, 93, 78, 0.1);
+}
+
+/* Ajuste específico para o botão de Alerta/Inadimplentes */
+.btn-filtro.active-alert {
+  background-color: var(--danger) !important; /* Vermelho para Inadimplentes */
+  color: white !important;
+  box-shadow: 0 4px 15px rgba(198, 40, 40, 0.3);
 }
 
 /* --- BARRA DE BUSCA (CORRIGIDA PARA NÃO CORTAR TEXTO) --- */
