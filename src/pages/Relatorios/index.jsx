@@ -67,7 +67,6 @@ export default function RelatorioInadimplencia() {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <h1>Relatório de Cobrança (Vencidos)</h1>
-        <p>Dados sincronizados com o MongoDB Atlas.</p>
       </header>
 
       <div className="resumo-cards">
