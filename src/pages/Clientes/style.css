@@ -61,24 +61,40 @@
   box-shadow: 0 4px 15px rgba(198, 40, 40, 0.3);
 }
 
-/* --- BARRA DE BUSCA (CORRIGIDA PARA NÃO CORTAR TEXTO) --- */
-.input-busca {
+/* --- BARRA DE BUSCA COMPLETA E IMPONENTE --- */
+.busca-secao {
   width: 100%;
-  max-width: 600px;
-  padding: 12px 25px !important; 
-  border-radius: 30px !important;
-  border: 2px solid #ddd;
-  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: center;
+  padding: 0 10px; /* Garante que não cole na beirada da tela */
+}
+
+.input-busca {
+  width: 100% !important; /* Força ocupação total */
+  max-width: 800px !important; /* Aumentei o limite para PCs */
+  padding: 15px 25px !important; 
+  border-radius: 50px !important; /* Estilo pílula moderno */
+  border: 2px solid var(--primary); /* Borda na cor da Ótica */
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
   font-size: 1.1rem !important;
-  line-height: 1.5; 
+  line-height: 1.4;
   margin-bottom: 30px;
   background-color: white;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.3s ease;
 }
 
+/* Feedback visual ao clicar para digitar */
 .input-busca:focus {
-  border-color: var(--primary);
+  box-shadow: 0 8px 30px rgba(74, 93, 78, 0.2);
+  border-color: var(--accent); /* Muda para o amadeirado ao focar */
+  transform: translateY(-2px);
+}
+
+/* Ajuste específico para o texto interno (placeholder) */
+.input-busca::placeholder {
+  color: #999;
+  font-size: 1rem;
 }
 
 /* --- TABELA DE CLIENTES --- */
