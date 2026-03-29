@@ -130,6 +130,31 @@ export function FinanceiroProvider({ children }) {
       alert("Erro ao dar baixa.");
     }
   };
+  const estornarBaixaParcela = async (vendaId, numeroParcela) => {
+    if (!window.confirm("Deseja estornar o pagamento desta parcela?")) return;
+
+    try {
+      // No banco de dados, voltamos 'paga' para false e 'dataPagamento' para null
+      await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paga: false, dataPagamento: null })
+      });
+
+      // Atualiza o estado local para o site refletir a mudança na hora
+      setVendas(prev => prev.map(v => {
+        if (v._id === vendaId) {
+          const novasParcelas = v.listaParcelas.map(p => 
+            p.numero === numeroParcela ? { ...p, paga: false, dataPagamento: null } : p
+          );
+          return { ...v, listaParcelas: novasParcelas };
+        }
+        return v;
+      }));
+    } catch (err) {
+      alert("Erro ao estornar parcela.");
+    }
+  };
 
   const excluirVenda = async (vendaId) => {
     if (!window.confirm("Excluir venda do banco?")) return;
@@ -143,7 +168,7 @@ export function FinanceiroProvider({ children }) {
 
   return (
     <FinanceiroContext.Provider value={{ 
-      vendas, clientes, adicionarVenda, darBaixaParcela, 
+      vendas, clientes, adicionarVenda, darBaixaParcela, estornarBaixaParcela,
       excluirVenda, adicionarCliente, editarCliente, excluirCliente, carregando 
     }}>
       {children}
