@@ -1,0 +1,220 @@
+/* Container Principal */
+.dashboard-container {
+  padding: 40px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Georgia', serif;
+}
+
+/* Cabeçalho Ajustado para Filtros */
+.dashboard-header {
+  margin-bottom: 40px;
+  border-bottom: 2px solid var(--accent-light);
+  padding-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end; /* Alinha o título com os filtros */
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.dashboard-header h1 {
+  color: var(--primary);
+  margin: 0;
+  font-size: 2.8rem !important;
+}
+
+/* --- SEÇÃO DE FILTROS (NOVO) --- */
+.filtros-periodo {
+  display: flex;
+  gap: 15px;
+  background: var(--white);
+  padding: 15px 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--accent-light);
+}
+
+.filtro-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filtro-group label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--primary);
+  text-transform: uppercase;
+}
+
+.filtro-group select, 
+.filtro-group input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: sans-serif;
+  font-size: 1rem;
+  color: var(--text);
+  outline: none;
+}
+
+.filtro-group select:focus, 
+.filtro-group input:focus {
+  border-color: var(--primary);
+}
+
+/* Grade de Cards */
+.resumo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+  margin-bottom: 50px;
+}
+
+.card {
+  background: var(--white);
+  padding: 35px 25px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: none;
+  transition: transform 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-8px);
+}
+
+.card.entrada { border-top: 6px solid var(--success); }
+.card.inadimplencia { border-top: 6px solid var(--accent); }
+.card.saldo { border-top: 6px solid var(--primary); }
+
+.card h3 {
+  font-size: 0.9rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 0;
+}
+
+.card p {
+  font-size: 2.4rem !important;
+  font-weight: 800;
+  color: var(--text);
+  margin: 15px 0 0 0;
+  font-family: 'Segoe UI', sans-serif;
+  white-space: nowrap; 
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Lista de Movimentações Estilizada */
+.lista-recente {
+  background: var(--white);
+  padding: 30px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.lista-recente h3 {
+  color: var(--primary);
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+}
+
+.item-venda {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.venda-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.cliente-nome {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.venda-detalhe {
+  color: #777;
+  font-size: 0.9rem;
+}
+
+.venda-valor {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Status de Cor na Lista (NOVO) */
+.status-pago {
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-pendente {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.valor-total {
+  font-size: 1.2rem;
+  color: var(--text);
+}
+
+/* --- VERSÃO MOBILE --- */
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filtros-periodo {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .resumo-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .card p {
+    font-size: 2rem !important;
+  }
+
+  .item-venda {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .venda-valor {
+    text-align: left;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background: #fdfaf5;
+    padding: 8px;
+    border-radius: 4px;
+  }
+}
+
+.secao-titulo {
+  margin: 30px 0 15px;
+  font-size: 1.2rem;
+  color: #4a5d4e;
+  border-left: 5px solid #d2b48c;
+  padding-left: 10px;
+  font-family: 'Georgia', serif;
+}

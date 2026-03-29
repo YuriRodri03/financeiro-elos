@@ -1,0 +1,178 @@
+.clientes-container {
+  padding: 20px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Barra de busca moderna */
+.input-busca {
+  width: 100%;
+  padding: 15px 25px;
+  border-radius: 30px; /* Arredondado moderno */
+  border: 1px solid #ddd;
+  box-shadow: var(--shadow);
+  font-size: 1rem;
+  margin-bottom: 25px;
+}
+
+/* Tabela Responsiva */
+.clientes-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px; /* Espaço entre linhas */
+}
+
+.clientes-table th {
+  padding: 15px;
+  color: var(--primary);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.clientes-table tr {
+  background: var(--white);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.clientes-table td {
+  padding: 20px 15px;
+}
+
+.clientes-table tr td:first-child { border-radius: 12px 0 0 12px; }
+.clientes-table tr td:last-child { border-radius: 0 12px 12px 0; }
+
+/* --- MOBILE CLIENTES --- */
+@media (max-width: 768px) {
+  .clientes-table thead { display: none; } /* Esconde cabeçalho */
+  
+  .clientes-table, .clientes-table tbody, .clientes-table tr, .clientes-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .clientes-table tr {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  .clientes-table td {
+    text-align: right;
+    padding: 10px 5px;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+  }
+
+  .clientes-table td:before {
+    content: attr(data-label); /* Puxa o título da coluna */
+    position: absolute;
+    left: 5px;
+    font-weight: bold;
+    color: var(--primary);
+  }
+}
+
+/* Escurece o fundo atrás da janela */
+.modal-overlay {
+  position: fixed; /* Fica preso na tela, mesmo com scroll */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* Fundo preto semi-transparente */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* Garante que fica na frente de TUDO */
+  padding: 20px;
+}
+
+/* A Janela Branca em si */
+.modal-content {
+  background: var(--white);
+  width: 95%;
+  max-width: 800px;
+  max-height: 85vh; /* Não deixa a janela ser maior que a tela */
+  border-radius: var(--radius);
+  padding: 40px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+  animation: modalEntrada 0.3s ease-out; /* Efeito de pulo ao abrir */
+}
+
+/* Corpo do modal com scroll interno caso o histórico seja longo */
+.modal-body {
+  overflow-y: auto;
+  margin-top: 15px;
+  padding-right: 10px;
+}
+
+/* Botão de fechar (X) no topo */
+.btn-close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn-close:hover {
+  color: var(--danger);
+}
+
+/* Animação para a janela aparecer suavemente */
+@keyframes modalEntrada {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Ajuste para celular: modal ocupa quase a tela toda */
+@media (max-width: 600px) {
+  .modal-content {
+    padding: 20px;
+    max-height: 95vh;
+  }
+}
+
+.card p {
+  font-size: 2.5rem !important; /* Valores do dashboard bem grandes */
+  margin-top: 15px;
+}
+
+.clientes-table td {
+  padding: 20px !important; /* Mais espaço interno nas células */
+  font-size: 1.1rem;
+}
+
+.clientes-table th {
+  padding: 20px !important;
+  font-size: 1rem;
+  letter-spacing: 1px;
+}
+
+/* Barra de busca maior */
+.input-busca {
+  padding: 18px 25px !important;
+  font-size: 1.2rem !important;
+}
+
+.modal-content {
+  max-width: 800px !important; /* Janela mais larga */
+  width: 95%;
+  padding: 40px !important;
+}
+
+.linha-parcela {
+  padding: 15px 0 !important;
+  font-size: 1.2rem !important;
+}
+
+.btn-baixa {
+  padding: 10px 20px !important;
+}

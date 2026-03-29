@@ -1,0 +1,12 @@
+.status-badge.atrasado {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #c62828;
+}
+
+.status-badge.pendente {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
+/* Reaproveita os estilos do dashboard e tabela que já criamos */

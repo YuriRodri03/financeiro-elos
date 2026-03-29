@@ -1,0 +1,111 @@
+/* Reaproveitando a estrutura base, mas com toques específicos */
+
+.vendas-container {
+  padding: 40px 20px;
+  max-width: 900px; /* Um pouco mais largo para acomodar bem o formulário */
+  margin: 0 auto;
+}
+
+.vendas-header {
+  margin-bottom: 30px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 15px;
+}
+
+.vendas-header h1 {
+  color: var(--primary);
+  font-size: 2.2rem;
+}
+
+.vendas-header p {
+  color: var(--accent);
+  font-style: italic;
+}
+
+/* Formulário de Cadastro */
+.vendas-form {
+  background: var(--white);
+  padding: 40px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Duas colunas para campos menores */
+  gap: 25px;
+  border-top: 8px solid var(--primary); /* Detalhe em verde musgo no topo */
+}
+
+/* Campos que ocupam a linha toda (Nome, Endereço, Obs) */
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-group label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+.form-group input, 
+.form-group textarea {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  background-color: #fafafa;
+}
+
+.form-group input:focus, 
+.form-group textarea:focus {
+  border-color: var(--accent);
+  background-color: #fff;
+  outline: none;
+  box-shadow: 0 0 8px rgba(160, 82, 45, 0.1);
+}
+
+/* Estilização da área de Observações/Grau */
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+}
+
+/* Botão de Salvar Imponente */
+.btn-salvar {
+  grid-column: span 2;
+  background-color: var(--primary);
+  color: white;
+  padding: 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s;
+  margin-top: 10px;
+  box-shadow: 0 4px 10px rgba(74, 93, 78, 0.2);
+}
+
+.btn-salvar:hover {
+  background-color: var(--accent);
+}
+
+/* --- RESPONSIVIDADE PARA CELULAR --- */
+@media (max-width: 650px) {
+  .vendas-form {
+    grid-template-columns: 1fr; /* Tudo em uma coluna no celular */
+    padding: 20px;
+  }
+
+  .form-group.full-width {
+    grid-column: span 1;
+  }
+
+  .btn-salvar {
+    grid-column: span 1;
+    font-size: 1.1rem;
+  }
+}

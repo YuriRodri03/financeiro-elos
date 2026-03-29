@@ -1,0 +1,84 @@
+:root {
+  --primary: #4a5d4e;      /* Verde Musgo */
+  --primary-light: #f1f3f1;
+  --accent: #a0522d;       /* Amadeirado */
+  --accent-light: #fdfaf5; /* Creme fundo */
+  --text: #333d35;
+  --white: #ffffff;
+  --danger: #c62828;
+  --success: #2e7d32;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --radius: 12px;
+  
+  /* Aumentando a fonte base global */
+  font-size: 19px; 
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  line-height: 1.6;
+  font-family: 'Georgia', serif; /* Mantendo o estilo da ótica */
+  background-color: var(--accent-light);
+  color: var(--text);
+  margin: 0;
+}
+
+/* --- TÍTULOS ROBUSTOS --- */
+h1 { font-size: 2.8rem !important; margin-bottom: 20px; } 
+h2 { font-size: 2rem !important; }
+h3 { font-size: 1.5rem !important; }
+
+/* --- BOTÕES GRANDES E CONFORTÁVEIS --- */
+button {
+  padding: 14px 28px !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+/* --- AJUSTE PARA TABELAS E INPUTS (O QUE PARECIA PEQUENO) --- */
+
+/* Aumenta o tamanho de todos os campos de digitação */
+input, select, textarea {
+  font-size: 1.1rem !important;
+  padding: 15px !important;
+  border-radius: 8px !important;
+  width: 100%;
+}
+
+/* Dá "respiro" para as tabelas de clientes e histórico */
+table td, table th {
+  padding: 18px 20px !important; /* Células mais altas */
+  font-size: 1.1rem;
+}
+
+/* Aumenta os cards do Dashboard */
+.card {
+  padding: 30px !important;
+}
+
+.card p {
+  font-size: 2.8rem !important; /* Números do financeiro bem visíveis */
+}
+
+/* Ajuste de largura máxima para não ficar tudo esticado demais em telas ultra-wide */
+.dashboard-container, .clientes-container, .vendas-container {
+  max-width: 1200px !important;
+  padding: 40px 20px !important;
+}
+
+/* Estilo para a barra de busca ficar imponente */
+.input-busca {
+  padding: 20px 30px !important;
+  font-size: 1.3rem !important;
+  border-width: 2px !important;
+}
