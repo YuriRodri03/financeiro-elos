@@ -130,15 +130,15 @@ export default function Clientes() {
         <h1>Carteira de Clientes - Ótica Elos</h1>
       </header>
 
-      <div className="busca-secao" style={{ marginBottom: '20px' }}>
-        <input 
-          type="text" 
-          className="input-busca"
-          placeholder="🔍 Pesquisar por nome ou CPF..." 
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
-      </div>
+      <div className="busca-secao">
+  <input 
+    type="text" 
+    className="input-busca"
+    placeholder="🔍 Buscar por nome ou CPF do cliente..." 
+    value={busca}
+    onChange={(e) => setBusca(e.target.value)}
+  />
+</div>
 
       <div className="filtros-clientes">
   <button 
