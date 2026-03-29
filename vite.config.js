@@ -15,17 +15,19 @@ export default defineConfig({
         background_color: '#fdfaf5',
         display: 'standalone', // Faz parecer um app nativo
         icons: [
-          {
-            src: 'icon-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'icon-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
+  {
+    src: 'icon-192x192.png',
+    sizes: '192x192',
+    type: 'image/png',
+    purpose: 'any' 
+  },
+  {
+    src: 'icon-512x512.png',
+    sizes: '512x512',
+    type: 'image/png',
+    purpose: 'maskable' // Isso ajuda o ícone a ficar bonito no Android (sem bordas brancas)
+  }
+]
       }
     })
   ]
