@@ -9,160 +9,40 @@
   --success: #2e7d32;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   --radius: 12px;
-  
-  /* Aumentando a fonte base global */
-  font-size: 19px; 
+  font-size: 18px; 
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   line-height: 1.6;
-  font-family: 'Georgia', serif; /* Mantendo o estilo da ótica */
+  font-family: 'Georgia', serif;
   background-color: var(--accent-light);
   color: var(--text);
-  margin: 0;
 }
 
-/* --- TÍTULOS ROBUSTOS --- */
-h1 { font-size: 2.8rem !important; margin-bottom: 20px; } 
-h2 { font-size: 2rem !important; }
-h3 { font-size: 1.5rem !important; }
-
-/* --- BOTÕES GRANDES E CONFORTÁVEIS --- */
-button {
-  padding: 14px 28px !important;
-  font-size: 1rem !important;
-  font-weight: 600 !important;
-  border-radius: 8px !important;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-button:active {
-  transform: scale(0.96);
-}
-
-/* --- AJUSTE PARA TABELAS E INPUTS (O QUE PARECIA PEQUENO) --- */
-
-/* Aumenta o tamanho de todos os campos de digitação */
-input, select, textarea {
-  font-size: 1.1rem !important;
-  padding: 15px !important;
-  border-radius: 8px !important;
-  width: 100%;
-}
-
-/* Dá "respiro" para as tabelas de clientes e histórico */
-table td, table th {
-  padding: 18px 20px !important; /* Células mais altas */
-  font-size: 1.1rem;
-}
-
-/* Aumenta os cards do Dashboard */
-.card {
-  padding: 30px !important;
-}
-
-.card p {
-  font-size: 2.8rem !important; /* Números do financeiro bem visíveis */
-}
-
-/* Ajuste de largura máxima para não ficar tudo esticado demais em telas ultra-wide */
-.dashboard-container, .clientes-container, .vendas-container {
-  max-width: 1200px !important;
-  padding: 40px 20px !important;
-}
-
-/* Estilo para a barra de busca ficar imponente */
-.input-busca {
-  padding: 20px 30px !important;
-  font-size: 1.3rem !important;
-  border-width: 2px !important;
-}
-
-/* --- AJUSTE ESTRUTURAL DO TOPO (NAVBAR) --- */
-
-/* 1. Força o cabeçalho a empilhar os itens no mobile */
-.navbar-container, .app-header, header { 
-  display: flex;
-  flex-direction: column; 
-  align-items: center;
-  gap: 20px; /* Espaço entre o nome da loja e as abas */
-  padding: 20px 10px !important;
-  text-align: center;
-}
-
-/* 2. Organiza os botões das abas para não encavalarem */
-.nav-menu, .abas-container, .filtros-clientes {
-  display: flex;
-  flex-wrap: wrap; /* Faz as abas pularem de linha se não couberem */
-  justify-content: center;
-  gap: 12px !important;
-  width: 100%;
-}
-
-/* 3. Estilo dos botões de aba para mobile */
-.btn-aba, .nav-link, button[class*="btn-aba"] {
-  flex: 1 1 auto; /* Permite que o botão cresça conforme o texto */
-  min-width: 140px; /* Garante que não fiquem finos demais */
-  padding: 12px 15px !important;
-  font-size: 0.9rem !important;
-  white-space: nowrap; /* Impede que o texto da aba quebre */
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-/* --- AJUSTES ESPECÍFICOS PARA CELULAR (Telas menores que 600px) --- */
-@media (max-width: 600px) {
-  /* Diminui um pouco os títulos que estavam gigantes (2.8rem) no celular */
-  h1 { font-size: 1.8rem !important; }
-  h2 { font-size: 1.4rem !important; }
-  
-  /* Faz as abas ficarem em duas colunas bem alinhadas */
-  .nav-menu, .filtros-clientes, .abas-container {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr; /* Duas colunas iguais */
-    gap: 10px !important;
-  }
-
-  /* Ajuste de tabelas para não quebrar o layout */
-  .clientes-table, table {
-    display: block;
-    overflow-x: auto; /* Permite deslizar a tabela para o lado */
-    white-space: nowrap;
-  }
-
-  /* Ajuste dos cards do Dashboard no mobile */
-  .resumo-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-  }
-}
-
-/* Cabeçalho da Ótica */
+/* --- NAVEGAÇÃO (NAVBAR) --- */
 .navbar-container {
   display: flex;
-  flex-direction: column; /* No mobile, empilha um em cima do outro */
+  flex-direction: column; /* Empilha Nome e Menu */
   align-items: center;
-  padding: 20px !important;
+  justify-content: center;
+  padding: 20px;
   background-color: var(--primary);
   gap: 15px;
+  width: 100%;
 }
 
 .logo-loja {
-  font-family: 'Georgia', serif;
   font-size: 1.8rem;
   font-weight: bold;
   color: var(--white);
+  text-align: center;
 }
 
-/* Menu de Abas */
 .nav-menu {
   display: grid;
-  grid-template-columns: 1fr 1fr; /* 2 colunas no celular */
+  grid-template-columns: 1fr 1fr; /* Duas colunas no mobile */
   gap: 10px;
   width: 100%;
   max-width: 500px;
@@ -170,34 +50,93 @@ table td, table th {
 
 .nav-link {
   background-color: rgba(255, 255, 255, 0.1);
-  color: #d2b48c !important; /* Cor amadeirada */
+  color: #d2b48c !important;
   text-decoration: none;
   font-weight: bold;
-  padding: 12px !important;
+  padding: 12px;
   border-radius: 8px;
   text-align: center;
-  font-size: 0.85rem !important;
+  font-size: 0.8rem;
 }
 
 .btn-logout {
-  grid-column: span 2; /* O botão de sair ocupa a linha toda */
+  grid-column: span 2; /* Sair ocupa a largura toda no grid */
   background-color: #ffadad !important;
   color: #c62828 !important;
-  margin-top: 5px;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: bold;
 }
 
-/* Quando estiver no Computador (Tela larga) */
+/* --- CONTEÚDO PRINCIPAL (DASHBOARD, CLIENTES, ETC) --- */
+.dashboard-container, .clientes-container, .vendas-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centraliza o título e o conteúdo */
+  text-align: center;
+}
+
+h1 { 
+  font-size: 2rem !important; 
+  margin-bottom: 20px; 
+  width: 100%;
+  text-align: center; /* Garante que o Painel Financeiro não alinhe à direita */
+}
+
+/* Grids de cards no Dashboard */
+.resumo-cards {
+  display: grid;
+  grid-template-columns: 1fr; /* Um card por linha no mobile */
+  gap: 15px;
+  width: 100%;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: 100%;
+}
+
+/* --- AJUSTES PARA TELAS GRANDES (PC) --- */
 @media (min-width: 768px) {
   .navbar-container {
-    flex-direction: row; /* Volta a ser uma linha no PC */
+    flex-direction: row;
     justify-content: space-between;
   }
+  
   .nav-menu {
     display: flex;
     width: auto;
   }
+
+  .nav-link {
+    min-width: 120px;
+  }
+
+  .resumo-cards {
+    grid-template-columns: 1fr 1fr 1fr; /* Três cards por linha no PC */
+  }
+
   .btn-logout {
     grid-column: auto;
-    margin-top: 0;
   }
+}
+
+/* Tabelas Responsivas */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
 }
