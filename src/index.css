@@ -12,74 +12,81 @@
   font-size: 18px; 
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+}
 
 body {
   line-height: 1.6;
   font-family: 'Georgia', serif;
   background-color: var(--accent-light);
   color: var(--text);
+  overflow-x: hidden; /* Evita que o site "dance" para os lados no celular */
 }
 
-/* --- NAVEGAÇÃO (NAVBAR) --- */
+/* --- NAVEGAÇÃO (ESTILO DASHBOARD | CLIENTES) --- */
 .navbar-container {
   display: flex;
-  flex-direction: column; /* Empilha Nome e Menu */
+  flex-direction: column; 
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 10px;
   background-color: var(--primary);
-  gap: 15px;
   width: 100%;
+  border-bottom: 3px solid var(--accent);
 }
 
 .logo-loja {
-  font-size: 1.8rem;
+  font-size: 2rem;
   font-weight: bold;
   color: var(--white);
+  margin-bottom: 12px;
   text-align: center;
 }
 
-/* Menu de Abas - O segredo para não vazar */
 .nav-menu {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* Duas colunas iguais ocupando 50% cada */
-  gap: 10px;
-  width: 100%; /* Ocupa a largura total disponível */
-  max-width: 100vw; /* Garante que não ultrapasse a largura do visor */
-  padding: 0 10px; /* Margem interna para os botões não colarem na borda do celular */
-  box-sizing: border-box;
-}
-
-.nav-link {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #d2b48c !important;
-  text-decoration: none;
-  font-weight: bold;
-  padding: 15px 5px !important; /* Mais altura para o toque, menos largura */
-  border-radius: 8px;
-  text-align: center;
-  font-size: 0.8rem !important;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap; /* Se não couber tudo em uma linha, ele pula para a de baixo centralizado */
   justify-content: center;
-  min-width: 0; /* Permite que o botão encolha se necessário */
-  overflow: hidden; /* Evita que o texto empurre o botão para fora */
-  text-overflow: ellipsis;
-}
-
-.btn-logout {
-  grid-column: span 2; /* Ocupa as duas colunas, ficando centralizado embaixo */
-  background-color: #ffadad !important;
-  color: #c62828 !important;
-  border: none;
-  padding: 12px !important;
-  border-radius: 8px;
-  font-weight: bold;
+  align-items: center;
+  gap: 8px;
   width: 100%;
 }
 
-/* --- CONTEÚDO PRINCIPAL (DASHBOARD, CLIENTES, ETC) --- */
+.nav-link {
+  color: #d2b48c !important; /* Tom amadeirado claro */
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.85rem;
+  padding: 5px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+/* Adiciona a barra separadora entre os links */
+.nav-link:not(:last-child)::after {
+  content: "|";
+  margin-left: 10px;
+  color: rgba(210, 180, 140, 0.4);
+  font-weight: normal;
+}
+
+.btn-logout {
+  background: none !important;
+  border: 1px solid rgba(255, 173, 173, 0.3) !important;
+  color: #ffadad !important;
+  font-weight: bold;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-left: 10px;
+  padding: 4px 10px !important;
+  border-radius: 4px;
+}
+
+/* --- CONTEÚDO E TÍTULOS --- */
 .dashboard-container, .clientes-container, .vendas-container {
   width: 100%;
   max-width: 1200px;
@@ -87,66 +94,73 @@ body {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  align-items: center; /* Centraliza o título e o conteúdo */
-  text-align: center;
+  align-items: center;
 }
 
 h1 { 
-  font-size: 2rem !important; 
-  margin-bottom: 20px; 
+  font-size: 1.8rem !important; 
+  margin: 25px 0; 
   width: 100%;
-  text-align: center; /* Garante que o Painel Financeiro não alinhe à direita */
+  text-align: center;
+  color: var(--primary);
 }
 
-/* Grids de cards no Dashboard */
+/* --- CARDS DO DASHBOARD --- */
 .resumo-cards {
   display: grid;
-  grid-template-columns: 1fr; /* Um card por linha no mobile */
+  grid-template-columns: 1fr; /* Um card por linha no celular */
   gap: 15px;
   width: 100%;
 }
 
+@media (min-width: 768px) {
+  .resumo-cards {
+    grid-template-columns: 1fr 1fr 1fr; /* Três cards no PC */
+  }
+}
+
 .card {
   background: white;
-  padding: 20px;
+  padding: 25px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.card h3 { font-size: 1.1rem; color: #666; margin-bottom: 10px; }
+.card p { font-size: 2rem; font-weight: bold; color: var(--primary); }
+
+/* --- FORMULÁRIOS E TABELAS --- */
+input, select, textarea {
+  font-size: 1rem !important;
+  padding: 12px !important;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 15px;
   width: 100%;
 }
 
-/* --- AJUSTES PARA TELAS GRANDES (PC) --- */
-@media (min-width: 768px) {
-  .navbar-container {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-  
-  .nav-menu {
-    display: flex;
-    width: auto;
-  }
-
-  .nav-link {
-    min-width: 120px;
-  }
-
-  .resumo-cards {
-    grid-template-columns: 1fr 1fr 1fr; /* Três cards por linha no PC */
-  }
-
-  .btn-logout {
-    grid-column: auto;
-  }
-}
-
-/* Tabelas Responsivas */
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: auto; /* Scroll lateral para tabelas no celular */
+  margin-top: 20px;
+  background: white;
+  border-radius: 8px;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
+  min-width: 600px; /* Garante que a tabela não esprema demais */
+}
+
+table th, table td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+table th {
+  background-color: var(--primary-light);
+  color: var(--primary);
 }
