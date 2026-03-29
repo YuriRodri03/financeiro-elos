@@ -3,7 +3,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 const FinanceiroContext = createContext();
 
 // Ajustado para bater com as rotas do server.js
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
 
 export function FinanceiroProvider({ children }) {
   const [vendas, setVendas] = useState([]);
