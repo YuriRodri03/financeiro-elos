@@ -66,7 +66,6 @@ export default function CadastroClientes() {
     <div className="vendas-container"> 
       <header className="vendas-header">
         <h1>Novo Cadastro - Ótica Elos</h1>
-        <p>Dados sincronizados em tempo real com o MongoDB Atlas.</p>
       </header>
 
       <form className="vendas-form" onSubmit={salvar}>

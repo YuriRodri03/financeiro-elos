@@ -81,7 +81,6 @@ export default function Vendas() {
     <div className="vendas-container">
       <header className="vendas-header">
         <h1>Nova Venda - Ótica Elos</h1>
-        <p>Busca automática de cliente por CPF integrada ao MongoDB.</p>
       </header>
 
       <form className="vendas-form" onSubmit={handleSalvar}>

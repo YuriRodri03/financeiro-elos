@@ -39,13 +39,21 @@
 .input-busca {
   width: 100%;
   max-width: 600px;
-  padding: 18px 25px !important;
+  /* Reduzi um pouco o padding vertical para o texto não subir */
+  padding: 12px 25px !important; 
   border-radius: 30px !important;
-  border: 1px solid #ddd;
+  border: 2px solid #ddd; /* Aumentei a borda para ficar mais visível */
   box-shadow: var(--shadow);
   font-size: 1.1rem !important;
+  line-height: 1.5; /* Garante que o texto tenha espaço para aparecer */
   margin-bottom: 30px;
   background-color: white;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.input-busca:focus {
+  border-color: var(--primary);
 }
 
 /* --- TABELA DE CLIENTES --- */

@@ -105,9 +105,21 @@ export default function Clientes() {
 
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? c.totalGeralDevido > 0.01 : true;
+    
     const termo = busca.toLowerCase();
-    const passaBusca = c.nome.toLowerCase().includes(termo) || c.cpf.includes(termo);
-    return passaFiltroStatus && passaBusca;
+    
+    // Criamos uma versão "limpa" (só números) do que foi digitado e do CPF do banco
+    const termoApenasNumeros = termo.replace(/\D/g, '');
+    const cpfBancoApenasNumeros = c.cpf.replace(/\D/g, '');
+
+    const passaBuscaNome = c.nome.toLowerCase().includes(termo);
+    
+    // Se o usuário digitou números, buscamos no CPF limpo
+    // Se digitou letras, buscamos apenas no Nome
+    const passaBuscaCPF = cpfBancoApenasNumeros.includes(termoApenasNumeros);
+
+    // Retorna true se passar no filtro de status E (no nome OU no cpf)
+    return passaFiltroStatus && (passaBuscaNome || (termoApenasNumeros !== '' && passaBuscaCPF));
   });
 
   if (carregando) return null; // Evita erros de cálculo enquanto os dados chegam
@@ -116,7 +128,6 @@ export default function Clientes() {
     <div className="clientes-container">
       <header className="clientes-header">
         <h1>Carteira de Clientes - Ótica Elos</h1>
-        <p>Dados de contato e histórico financeiro integrados na nuvem</p>
       </header>
 
       <div className="busca-secao" style={{ marginBottom: '20px' }}>
