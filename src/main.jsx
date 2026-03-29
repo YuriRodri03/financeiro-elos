@@ -88,17 +88,17 @@ function AppContent() {
   // PASSO 3: Sistema liberado com dados carregados
   return (
     <Router>
-      <nav style={navStyle}>
-        <div className="logo" style={{fontSize: '1.5rem', fontWeight: 'bold'}}>
+      <nav className="navbar-container">
+        <div className="logo-loja">
           Ótica Elos
         </div>
-        <div className="links">
-          <Link to="/" style={linkStyle}>Dashboard</Link>
-          <Link to="/vendas" style={linkStyle}>Nova Venda</Link>
-          <Link to="/cadastro-clientes" style={linkStyle}>Novo Cliente</Link> 
-          <Link to="/clientes" style={linkStyle}>Clientes</Link>
-          <Link to="/relatorios" style={linkStyle}>Cobrança</Link>
-          <button onClick={realizarLogout} style={{...linkStyle, color: '#ffadad', marginLeft: '30px'}}>Sair</button>
+        <div className="nav-menu">
+          <Link to="/" className="nav-link">Dashboard</Link>
+          <Link to="/vendas" className="nav-link">Nova Venda</Link>
+          <Link to="/cadastro-clientes" className="nav-link">Novo Cliente</Link> 
+          <Link to="/clientes" className="nav-link">Clientes</Link>
+          <Link to="/relatorios" className="nav-link">Cobrança</Link>
+          <button onClick={realizarLogout} className="btn-logout">Sair</button>
         </div>
       </nav>
 

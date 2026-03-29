@@ -141,3 +141,63 @@ table td, table th {
     gap: 15px;
   }
 }
+
+/* Cabeçalho da Ótica */
+.navbar-container {
+  display: flex;
+  flex-direction: column; /* No mobile, empilha um em cima do outro */
+  align-items: center;
+  padding: 20px !important;
+  background-color: var(--primary);
+  gap: 15px;
+}
+
+.logo-loja {
+  font-family: 'Georgia', serif;
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: var(--white);
+}
+
+/* Menu de Abas */
+.nav-menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2 colunas no celular */
+  gap: 10px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.nav-link {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #d2b48c !important; /* Cor amadeirada */
+  text-decoration: none;
+  font-weight: bold;
+  padding: 12px !important;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.85rem !important;
+}
+
+.btn-logout {
+  grid-column: span 2; /* O botão de sair ocupa a linha toda */
+  background-color: #ffadad !important;
+  color: #c62828 !important;
+  margin-top: 5px;
+}
+
+/* Quando estiver no Computador (Tela larga) */
+@media (min-width: 768px) {
+  .navbar-container {
+    flex-direction: row; /* Volta a ser uma linha no PC */
+    justify-content: space-between;
+  }
+  .nav-menu {
+    display: flex;
+    width: auto;
+  }
+  .btn-logout {
+    grid-column: auto;
+    margin-top: 0;
+  }
+}
