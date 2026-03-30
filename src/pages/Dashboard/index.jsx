@@ -113,7 +113,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card inadimplencia clicavel" onClick={() => setModalAberto(true)} style={{ cursor: 'pointer' }}>
-          <h3>A Receber (No Mês) 🔍</h3>
+          <h3>A Receber (No Mês)</h3>
           <p>R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
           <small>Clique para ver detalhes</small>
         </div>
