@@ -134,7 +134,7 @@ export default function CadastroClientes() {
         </div>
 
         <button type="submit" className="btn-salvar">
-          Finalizar e Salvar na Nuvem
+          Finalizar Cadastro
         </button>
       </form>
     </div>

@@ -10,11 +10,11 @@ export default function Vendas() {
     cpf: '',
     produto: '',
     valorTotal: '',
-    valorEntrada: '0', // Novo campo para entrada
+    valorEntrada: '', // Iniciamos vazio para melhor UX com a máscara
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
     dataVenda: new Date().toISOString().split('T')[0],
-    dataPrimeiraParcela: new Date().toISOString().split('T')[0] // Novo campo para flexibilidade de data
+    dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
 
   const aplicarMascaraCPF = (valor) => {
@@ -25,13 +25,21 @@ export default function Vendas() {
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
+  // Nova função para formatar como Moeda (R$)
+  const aplicarMascaraMoeda = (valor) => {
+    let v = valor.replace(/\D/g, '');
+    v = (Number(v) / 100).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+    return v;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
-      
-      // Busca o cliente no estado global
       const clienteExistente = clientes.find(c => c.cpf === valorFormatado);
       
       setVenda({ 
@@ -39,13 +47,31 @@ export default function Vendas() {
         cpf: valorFormatado,
         cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente)
       });
-    } else {
+    } 
+    // Aplica máscara de dinheiro nos campos de valor
+    else if (name === 'valorTotal' || name === 'valorEntrada') {
+      const valorMascarado = aplicarMascaraMoeda(value);
+      setVenda({ ...venda, [name]: valorMascarado });
+    } 
+    else {
       setVenda({ ...venda, [name]: value });
     }
   };
 
   const handleSalvar = async (e) => {
     e.preventDefault();
+
+    // Convertemos os valores de "R$ 1.234,56" para número puro (1234.56) antes de enviar
+    const limparMoeda = (valor) => {
+      if (!valor) return 0;
+      return Number(valor.replace(/\D/g, '')) / 100;
+    };
+
+    const dadosParaSalvar = {
+      ...venda,
+      valorTotal: limparMoeda(venda.valorTotal),
+      valorEntrada: limparMoeda(venda.valorEntrada)
+    };
 
     if (!venda.cliente || !venda.valorTotal || !venda.cpf) {
       alert("Por favor, preencha todos os campos obrigatórios.");
@@ -58,17 +84,16 @@ export default function Vendas() {
     }
 
     try {
-      await adicionarVenda(venda);
+      await adicionarVenda(dadosParaSalvar);
       
       alert("Venda registrada com sucesso! 👓");
 
-      // Reseta o formulário
       setVenda({
         cliente: '',
         cpf: '',
         produto: '',
         valorTotal: '',
-        valorEntrada: '0',
+        valorEntrada: '',
         parcelas: 1,
         metodoPagamento: 'Dinheiro',
         dataVenda: new Date().toISOString().split('T')[0],
@@ -121,20 +146,25 @@ export default function Vendas() {
         </div>
 
         <div className="form-group">
-          <label>Valor Total da Venda (R$)</label>
-          <input type="number" name="valorTotal" value={venda.valorTotal} step="0.01" onChange={handleChange} required placeholder="0,00" />
+          <label>Valor Total da Venda</label>
+          <input 
+            type="text" 
+            name="valorTotal" 
+            value={venda.valorTotal} 
+            onChange={handleChange} 
+            required 
+            placeholder="R$ 0,00" 
+          />
         </div>
 
-        {/* Novo campo: Valor de Entrada */}
         <div className="form-group">
-          <label>Valor de Entrada (Sinal R$)</label>
+          <label>Valor de Entrada</label>
           <input 
-            type="number" 
+            type="text" 
             name="valorEntrada" 
             value={venda.valorEntrada} 
-            step="0.01" 
             onChange={handleChange} 
-            placeholder="0,00" 
+            placeholder="R$ 0,00" 
           />
         </div>
 
@@ -153,7 +183,6 @@ export default function Vendas() {
           <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} />
         </div>
 
-        {/* Campo Condicional: Só aparece se for Boleto/Crediário */}
         {venda.metodoPagamento === 'Boleto / Crediário' && (
           <div className="form-group">
             <label>Data da 1ª Parcela</label>
@@ -166,7 +195,7 @@ export default function Vendas() {
           </div>
         )}
 
-        <button type="submit" className="btn-salvar">Finalizar e Gravar na Nuvem</button>
+        <button type="submit" className="btn-salvar">Finalizar</button>
       </form>
     </div>
   );
