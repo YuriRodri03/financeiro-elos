@@ -301,45 +301,80 @@
 /* --- SEÇÃO DE ANÁLISE ECONÔMICA --- */
 .analise-economica {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* Força 3 colunas no computador, mas permite o auto-fit se a tela diminuir */
+  grid-template-columns: repeat(3, 1fr); 
   gap: 20px;
   margin-bottom: 40px;
 }
 
 .card-analise {
-  background: #fdfaf5; /* Tom creme suave para diferenciar dos cards de valores */
-  padding: 20px;
+  background: #fdfaf5; 
+  padding: 25px;
   border-radius: 12px;
   border: 1px dashed #d2b48c;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between; /* Melhora a distribuição interna */
+  min-height: 140px; /* Garante que todos tenham a mesma altura */
+  transition: all 0.3s ease;
+}
+
+.card-analise:hover {
+  background: #f7f1e7;
+  border-style: solid;
 }
 
 .card-analise h4 {
   margin: 0 0 10px 0;
   color: #4a5d4e;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-analise strong {
+  font-family: 'Segoe UI', sans-serif;
+  display: block;
+  margin: 5px 0;
 }
 
 .card-analise p {
-  font-size: 0.85rem !important;
-  color: #666;
-  margin-top: 10px;
+  font-size: 0.8rem !important;
+  color: #777;
+  margin-top: auto; /* Empurra o texto descritivo para o final */
+  line-height: 1.2;
 }
 
 /* Barra de Progresso */
 .progresso-container {
   width: 100%;
-  height: 100%;
   background: #e0e0e0;
   border-radius: 10px;
-  height: 10px;
+  height: 8px;
   overflow: hidden;
+  margin: 10px 0;
 }
 
 .progresso-barra {
   height: 100%;
-  transition: width 0.5s ease-in-out;
+  background-color: #4a5d4e;
+  transition: width 0.8s ease-in-out;
+}
+
+/* --- AJUSTE RESPONSIVO PARA A ANÁLISE --- */
+@media (max-width: 1024px) {
+  .analise-economica {
+    grid-template-columns: repeat(2, 1fr); /* 2 colunas em tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .analise-economica {
+    grid-template-columns: 1fr; /* 1 coluna no celular */
+  }
+  
+  .card-analise {
+    min-height: auto;
+    padding: 20px;
+  }
 }
