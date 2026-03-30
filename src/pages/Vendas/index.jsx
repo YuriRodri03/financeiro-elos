@@ -10,7 +10,7 @@ export default function Vendas() {
     cpf: '',
     produto: '',
     valorTotal: '',
-    valorEntrada: '', // Iniciamos vazio para melhor UX com a máscara
+    valorEntrada: '', 
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
     dataVenda: new Date().toISOString().split('T')[0],
@@ -25,9 +25,9 @@ export default function Vendas() {
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
-  // Nova função para formatar como Moeda (R$)
   const aplicarMascaraMoeda = (valor) => {
     let v = valor.replace(/\D/g, '');
+    if (!v) return '';
     v = (Number(v) / 100).toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -48,7 +48,6 @@ export default function Vendas() {
         cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente)
       });
     } 
-    // Aplica máscara de dinheiro nos campos de valor
     else if (name === 'valorTotal' || name === 'valorEntrada') {
       const valorMascarado = aplicarMascaraMoeda(value);
       setVenda({ ...venda, [name]: valorMascarado });
@@ -61,7 +60,6 @@ export default function Vendas() {
   const handleSalvar = async (e) => {
     e.preventDefault();
 
-    // Convertemos os valores de "R$ 1.234,56" para número puro (1234.56) antes de enviar
     const limparMoeda = (valor) => {
       if (!valor) return 0;
       return Number(valor.replace(/\D/g, '')) / 100;
@@ -78,14 +76,8 @@ export default function Vendas() {
       return;
     }
 
-    if (venda.cpf.length < 14) {
-      alert("O CPF digitado está incompleto.");
-      return;
-    }
-
     try {
       await adicionarVenda(dadosParaSalvar);
-      
       alert("Venda registrada com sucesso! 👓");
 
       setVenda({
@@ -131,7 +123,7 @@ export default function Vendas() {
             value={venda.cliente} 
             onChange={handleChange} 
             required 
-            placeholder={venda.cpf.length === 14 ? "Cliente encontrado!" : "Digite ou busque pelo CPF"} 
+            placeholder="Nome Completo" 
           />
         </div>
 
@@ -183,19 +175,21 @@ export default function Vendas() {
           <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} />
         </div>
 
+        {/* OPÇÃO DE DATA PERSONALIZADA PARA BOLETO */}
         {venda.metodoPagamento === 'Boleto / Crediário' && (
           <div className="form-group">
-            <label>Data da 1ª Parcela</label>
+            <label style={{color: 'var(--primary)', fontWeight: 'bold'}}>🗓️ Vencimento da 1ª Parcela</label>
             <input 
               type="date" 
               name="dataPrimeiraParcela" 
               value={venda.dataPrimeiraParcela} 
-              onChange={handleChange} 
+              onChange={handleChange}
+              style={{borderColor: 'var(--primary)', backgroundColor: '#f0f4f0'}}
             />
           </div>
         )}
 
-        <button type="submit" className="btn-salvar">Finalizar</button>
+        <button type="submit" className="btn-salvar">Finalizar Venda</button>
       </form>
     </div>
   );
