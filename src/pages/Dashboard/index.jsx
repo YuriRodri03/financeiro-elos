@@ -3,7 +3,7 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import './style.css';
 
 export default function Dashboard() {
-  const { vendas, carregando } = useFinanceiro();
+  const { vendas, despesas, carregando } = useFinanceiro();
 
   const dataAtual = new Date();
   const [mesFiltro, setMesFiltro] = useState(dataAtual.getMonth() + 1);
@@ -19,10 +19,7 @@ export default function Dashboard() {
     let lista = [];
     vendas.forEach(venda => {
       (venda.listaParcelas || []).forEach(p => {
-        // Só olhamos parcelas não pagas
         if (!p.paga) {
-          // IMPORTANTE: Agora usamos o vencimentoOriginal que criamos no Context
-          // Se o campo não existir (vendas antigas), ele usa a lógica antiga de fallback
           const dataVenc = p.vencimentoOriginal 
             ? new Date(p.vencimentoOriginal + 'T00:00:00')
             : (() => {
@@ -57,6 +54,17 @@ export default function Dashboard() {
     return acc + parcelasPagasNoMes.reduce((soma, p) => soma + p.valor, 0);
   }, 0);
 
+  const totalDespesasMes = despesas.reduce((acc, d) => {
+    const dataVenc = new Date(d.vencimento + 'T00:00:00');
+    if ((dataVenc.getMonth() + 1) === Number(mesFiltro) && 
+        dataVenc.getFullYear() === Number(anoFiltro)) {
+      return acc + d.valor;
+    }
+    return acc;
+  }, 0);
+
+  const saldoLiquidoMes = totalNoCaixaMes - totalDespesasMes;
+
   const vendasNovasNoMes = vendas.filter(v => {
     const dataV = new Date(v.dataVenda + 'T00:00:00');
     return (dataV.getMonth() + 1) === Number(mesFiltro) && 
@@ -64,6 +72,15 @@ export default function Dashboard() {
   });
 
   const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal), 0);
+
+  // --- ANÁLISES ECONÔMICAS (MÉTRICAS DE GESTÃO) ---
+  
+  const margemCaixa = volumeVendasMes > 0 ? (totalNoCaixaMes / volumeVendasMes) * 100 : 0;
+  
+  const faltamParaCusto = totalDespesasMes - totalNoCaixaMes;
+  
+  const totalEsperadoMes = totalNoCaixaMes + totalAReceberMes;
+  const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberMes / totalEsperadoMes) * 100 : 0;
 
   // --- CÁLCULOS ANUAIS ---
 
@@ -74,6 +91,11 @@ export default function Dashboard() {
       return dataPagto.getFullYear() === Number(anoFiltro);
     });
     return acc + parcelasPagasNoAno.reduce((soma, p) => soma + p.valor, 0);
+  }, 0);
+
+  const totalDespesasAno = despesas.reduce((acc, d) => {
+    const dataVenc = new Date(d.vencimento + 'T00:00:00');
+    return dataVenc.getFullYear() === Number(anoFiltro) ? acc + d.valor : acc;
   }, 0);
 
   const volumeVendasAno = vendas.reduce((acc, v) => {
@@ -105,22 +127,66 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <h2 className="secao-titulo">Resumo Mensal ({mesFiltro}/{anoFiltro})</h2>
+      <h2 className="secao-titulo">Fluxo de Caixa Mensal ({mesFiltro}/{anoFiltro})</h2>
       <section className="resumo-cards">
         <div className="card entrada">
-          <h3>Recebido no Mês</h3>
+          <h3>Recebido (Entradas)</h3>
           <p>R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
         </div>
 
+        <div className="card saida" style={{ borderLeft: '5px solid #c62828' }}>
+          <h3>Contas (Despesas)</h3>
+          <p style={{ color: '#c62828' }}>- R$ {totalDespesasMes.toFixed(2).replace('.', ',')}</p>
+        </div>
+
+        <div className="card saldo" style={{ borderLeft: '5px solid #1565c0' }}>
+          <h3>Saldo Líquido</h3>
+          <p className={saldoLiquidoMes >= 0 ? 'valor-positivo' : 'valor-negativo'}>
+            R$ {saldoLiquidoMes.toFixed(2).replace('.', ',')}
+          </p>
+        </div>
+      </section>
+
+      {/* SEÇÃO DE ANÁLISE ESTRATÉGICA */}
+      <h2 className="secao-titulo">Análise de Saúde Financeira</h2>
+      <section className="analise-economica">
+        <div className="card-analise">
+          <h4>Eficiência de Caixa</h4>
+          <div className="progresso-container">
+            <div className="progresso-barra" style={{ width: `${Math.min(margemCaixa, 100)}%` }}></div>
+          </div>
+          <p>{margemCaixa.toFixed(1)}% das vendas já viraram dinheiro em caixa.</p>
+        </div>
+
+        <div className="card-analise">
+          <h4>Ponto de Equilíbrio</h4>
+          <strong style={{ color: faltamParaCusto <= 0 ? '#2e7d32' : '#c62828' }}>
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `Faltam R$ ${faltamParaCusto.toFixed(2)}`}
+          </strong>
+          <p>Quanto falta receber para quitar as despesas do mês.</p>
+        </div>
+
+        <div className="card-analise">
+          <h4>Risco de Crédito</h4>
+          <strong style={{ color: indiceInadimplencia > 30 ? '#c62828' : '#d2b48c' }}>
+            {indiceInadimplencia.toFixed(1)}%
+          </strong>
+          <p>Volume de parcelas em aberto sobre o total esperado.</p>
+        </div>
+      </section>
+
+      <h2 className="secao-titulo">Gestão de Crédito e Faturamento</h2>
+      <section className="resumo-cards">
         <div className="card inadimplencia clicavel" onClick={() => setModalAberto(true)} style={{ cursor: 'pointer' }}>
-          <h3>A Receber (No Mês)</h3>
+          <h3>A Receber (No Mês) 🔍</h3>
           <p>R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
           <small>Clique para ver detalhes</small>
         </div>
 
-        <div className="card saldo">
-          <h3>Vendas no Mês</h3>
+        <div className="card vendas-total">
+          <h3>Faturamento Bruto</h3>
           <p>R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
+          <small>Total em novos contratos</small>
         </div>
       </section>
 
@@ -158,8 +224,12 @@ export default function Dashboard() {
           <h3>Total Recebido (Ano)</h3>
           <p>R$ {totalNoCaixaAno.toFixed(2).replace('.', ',')}</p>
         </div>
+        <div className="card saida" style={{borderColor: '#c62828'}}>
+          <h3>Despesas (Ano)</h3>
+          <p>R$ {totalDespesasAno.toFixed(2).replace('.', ',')}</p>
+        </div>
         <div className="card saldo" style={{borderColor: '#1565c0'}}>
-          <h3>Total de Vendas (Ano)</h3>
+          <h3>Vendas Brutas (Ano)</h3>
           <p>R$ {volumeVendasAno.toFixed(2).replace('.', ',')}</p>
         </div>
       </section>

@@ -271,3 +271,75 @@
   max-height: 80vh;
   overflow-y: auto;
 }
+
+/* Cores para Despesas e Saldo */
+.card.saida { 
+  border-top: 6px solid #c62828 !important; 
+}
+
+.card.vendas-total { 
+  border-top: 6px solid #1565c0 !important; 
+}
+
+/* Ajuste para o texto de Saldo Negativo */
+.valor-negativo {
+  color: #c62828 !important;
+}
+
+.valor-positivo {
+  color: #2e7d32 !important;
+}
+
+/* Estilo para o mini-alerta de clique no card */
+.card small {
+  display: block;
+  margin-top: 10px;
+  font-family: sans-serif;
+  opacity: 0.8;
+}
+
+/* --- SEÇÃO DE ANÁLISE ECONÔMICA --- */
+.analise-economica {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.card-analise {
+  background: #fdfaf5; /* Tom creme suave para diferenciar dos cards de valores */
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px dashed #d2b48c;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.card-analise h4 {
+  margin: 0 0 10px 0;
+  color: #4a5d4e;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+}
+
+.card-analise p {
+  font-size: 0.85rem !important;
+  color: #666;
+  margin-top: 10px;
+}
+
+/* Barra de Progresso */
+.progresso-container {
+  width: 100%;
+  height: 100%;
+  background: #e0e0e0;
+  border-radius: 10px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.progresso-barra {
+  height: 100%;
+  transition: width 0.5s ease-in-out;
+}

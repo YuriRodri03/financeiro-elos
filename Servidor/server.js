@@ -13,7 +13,8 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ Banco MongoDB da Ótica Elos Conectado!"))
   .catch(err => console.error("❌ Erro na conexão:", err));
 
-// Modelos (Schemas)
+// --- MODELOS (SCHEMAS) ---
+
 const Cliente = mongoose.model('Cliente', {
   nome: String, cpf: String, telefone: String, endereco: String, observacoes: String
 });
@@ -23,13 +24,21 @@ const Venda = mongoose.model('Venda', {
   listaParcelas: Array, dataVenda: String, metodoPagamento: String
 });
 
+// NOVO MODELO: Despesa
+const Despesa = mongoose.model('Despesa', {
+  descricao: String,
+  valor: Number,
+  categoria: String,
+  vencimento: String,
+  paga: Boolean
+});
+
 // --- ROTAS API ---
 
-// Clientes
+// CLIENTES
 app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
-// Rota de Edição (PUT) que usamos no seu componente de Clientes
 app.put('/api/clientes/:cpf', async (req, res) => {
   const atualizado = await Cliente.findOneAndUpdate({ cpf: req.params.cpf }, req.body, { new: true });
   res.json(atualizado);
@@ -40,9 +49,20 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
   res.json({ message: "Removido" });
 });
 
-// Vendas
+// VENDAS
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
 app.post('/api/vendas', async (req, res) => res.json(await new Venda(req.body).save()));
+
+// Rota para Editar Data da Venda (PATCH)
+app.patch('/api/vendas/:id', async (req, res) => {
+  try {
+    const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(venda);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao atualizar venda" });
+  }
+});
+
 app.delete('/api/vendas/:id', async (req, res) => {
   try {
     await Venda.findByIdAndDelete(req.params.id);
@@ -52,7 +72,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// Baixa de Parcela
+// BAIXA DE PARCELA
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -69,6 +89,34 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     res.json(venda);
   } catch (err) {
     res.status(500).json({ error: "Erro ao dar baixa" });
+  }
+});
+
+// --- ROTAS DE DESPESAS (ADICIONADAS) ---
+
+app.get('/api/despesas', async (req, res) => {
+  res.json(await Despesa.find());
+});
+
+app.post('/api/despesas', async (req, res) => {
+  res.json(await new Despesa(req.body).save());
+});
+
+app.patch('/api/despesas/:id', async (req, res) => {
+  try {
+    const despesa = await Despesa.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(despesa);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao atualizar despesa" });
+  }
+});
+
+app.delete('/api/despesas/:id', async (req, res) => {
+  try {
+    await Despesa.findByIdAndDelete(req.params.id);
+    res.json({ message: "Despesa excluída" });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao excluir despesa" });
   }
 });
 

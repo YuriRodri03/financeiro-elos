@@ -9,40 +9,16 @@ import Vendas from './pages/Vendas';
 import Clientes from './pages/Clientes';
 import CadastroClientes from './pages/CadastroClientes';
 import RelatorioInadimplencia from './pages/Relatorios';
+import Despesas from './pages/Despesas'; // NOVO: Importando Despesas
 import Login from './pages/Login';
 
 import './index.css'; 
 
-// 2. Estilos da Navegação
-const navStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '1rem 2rem',
-  backgroundColor: '#4a5d4e', 
-  color: '#fdfaf5',
-  fontFamily: 'Georgia, serif'
-};
-
-const linkStyle = {
-  color: '#d2b48c', 
-  marginLeft: '20px',
-  textDecoration: 'none',
-  fontWeight: 'bold',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: '1rem'
-};
-
 // 3. Componente de Proteção e Renderização
 function AppContent() {
   const [autenticado, setAutenticado] = useState(false);
-  
-  // Pegamos o estado de carregamento do MongoDB que criamos no Contexto
   const { carregando } = useFinanceiro();
 
-  // Verifica login ao abrir o app
   useEffect(() => {
     const auth = localStorage.getItem('otica_elos_auth');
     if (auth === 'true') {
@@ -62,12 +38,10 @@ function AppContent() {
     }
   };
 
-  // PASSO 1: Se não estiver logado, barra tudo e mostra Login
   if (!autenticado) {
     return <Login onLogin={realizarLogin} />;
   }
 
-  // PASSO 2: Se estiver logado, mas os dados do MongoDB ainda não chegaram
   if (carregando) {
     return (
       <div style={{
@@ -85,7 +59,6 @@ function AppContent() {
     );
   }
 
-  // PASSO 3: Sistema liberado com dados carregados
   return (
     <Router>
       <nav className="navbar-container">
@@ -94,9 +67,10 @@ function AppContent() {
         </div>
         <div className="nav-menu">
           <Link to="/" className="nav-link">Dashboard</Link>
-          <Link to="/vendas" className="nav-link">Nova Venda</Link>
-          <Link to="/cadastro-clientes" className="nav-link">Novo Cliente</Link> 
+          <Link to="/vendas" className="nav-link">Vendas</Link>
+          <Link to="/despesas" className="nav-link">Gastos</Link>
           <Link to="/clientes" className="nav-link">Clientes</Link>
+          <Link to="/cadastro-clientes" className="nav-link">Novo Cliente</Link> 
           <Link to="/relatorios" className="nav-link">Cobrança</Link>
           <button onClick={realizarLogout} className="btn-logout">Sair</button>
         </div>
@@ -105,6 +79,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/vendas" element={<Vendas />} />
+        <Route path="/despesas" element={<Despesas />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/cadastro-clientes" element={<CadastroClientes />} />
         <Route path="/relatorios" element={<RelatorioInadimplencia />} />
@@ -113,7 +88,6 @@ function AppContent() {
   );
 }
 
-// 4. Renderização Final (Envolvendo com o Provider)
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <FinanceiroProvider>
