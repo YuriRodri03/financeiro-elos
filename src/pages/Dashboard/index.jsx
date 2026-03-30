@@ -19,16 +19,24 @@ export default function Dashboard() {
     let lista = [];
     vendas.forEach(venda => {
       (venda.listaParcelas || []).forEach(p => {
+        // Só olhamos parcelas não pagas
         if (!p.paga) {
-          const dataVenc = new Date(venda.dataVenda + 'T00:00:00');
-          dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+          // IMPORTANTE: Agora usamos o vencimentoOriginal que criamos no Context
+          // Se o campo não existir (vendas antigas), ele usa a lógica antiga de fallback
+          const dataVenc = p.vencimentoOriginal 
+            ? new Date(p.vencimentoOriginal + 'T00:00:00')
+            : (() => {
+                const d = new Date(venda.dataVenda + 'T00:00:00');
+                d.setMonth(d.getMonth() + (p.numero - 1));
+                return d;
+              })();
           
           if ((dataVenc.getMonth() + 1) === Number(mesFiltro) && 
               dataVenc.getFullYear() === Number(anoFiltro)) {
             lista.push({
               cliente: venda.cliente,
               valor: p.valor,
-              parcela: p.numero
+              parcela: p.numero === 0 ? "Entrada" : `${p.numero}ª`
             });
           }
         }
@@ -57,7 +65,7 @@ export default function Dashboard() {
 
   const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal), 0);
 
-  // --- CÁLCULOS ANUAIS (RECOLOCADOS) ---
+  // --- CÁLCULOS ANUAIS ---
 
   const totalNoCaixaAno = vendas.reduce((acc, venda) => {
     const parcelasPagasNoAno = (venda.listaParcelas || []).filter(p => {
@@ -116,7 +124,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* MODAL DETALHADO */}
       {modalAberto && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -132,8 +139,8 @@ export default function Dashboard() {
                     {detalhesAReceber.map((item, idx) => (
                       <tr key={idx}>
                         <td>{item.cliente}</td>
-                        <td>{item.parcela}ª</td>
-                        <td><strong>R$ {item.valor.toFixed(2)}</strong></td>
+                        <td>{item.parcela}</td>
+                        <td><strong>R$ {item.valor.toFixed(2).replace('.', ',')}</strong></td>
                       </tr>
                     ))}
                   </tbody>
@@ -145,7 +152,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* SEÇÃO ANUAL REINTEGRADA */}
       <h2 className="secao-titulo">Resumo Anual ({anoFiltro})</h2>
       <section className="resumo-cards">
         <div className="card entrada" style={{borderColor: '#2e7d32'}}>
@@ -158,7 +164,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* LISTA DE VENDAS RECENTES REINTEGRADA */}
       <div className="lista-recente">
         <h3>Vendas de {mesFiltro}/{anoFiltro}</h3>
         {vendasNovasNoMes.length > 0 ? (
