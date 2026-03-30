@@ -51,7 +51,6 @@ export function FinanceiroProvider({ children }) {
     }
   };
 
-  // ADICIONADO: Função para editar cliente no banco
   const editarCliente = async (cpfAntigo, dadosNovos) => {
     try {
       await fetch(`${API_URL}/clientes/${cpfAntigo}`, {
@@ -60,7 +59,6 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify(dadosNovos)
       });
       
-      // Atualiza localmente
       setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? { ...c, ...dadosNovos } : c));
       setVendas(prev => prev.map(v => v.cpf === cpfAntigo ? { ...v, cliente: dadosNovos.nome, cpf: dadosNovos.cpf } : v));
     } catch (err) {
@@ -79,18 +77,47 @@ export function FinanceiroProvider({ children }) {
     }
   };
 
-  // --- FUNÇÕES DE VENDA ---
+  // --- FUNÇÕES DE VENDA (ATUALIZADA COM ENTRADA E DATA FLEXÍVEL) ---
   const adicionarVenda = async (novaVenda) => {
     const valorTotal = Number(novaVenda.valorTotal);
+    const valorEntrada = Number(novaVenda.valorEntrada || 0);
+    const valorRestante = valorTotal - valorEntrada;
     const numParcelas = Number(novaVenda.parcelas);
-    const valorDaParcela = (valorTotal / numParcelas);
-    
-    const parcelasGeradas = Array.from({ length: numParcelas }, (_, i) => ({
-      numero: i + 1,
-      valor: valorDaParcela,
-      paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
-      dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null
-    }));
+    const valorDaParcela = valorRestante / numParcelas;
+
+    let parcelasGeradas = [];
+
+    // 1. Registrar Entrada (Parcela 0) se houver
+    if (valorEntrada > 0) {
+      parcelasGeradas.push({
+        numero: 0,
+        valor: valorEntrada,
+        paga: true,
+        dataPagamento: novaVenda.dataVenda,
+        vencimentoOriginal: novaVenda.dataVenda,
+        observacao: "Entrada/Sinal"
+      });
+    }
+
+    // 2. Gerar parcelas do saldo devedor
+    for (let i = 0; i < numParcelas; i++) {
+      // Se for Boleto, usa a dataPrimeiraParcela escolhida. Se não, usa a data da venda.
+      const dataBase = novaVenda.metodoPagamento === 'Boleto / Crediário' 
+        ? novaVenda.dataPrimeiraParcela 
+        : novaVenda.dataVenda;
+
+      let dataVenc = new Date(dataBase + 'T00:00:00');
+      dataVenc.setMonth(dataVenc.getMonth() + i);
+
+      parcelasGeradas.push({
+        numero: i + 1,
+        valor: valorDaParcela,
+        // Pagamento automático se NÃO for boleto
+        paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
+        dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null,
+        vencimentoOriginal: dataVenc.toISOString().split('T')[0]
+      });
+    }
 
     const vendaCompleta = { ...novaVenda, listaParcelas: parcelasGeradas };
 
@@ -109,7 +136,6 @@ export function FinanceiroProvider({ children }) {
 
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
-    
     try {
       await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
         method: 'PATCH',
@@ -130,18 +156,16 @@ export function FinanceiroProvider({ children }) {
       alert("Erro ao dar baixa.");
     }
   };
+
   const estornarBaixaParcela = async (vendaId, numeroParcela) => {
     if (!window.confirm("Deseja estornar o pagamento desta parcela?")) return;
-
     try {
-      // No banco de dados, voltamos 'paga' para false e 'dataPagamento' para null
       await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paga: false, dataPagamento: null })
       });
 
-      // Atualiza o estado local para o site refletir a mudança na hora
       setVendas(prev => prev.map(v => {
         if (v._id === vendaId) {
           const novasParcelas = v.listaParcelas.map(p => 

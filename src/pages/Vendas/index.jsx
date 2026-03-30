@@ -10,9 +10,11 @@ export default function Vendas() {
     cpf: '',
     produto: '',
     valorTotal: '',
+    valorEntrada: '0', // Novo campo para entrada
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
-    dataVenda: new Date().toISOString().split('T')[0]
+    dataVenda: new Date().toISOString().split('T')[0],
+    dataPrimeiraParcela: new Date().toISOString().split('T')[0] // Novo campo para flexibilidade de data
   });
 
   const aplicarMascaraCPF = (valor) => {
@@ -29,13 +31,12 @@ export default function Vendas() {
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
       
-      // Busca o cliente no estado global (que veio do MongoDB no carregamento)
+      // Busca o cliente no estado global
       const clienteExistente = clientes.find(c => c.cpf === valorFormatado);
       
       setVenda({ 
         ...venda, 
         cpf: valorFormatado,
-        // Se achou o cliente, trava o nome. Se não, deixa o usuário digitar.
         cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente)
       });
     } else {
@@ -43,7 +44,7 @@ export default function Vendas() {
     }
   };
 
-  const handleSalvar = async (e) => { // Tornamos assíncrona para esperar o MongoDB
+  const handleSalvar = async (e) => {
     e.preventDefault();
 
     if (!venda.cliente || !venda.valorTotal || !venda.cpf) {
@@ -57,23 +58,24 @@ export default function Vendas() {
     }
 
     try {
-      // Espera a função do Contexto enviar para o backend
       await adicionarVenda(venda);
       
-      alert("Venda registrada com sucesso no banco de dados! 👓");
+      alert("Venda registrada com sucesso! 👓");
 
-      // Limpa o formulário apenas se deu tudo certo
+      // Reseta o formulário
       setVenda({
         cliente: '',
         cpf: '',
         produto: '',
         valorTotal: '',
+        valorEntrada: '0',
         parcelas: 1,
         metodoPagamento: 'Dinheiro',
-        dataVenda: new Date().toISOString().split('T')[0]
+        dataVenda: new Date().toISOString().split('T')[0],
+        dataPrimeiraParcela: new Date().toISOString().split('T')[0]
       });
     } catch (error) {
-      alert("Erro ao salvar a venda. Verifique se o servidor está ligado.");
+      alert("Erro ao salvar a venda.");
     }
   };
 
@@ -119,8 +121,21 @@ export default function Vendas() {
         </div>
 
         <div className="form-group">
-          <label>Valor Total (R$)</label>
+          <label>Valor Total da Venda (R$)</label>
           <input type="number" name="valorTotal" value={venda.valorTotal} step="0.01" onChange={handleChange} required placeholder="0,00" />
+        </div>
+
+        {/* Novo campo: Valor de Entrada */}
+        <div className="form-group">
+          <label>Valor de Entrada (Sinal R$)</label>
+          <input 
+            type="number" 
+            name="valorEntrada" 
+            value={venda.valorEntrada} 
+            step="0.01" 
+            onChange={handleChange} 
+            placeholder="0,00" 
+          />
         </div>
 
         <div className="form-group">
@@ -134,9 +149,22 @@ export default function Vendas() {
         </div>
 
         <div className="form-group">
-          <label>Número de Parcelas</label>
+          <label>Nº de Parcelas (Restante)</label>
           <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} />
         </div>
+
+        {/* Campo Condicional: Só aparece se for Boleto/Crediário */}
+        {venda.metodoPagamento === 'Boleto / Crediário' && (
+          <div className="form-group">
+            <label>Data da 1ª Parcela</label>
+            <input 
+              type="date" 
+              name="dataPrimeiraParcela" 
+              value={venda.dataPrimeiraParcela} 
+              onChange={handleChange} 
+            />
+          </div>
+        )}
 
         <button type="submit" className="btn-salvar">Finalizar e Gravar na Nuvem</button>
       </form>
