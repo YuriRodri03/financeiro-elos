@@ -77,7 +77,7 @@ export function FinanceiroProvider({ children }) {
     }
   };
 
-  // --- FUNÇÕES DE VENDA (ATUALIZADA COM ENTRADA E DATA FLEXÍVEL) ---
+  // --- FUNÇÕES DE VENDA ---
   const adicionarVenda = async (novaVenda) => {
     const valorTotal = Number(novaVenda.valorTotal);
     const valorEntrada = Number(novaVenda.valorEntrada || 0);
@@ -87,7 +87,6 @@ export function FinanceiroProvider({ children }) {
 
     let parcelasGeradas = [];
 
-    // 1. Registrar Entrada (Parcela 0) se houver
     if (valorEntrada > 0) {
       parcelasGeradas.push({
         numero: 0,
@@ -99,9 +98,7 @@ export function FinanceiroProvider({ children }) {
       });
     }
 
-    // 2. Gerar parcelas do saldo devedor
     for (let i = 0; i < numParcelas; i++) {
-      // Se for Boleto, usa a dataPrimeiraParcela escolhida. Se não, usa a data da venda.
       const dataBase = novaVenda.metodoPagamento === 'Boleto / Crediário' 
         ? novaVenda.dataPrimeiraParcela 
         : novaVenda.dataVenda;
@@ -112,7 +109,6 @@ export function FinanceiroProvider({ children }) {
       parcelasGeradas.push({
         numero: i + 1,
         valor: valorDaParcela,
-        // Pagamento automático se NÃO for boleto
         paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
         dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null,
         vencimentoOriginal: dataVenc.toISOString().split('T')[0]
@@ -134,6 +130,24 @@ export function FinanceiroProvider({ children }) {
     }
   };
 
+  // NOVA FUNÇÃO: Editar data da venda
+  const editarDataVenda = async (vendaId, novaData) => {
+    try {
+      await fetch(`${API_URL}/vendas/${vendaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataVenda: novaData })
+      });
+
+      setVendas(prev => prev.map(v => 
+        (v._id === vendaId || v.id === vendaId) ? { ...v, dataVenda: novaData } : v
+      ));
+      alert("Data atualizada com sucesso!");
+    } catch (err) {
+      alert("Erro ao atualizar data no banco.");
+    }
+  };
+
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
     try {
@@ -144,7 +158,7 @@ export function FinanceiroProvider({ children }) {
       });
 
       setVendas(prev => prev.map(v => {
-        if (v._id === vendaId) {
+        if (v._id === vendaId || v.id === vendaId) {
           const novasParcelas = v.listaParcelas.map(p => 
             p.numero === numeroParcela ? { ...p, paga: true, dataPagamento: dataFinal } : p
           );
@@ -167,7 +181,7 @@ export function FinanceiroProvider({ children }) {
       });
 
       setVendas(prev => prev.map(v => {
-        if (v._id === vendaId) {
+        if (v._id === vendaId || v.id === vendaId) {
           const novasParcelas = v.listaParcelas.map(p => 
             p.numero === numeroParcela ? { ...p, paga: false, dataPagamento: null } : p
           );
@@ -184,7 +198,7 @@ export function FinanceiroProvider({ children }) {
     if (!window.confirm("Excluir venda do banco?")) return;
     try {
       await fetch(`${API_URL}/vendas/${vendaId}`, { method: 'DELETE' });
-      setVendas(prev => prev.filter(v => v._id !== vendaId));
+      setVendas(prev => prev.filter(v => (v._id !== vendaId && v.id !== vendaId)));
     } catch (err) {
       alert("Erro ao excluir venda.");
     }
@@ -193,7 +207,7 @@ export function FinanceiroProvider({ children }) {
   return (
     <FinanceiroContext.Provider value={{ 
       vendas, clientes, adicionarVenda, darBaixaParcela, estornarBaixaParcela,
-      excluirVenda, adicionarCliente, editarCliente, excluirCliente, carregando 
+      excluirVenda, adicionarCliente, editarCliente, excluirCliente, editarDataVenda, carregando 
     }}>
       {children}
     </FinanceiroContext.Provider>

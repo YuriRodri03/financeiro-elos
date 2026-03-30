@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import './style.css';
 
-// SUB-COMPONENTE PARA CADA LINHA DE PARCELA (Ajustado para MongoDB)
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
 
@@ -52,13 +51,20 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
 }
 
 export default function Clientes() {
-  const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, carregando } = useFinanceiro();
+  const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, editarDataVenda, carregando } = useFinanceiro();
   
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
 
   const fecharModal = () => setClienteSelecionadoCPF(null);
+
+  const handleEditarDataVenda = (vendaId, dataAntiga) => {
+    const novaData = prompt("Altere a data da venda (AAAA-MM-DD):", dataAntiga);
+    if (novaData && novaData !== dataAntiga) {
+      editarDataVenda(vendaId, novaData);
+    }
+  };
 
   const handleEditarCadastro = (cpfAntigo, nomeAntigo) => {
     const novoNome = prompt("Digite o novo nome do cliente:", nomeAntigo);
@@ -70,7 +76,6 @@ export default function Clientes() {
     }
   };
 
-  // --- Lógica Unificada Atualizada para MongoDB ---
   const listaFinalClientes = useMemo(() => {
     const todosCPFs = Array.from(new Set([
       ...vendas.map(v => v.cpf),
@@ -105,24 +110,15 @@ export default function Clientes() {
 
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? c.totalGeralDevido > 0.01 : true;
-    
     const termo = busca.toLowerCase();
-    
-    // Criamos uma versão "limpa" (só números) do que foi digitado e do CPF do banco
     const termoApenasNumeros = termo.replace(/\D/g, '');
     const cpfBancoApenasNumeros = c.cpf.replace(/\D/g, '');
-
     const passaBuscaNome = c.nome.toLowerCase().includes(termo);
-    
-    // Se o usuário digitou números, buscamos no CPF limpo
-    // Se digitou letras, buscamos apenas no Nome
     const passaBuscaCPF = cpfBancoApenasNumeros.includes(termoApenasNumeros);
-
-    // Retorna true se passar no filtro de status E (no nome OU no cpf)
     return passaFiltroStatus && (passaBuscaNome || (termoApenasNumeros !== '' && passaBuscaCPF));
   });
 
-  if (carregando) return null; // Evita erros de cálculo enquanto os dados chegam
+  if (carregando) return null;
 
   return (
     <div className="clientes-container">
@@ -131,30 +127,23 @@ export default function Clientes() {
       </header>
 
       <div className="busca-secao">
-  <input 
-    type="text" 
-    className="input-busca"
-    placeholder="🔍 Buscar por nome ou CPF do cliente..." 
-    value={busca}
-    onChange={(e) => setBusca(e.target.value)}
-  />
-</div>
+        <input 
+          type="text" 
+          className="input-busca"
+          placeholder="🔍 Buscar por nome ou CPF do cliente..." 
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+      </div>
 
       <div className="filtros-clientes">
-  <button 
-    onClick={() => setFiltro('todos')} 
-    className={`btn-filtro ${filtro === 'todos' ? 'active' : ''}`}
-  >
-    👥 Todos ({listaFinalClientes.length})
-  </button>
-  
-  <button 
-    onClick={() => setFiltro('pendentes')} 
-    className={`btn-filtro ${filtro === 'pendentes' ? 'active-alert' : ''}`}
-  >
-    ⚠️ Inadimplentes
-  </button>
-</div>
+        <button onClick={() => setFiltro('todos')} className={`btn-filtro ${filtro === 'todos' ? 'active' : ''}`}>
+          👥 Todos ({listaFinalClientes.length})
+        </button>
+        <button onClick={() => setFiltro('pendentes')} className={`btn-filtro ${filtro === 'pendentes' ? 'active-alert' : ''}`}>
+          ⚠️ Inadimplentes
+        </button>
+      </div>
 
       <table className="clientes-table">
         <thead>
@@ -183,16 +172,8 @@ export default function Clientes() {
                 </span>
               </td>
               <td style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-detalhes" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>
-                  Ver Ficha
-                </button>
-                <button 
-                  className="btn-excluir-venda" 
-                  style={{ marginTop: 0, width: '40px', padding: '5px' }} 
-                  onClick={() => excluirCliente(cliente.cpf)}
-                >
-                  🗑️
-                </button>
+                <button className="btn-detalhes" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>Ver Ficha</button>
+                <button className="btn-excluir-venda" style={{ marginTop: 0, width: '40px', padding: '5px' }} onClick={() => excluirCliente(cliente.cpf)}>🗑️</button>
               </td>
             </tr>
           ))}
@@ -203,7 +184,6 @@ export default function Clientes() {
         <div className="modal-overlay">
           <div className="modal-content">
             <button onClick={fecharModal} className="btn-close">&times;</button>
-            
             <header className="modal-header">
               <div style={{flex: 1}}>
                 <h2 style={{margin: 0}}>{clienteNoModal.nome}</h2>
@@ -213,7 +193,6 @@ export default function Clientes() {
                   <p style={{margin: '5px 0'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
                   <p style={{margin: '5px 0'}}>📝 <strong>Observações:</strong> {clienteNoModal.observacoes || 'Nenhuma nota registrada'}</p>
                 </div>
-
                 <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                   <button onClick={() => handleEditarCadastro(clienteNoModal.cpf, clienteNoModal.nome)} className="btn-editar-perfil">✏️ Editar Nome/CPF</button>
                   <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
@@ -223,23 +202,22 @@ export default function Clientes() {
             
             <div className="modal-body">
               <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee'}}>Histórico de Compras</h3>
-              
               {clienteNoModal.historicoVendas.map((venda) => (
                 <div key={venda._id || venda.id} className="card-venda-historico">
                   <div className="venda-topo">
                     <strong>📦 {venda.produto || 'Óculos'}</strong>
-                    <span>{venda.dataVenda.split('-').reverse().join('/')}</span>
+                    {/* DATA EDITÁVEL ABAIXO */}
+                    <span 
+                      onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
+                      style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)' }}
+                      title="Clique para editar a data"
+                    >
+                      {venda.dataVenda.split('-').reverse().join('/')} ✏️
+                    </span>
                   </div>
-                  
                   <div className="venda-parcelas">
                     {venda.listaParcelas.map(p => (
-                      <LinhaParcela 
-                        key={p.numero} 
-                        p={p} 
-                        vendaId={venda._id || venda.id} 
-                        darBaixaParcela={darBaixaParcela} 
-                        estornarBaixaParcela={estornarBaixaParcela}
-                      />
+                      <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                     ))}
                   </div>
                   <button className="btn-excluir-venda" onClick={() => excluirVenda(venda._id || venda.id)}>🗑️ Excluir Venda</button>
