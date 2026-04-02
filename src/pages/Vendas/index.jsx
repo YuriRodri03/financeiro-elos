@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils'; // Importação do utilitário
+import { gerarPDFDocumento } from '../../documentosUtils'; 
 import './style.css';
 
 export default function Vendas() {
@@ -12,7 +12,7 @@ export default function Vendas() {
     produto: '',
     valorTotal: '',
     valorEntrada: '',
-    desconto: '', // Novo campo para o PDF
+    desconto: '', 
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
     dataVenda: new Date().toISOString().split('T')[0],
@@ -85,18 +85,17 @@ export default function Vendas() {
     try {
       await adicionarVenda(dadosParaSalvar);
       
-      // DISPARO DO PDF DE PEDIDO COM GARANTIA [cite: 54, 55]
       const imprimir = confirm("Venda registrada com sucesso! 👓\nDeseja gerar o Pedido com Garantia agora?");
       if (imprimir) {
         gerarPDFDocumento({
-          numero: "017-2026", // Você pode integrar com o ID real se disponível
-          data: venda.dataVenda.split('-').reverse().join('/'), [cite: 47]
-          cliente: venda.cliente, [cite: 45]
-          produto: venda.produto || "PRODUTOS ÓPTICOS", [cite: 50]
-          valorProduto: valorTotalLimpio + descontoLimpio, [cite: 49]
-          desconto: descontoLimpio, [cite: 49]
-          valorTotal: valorTotalLimpio [cite: 49]
-        }, 'pedido'); // O tipo 'pedido' gera a 2ª página de garantia [cite: 54]
+          numero: "017-2026", 
+          data: venda.dataVenda.split('-').reverse().join('/'),
+          cliente: venda.cliente,
+          produto: venda.produto || "PRODUTOS ÓPTICOS",
+          valorProduto: valorTotalLimpio + descontoLimpio,
+          desconto: descontoLimpio,
+          valorTotal: valorTotalLimpio
+        }, 'pedido'); 
       }
 
       setVenda({
@@ -114,7 +113,7 @@ export default function Vendas() {
     } catch (error) {
       alert("Erro ao salvar a venda.");
     }
-  };
+  }; // Fechamento da função handleSalvar
 
   return (
     <div className="vendas-container">
