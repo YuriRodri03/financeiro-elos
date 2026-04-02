@@ -67,30 +67,27 @@ export default function Clientes() {
   };
 
   const handleEditarCadastro = (cliente) => {
-  const novoNome = prompt("Nome do cliente:", cliente.nome);
-  const novoCpf = prompt("CPF (apenas números):", cliente.cpf);
-  const novoTelefone = prompt("Telefone/WhatsApp:", cliente.telefone);
-  const novoEndereco = prompt("Endereço completo:", cliente.endereco);
-  const novasObs = prompt("Observações:", cliente.observacoes);
+    const novoNome = prompt("Nome do cliente:", cliente.nome);
+    const novoCpf = prompt("CPF (apenas números):", cliente.cpf);
+    const novoTelefone = prompt("Telefone/WhatsApp:", cliente.telefone);
+    const novoEndereco = prompt("Endereço completo:", cliente.endereco);
+    const novasObs = prompt("Observações:", cliente.observacoes);
 
-  // Só prossegue se o nome e CPF (campos obrigatórios) forem preenchidos
-  if (novoNome && novoCpf) {
-    editarCliente(cliente.cpf, { 
-      nome: novoNome, 
-      cpf: novoCpf, 
-      telefone: novoTelefone || cliente.telefone,
-      endereco: novoEndereco || cliente.endereco,
-      observacoes: novasObs || cliente.observacoes
-    });
-    
-    // Se o CPF mudou, fechamos o modal para evitar erros de referência
-    if (novoCpf !== cliente.cpf) {
-      fecharModal();
+    if (novoNome && novoCpf) {
+      editarCliente(cliente.cpf, { 
+        nome: novoNome, 
+        cpf: novoCpf, 
+        telefone: novoTelefone || cliente.telefone,
+        endereco: novoEndereco || cliente.endereco,
+        observacoes: novasObs || cliente.observacoes
+      });
+      
+      if (novoCpf !== cliente.cpf) {
+        fecharModal();
+      }
+      alert("Cadastro atualizado com sucesso!");
     }
-    
-    alert("Cadastro atualizado com sucesso!");
-  }
-};
+  };
 
   const listaFinalClientes = useMemo(() => {
     const todosCPFs = Array.from(new Set([
@@ -202,48 +199,58 @@ export default function Clientes() {
             <button onClick={fecharModal} className="btn-close">&times;</button>
             <header className="modal-header">
               <div style={{flex: 1}}>
-                <h2 style={{margin: 0}}>{clienteNoModal.nome}</h2>
-                <div className="dados-cadastro-box" style={{marginTop: '15px', padding: '15px', background: '#f4f7f4', borderRadius: '12px', border: '1px solid #e0e8e0'}}>
-                  <p style={{margin: '5px 0'}}>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
-                  <p style={{margin: '5px 0'}}>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
-                  <p style={{margin: '5px 0'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
-                  <p style={{margin: '5px 0'}}>📝 <strong>Observações:</strong> {clienteNoModal.observacoes || 'Nenhuma nota registrada'}</p>
+                <h2 style={{margin: 0, color: 'var(--primary)'}}>{clienteNoModal.nome}</h2>
+                
+                {/* FICHA ORGANIZADA */}
+                <div className="dados-cadastro-box" style={{
+                  marginTop: '15px', 
+                  padding: '20px', 
+                  background: '#fdfaf5', 
+                  borderRadius: '12px', 
+                  border: '1px solid #d2b48c',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '15px'
+                }}>
+                  <p style={{margin: 0}}>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
+                  <p style={{margin: 0}}>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
+                  <p style={{margin: 0, gridColumn: 'span 2'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
+                  <p style={{margin: 0, gridColumn: 'span 2', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', borderTop: '1px solid #e8d5bc', paddingTop: '10px'}}>
+                    📝 {clienteNoModal.observacoes || 'Nenhuma nota registrada'}
+                  </p>
                 </div>
+
                 <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                  <button 
-  onClick={() => handleEditarCadastro(clienteNoModal)} 
-  className="btn-editar-perfil"
->
-  ✏️ Editar Cadastro Completo
-</button>
+                  <button onClick={() => handleEditarCadastro(clienteNoModal)} className="btn-editar-perfil">✏️ Editar Cadastro Completo</button>
                   <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
                 </div>
               </div>
             </header>
             
             <div className="modal-body">
-              <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee'}}>Histórico de Compras</h3>
-              {clienteNoModal.historicoVendas.map((venda) => (
-                <div key={venda._id || venda.id} className="card-venda-historico">
-                  <div className="venda-topo">
-                    <strong>📦 {venda.produto || 'Óculos'}</strong>
-                    {/* DATA EDITÁVEL ABAIXO */}
-                    <span 
-                      onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
-                      style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)' }}
-                      title="Clique para editar a data"
-                    >
-                      {venda.dataVenda.split('-').reverse().join('/')} ✏️
-                    </span>
+              <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee', paddingTop: '20px'}}>Histórico de Compras</h3>
+              {clienteNoModal.historicoVendas.length > 0 ? (
+                clienteNoModal.historicoVendas.map((venda) => (
+                  <div key={venda._id || venda.id} className="card-venda-historico">
+                    <div className="venda-topo">
+                      <strong>📦 {venda.produto || 'Óculos'}</strong>
+                      <span 
+                        onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
+                        style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)', fontSize: '0.9rem' }}
+                        title="Clique para editar a data"
+                      >
+                        {venda.dataVenda.split('-').reverse().join('/')} ✏️
+                      </span>
+                    </div>
+                    <div className="venda-parcelas">
+                      {venda.listaParcelas.map(p => (
+                        <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                      ))}
+                    </div>
+                    <button className="btn-excluir-venda" onClick={() => excluirVenda(venda._id || venda.id)}>🗑️ Excluir Registro de Venda</button>
                   </div>
-                  <div className="venda-parcelas">
-                    {venda.listaParcelas.map(p => (
-                      <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
-                    ))}
-                  </div>
-                  <button className="btn-excluir-venda" onClick={() => excluirVenda(venda._id || venda.id)}>🗑️ Excluir Venda</button>
-                </div>
-              ))}
+                ))
+              ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra realizada ainda.</p>}
             </div>
             <button onClick={fecharModal} className="btn-sair">Voltar para a Lista</button>
           </div>
