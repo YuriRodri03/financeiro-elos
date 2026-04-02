@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
+import { gerarPDFDocumento } from '../../documentosUtils'; // Importação do utilitário
 import './style.css';
 
 export default function Vendas() {
@@ -10,7 +11,8 @@ export default function Vendas() {
     cpf: '',
     produto: '',
     valorTotal: '',
-    valorEntrada: '', 
+    valorEntrada: '',
+    desconto: '', // Novo campo para o PDF
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
     dataVenda: new Date().toISOString().split('T')[0],
@@ -48,7 +50,7 @@ export default function Vendas() {
         cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente)
       });
     } 
-    else if (name === 'valorTotal' || name === 'valorEntrada') {
+    else if (name === 'valorTotal' || name === 'valorEntrada' || name === 'desconto') {
       const valorMascarado = aplicarMascaraMoeda(value);
       setVenda({ ...venda, [name]: valorMascarado });
     } 
@@ -65,10 +67,14 @@ export default function Vendas() {
       return Number(valor.replace(/\D/g, '')) / 100;
     };
 
+    const valorTotalLimpio = limparMoeda(venda.valorTotal);
+    const descontoLimpio = limparMoeda(venda.desconto);
+
     const dadosParaSalvar = {
       ...venda,
-      valorTotal: limparMoeda(venda.valorTotal),
-      valorEntrada: limparMoeda(venda.valorEntrada)
+      valorTotal: valorTotalLimpio,
+      valorEntrada: limparMoeda(venda.valorEntrada),
+      desconto: descontoLimpio
     };
 
     if (!venda.cliente || !venda.valorTotal || !venda.cpf) {
@@ -78,7 +84,20 @@ export default function Vendas() {
 
     try {
       await adicionarVenda(dadosParaSalvar);
-      alert("Venda registrada com sucesso! 👓");
+      
+      // DISPARO DO PDF DE PEDIDO COM GARANTIA [cite: 54, 55]
+      const imprimir = confirm("Venda registrada com sucesso! 👓\nDeseja gerar o Pedido com Garantia agora?");
+      if (imprimir) {
+        gerarPDFDocumento({
+          numero: "017-2026", // Você pode integrar com o ID real se disponível
+          data: venda.dataVenda.split('-').reverse().join('/'), [cite: 47]
+          cliente: venda.cliente, [cite: 45]
+          produto: venda.produto || "PRODUTOS ÓPTICOS", [cite: 50]
+          valorProduto: valorTotalLimpio + descontoLimpio, [cite: 49]
+          desconto: descontoLimpio, [cite: 49]
+          valorTotal: valorTotalLimpio [cite: 49]
+        }, 'pedido'); // O tipo 'pedido' gera a 2ª página de garantia [cite: 54]
+      }
 
       setVenda({
         cliente: '',
@@ -86,6 +105,7 @@ export default function Vendas() {
         produto: '',
         valorTotal: '',
         valorEntrada: '',
+        desconto: '',
         parcelas: 1,
         metodoPagamento: 'Dinheiro',
         dataVenda: new Date().toISOString().split('T')[0],
@@ -105,26 +125,12 @@ export default function Vendas() {
       <form className="vendas-form" onSubmit={handleSalvar}>
         <div className="form-group">
           <label>CPF do Cliente</label>
-          <input 
-            type="text" 
-            name="cpf" 
-            value={venda.cpf} 
-            onChange={handleChange} 
-            required 
-            placeholder="000.000.000-00" 
-          />
+          <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" />
         </div>
 
         <div className="form-group">
           <label>Nome do Cliente</label>
-          <input 
-            type="text" 
-            name="cliente" 
-            value={venda.cliente} 
-            onChange={handleChange} 
-            required 
-            placeholder="Nome Completo" 
-          />
+          <input type="text" name="cliente" value={venda.cliente} onChange={handleChange} required placeholder="Nome Completo" />
         </div>
 
         <div className="form-group full-width">
@@ -138,26 +144,18 @@ export default function Vendas() {
         </div>
 
         <div className="form-group">
-          <label>Valor Total da Venda</label>
-          <input 
-            type="text" 
-            name="valorTotal" 
-            value={venda.valorTotal} 
-            onChange={handleChange} 
-            required 
-            placeholder="R$ 0,00" 
-          />
+          <label>Preço de Venda (Final)</label>
+          <input type="text" name="valorTotal" value={venda.valorTotal} onChange={handleChange} required placeholder="R$ 0,00" />
+        </div>
+
+        <div className="form-group">
+          <label>Desconto Concedido</label>
+          <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" />
         </div>
 
         <div className="form-group">
           <label>Valor de Entrada</label>
-          <input 
-            type="text" 
-            name="valorEntrada" 
-            value={venda.valorEntrada} 
-            onChange={handleChange} 
-            placeholder="R$ 0,00" 
-          />
+          <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" />
         </div>
 
         <div className="form-group">
@@ -175,21 +173,14 @@ export default function Vendas() {
           <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} />
         </div>
 
-        {/* OPÇÃO DE DATA PERSONALIZADA PARA BOLETO */}
         {venda.metodoPagamento === 'Boleto / Crediário' && (
           <div className="form-group">
             <label style={{color: 'var(--primary)', fontWeight: 'bold'}}>🗓️ Vencimento da 1ª Parcela</label>
-            <input 
-              type="date" 
-              name="dataPrimeiraParcela" 
-              value={venda.dataPrimeiraParcela} 
-              onChange={handleChange}
-              style={{borderColor: 'var(--primary)', backgroundColor: '#f0f4f0'}}
-            />
+            <input type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange} style={{borderColor: 'var(--primary)', backgroundColor: '#f0f4f0'}} />
           </div>
         )}
 
-        <button type="submit" className="btn-salvar">Finalizar Venda</button>
+        <button type="submit" className="btn-salvar">Finalizar e Gerar Pedido</button>
       </form>
     </div>
   );

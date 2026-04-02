@@ -343,14 +343,37 @@ export default function Clientes() {
               {clienteNoModal.historicoVendas.length > 0 ? (
                 clienteNoModal.historicoVendas.map((venda) => (
                   <div key={venda._id || venda.id} className="card-venda-historico">
-                    <div className="venda-topo">
+                    <div className="venda-topo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong>📦 {venda.produto || 'Óculos'}</strong>
-                      <span 
-                        onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
-                        style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)', fontSize: '0.9rem' }}
-                      >
-                        {venda.dataVenda.split('-').reverse().join('/')} ✏️
-                      </span>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <span 
+                          onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
+                          style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)', fontSize: '0.9rem' }}
+                        >
+                          {venda.dataVenda.split('-').reverse().join('/')} ✏️
+                        </span>
+                        <button 
+                          onClick={() => gerarPDFDocumento({
+                            numero: venda.numeroPedido || "017-2026",
+                            data: venda.dataVenda.split('-').reverse().join('/'),
+                            cliente: clienteNoModal.nome,
+                            produto: venda.produto || "Produtos Ópticos",
+                            valorProduto: venda.valorTotal + (venda.desconto || 0),
+                            desconto: venda.desconto || 0,
+                            valorTotal: venda.valorTotal
+                          }, 'pedido')}
+                          style={{ 
+                            padding: '4px 8px', 
+                            fontSize: '11px', 
+                            cursor: 'pointer', 
+                            background: '#fff', 
+                            border: '1px solid #ddd', 
+                            borderRadius: '4px' 
+                          }}
+                        >
+                          📄 Pedido/Garantia
+                        </button>
+                      </div>
                     </div>
                     <div className="venda-parcelas">
                       {venda.listaParcelas.map(p => (
