@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
+import { gerarPDFDocumento } from '../../documentosUtils'; // Importação da utilidade de PDF
 import './style.css';
 
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
@@ -56,8 +57,6 @@ export default function Clientes() {
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
-  
-  // Estado para controlar se estamos editando e armazenar os dados temporários do formulário
   const [editandoCadastro, setEditandoCadastro] = useState(null);
 
   const fecharModal = () => {
@@ -77,13 +76,8 @@ export default function Clientes() {
       alert("Nome e CPF são obrigatórios!");
       return;
     }
-
     try {
-      // clienteSelecionadoCPF é o CPF atual (chave de busca)
-      // editandoCadastro contém os novos dados
       await editarCliente(clienteSelecionadoCPF, editandoCadastro);
-      
-      // Se o CPF mudou, precisamos atualizar a referência ou fechar o modal
       if (editandoCadastro.cpf !== clienteSelecionadoCPF) {
         fecharModal();
       } else {
@@ -210,7 +204,6 @@ export default function Clientes() {
                 </h2>
                 
                 {editandoCadastro ? (
-                  /* FORMULÁRIO DE EDIÇÃO */
                   <div className="dados-cadastro-box" style={{ marginTop: '15px', padding: '20px', background: '#fff', borderRadius: '12px', border: '2px solid var(--primary)', display: 'grid', gap: '12px' }}>
                     <div className="form-group-edit">
                       <label>Nome Completo:</label>
@@ -232,27 +225,40 @@ export default function Clientes() {
                       <label>Observações:</label>
                       <textarea value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" style={{width: '100%', resize: 'none'}} />
                     </div>
-                    
                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                       <button className="btn-baixa" onClick={salvarEdicao}>Salvar Alterações</button>
                       <button className="btn-sair" style={{ margin: 0, background: '#eee', color: '#666' }} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
                     </div>
                   </div>
                 ) : (
-                  /* FICHA DE VISUALIZAÇÃO */
                   <>
                     <div className="dados-cadastro-box" style={{ marginTop: '15px', padding: '20px', background: '#fdfaf5', borderRadius: '12px', border: '1px solid #d2b48c', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                       <p style={{margin: 0}}>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
                       <p style={{margin: 0}}>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
                       <p style={{margin: 0, gridColumn: 'span 2'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
-                      <p style={{margin: 0, gridColumn: 'span 2', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', borderTop: '1px solid #e8d5bc', paddingTop: '10px'}}>
+                      <p style={{margin: 0, gridColumn: 'span 2', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', borderTop: '1px solid #e8d5bc', paddingTop: '10px' }}>
                         📝 {clienteNoModal.observacoes || 'Nenhuma nota registrada'}
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap' }}>
                       <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
-                      <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
+                      
+                      <button 
+                        onClick={() => gerarPDFDocumento({
+                          numero: "017-2026", 
+                          data: new Date().toLocaleDateString('pt-BR'),
+                          cliente: clienteNoModal.nome,
+                          produto: "Produtos Ópticos / Lentes",
+                          valorTotal: clienteNoModal.totalGeralDevido || 0
+                        }, 'recibo')} 
+                        className="btn-editar-perfil" 
+                        style={{ background: '#4a5d4e', color: 'white' }}
+                      >
+                        📄 Gerar Recibo
+                      </button>
+
+                      <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir</button>
                     </div>
                   </>
                 )}
@@ -269,7 +275,6 @@ export default function Clientes() {
                       <span 
                         onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}
                         style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)', fontSize: '0.9rem' }}
-                        title="Clique para editar a data"
                       >
                         {venda.dataVenda.split('-').reverse().join('/')} ✏️
                       </span>
