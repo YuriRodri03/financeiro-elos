@@ -26,7 +26,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text("ELOS", 27, 23, { align: "center" });
   }
 
-  // --- CABEÇALHO (Dados Oficiais da Ótica Elos) ---
+  // --- CABEÇALHO ---
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
@@ -68,16 +68,19 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   y += 20;
   doc.setFont("helvetica", "normal");
-  const nomeCliente = (dados.cliente || "Cliente").toUpperCase();
-  
+  const nomeCli = (dados.cliente || "Cliente").toUpperCase();
+  const vLiq = Number(dados.valorTotal || 0);
+  const vBru = Number(dados.valorProduto || vLiq);
+  const vDesc = Number(dados.desconto || 0);
+
   if (tipo === 'recibo') {
-    const valorTexto = Number(dados.valorTotal || 0).toFixed(2).replace('.', ',');
-    const textoRecibo = "Declaro que recebi de " + nomeCliente + " o valor de R$ " + valorTexto + " em " + (dados.data || "01/04/2026") + ", referente aos seguintes produtos:";
-    const splitTexto = doc.splitTextToSize(textoRecibo, 170);
-    doc.text(splitTexto, margemEsq, y);
-    y += (splitTexto.length * 5);
+    const vTexto = vLiq.toFixed(2).replace('.', ',');
+    const txt = "Declaro que recebi de " + nomeCli + " o valor de R$ " + vTexto + " em " + (dados.data || "01/04/2026") + ", referente aos seguintes produtos:";
+    const splitTxt = doc.splitTextToSize(txt, 170);
+    doc.text(splitTxt, margemEsq, y);
+    y += (splitTxt.length * 5);
   } else {
-    doc.text("Cliente: " + nomeCliente, margemEsq, y);
+    doc.text("Cliente: " + nomeCli, margemEsq, y);
     y += 10;
   }
 
@@ -93,22 +96,32 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   
   y += 12;
   doc.setFont("helvetica", "normal");
-  doc.text(dados.produto || "VISÃO SIMPLES 1.61 BLUE", margemEsq + 2, y);
+  doc.text(dados.produto || "PRODUTOS OPTICOS", margemEsq + 2, y);
   doc.text("1", 142, y);
-  const valorTotalNum = Number(dados.valorTotal || 0);
-  doc.text("R$ " + valorTotalNum.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  doc.text("R$ " + vBru.toFixed(2).replace('.', ','), 170, y, { align: "right" });
 
+  // --- TOTAIS ---
   y += 15;
   doc.setDrawColor(230, 230, 230);
   doc.line(120, y, 190, y);
+  
   y += 7;
   doc.text("Subtotal", 120, y);
-  doc.text("R$ " + valorTotalNum.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  doc.text("R$ " + vBru.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+
+  if (vDesc > 0) {
+    y += 7;
+    doc.setTextColor(198, 40, 40);
+    doc.text("Desconto", 120, y);
+    doc.text("- R$ " + vDesc.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+  }
+
   y += 7;
   doc.setFont("helvetica", "bold");
   doc.setTextColor(74, 93, 78);
   doc.text("Total", 120, y);
-  doc.text("R$ " + valorTotalNum.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  doc.text("R$ " + vLiq.toFixed(2).replace('.', ','), 170, y, { align: "right" });
 
   // --- ASSINATURA ---
   y = 240;
@@ -117,42 +130,31 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text("obrigado por construir esse elo conosco.", 105, y, { align: "center" });
   
   y += 20;
-  doc.setDrawColor(0, 0, 0);
   doc.line(70, y, 140, y);
   y += 5;
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.text("Ótica Elos", 105, y, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.text("Anderson Soares", 105, y + 4, { align: "center" });
 
   // --- GARANTIA ---
   if (tipo === 'pedido') {
     doc.addPage();
-    doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Garantia", margemEsq, 20);
+    doc.text("Garantia", 20, 20);
     doc.setFontSize(9);
-    doc.text("Condições da garantia", margemEsq, 28);
-    
     doc.setFont("helvetica", "normal");
-    const garantiaTxt = [
-      "1. Cobertura de Garantia",
-      "1.1 A garantia cobre manutenção e ajuste de óculos.",
-      "1.2 Inclui substituição de parafusos e plaquetas.",
-      "2. Exclusões",
-      "2.1 Não cobre danos por uso inadequado ou acidentes.",
-      "3. Reclamações",
-      "3.1 Apresentar o comprovante de serviço original."
+    const linhas = [
+      "1. Cobertura: Manutencao e ajuste de oculos.",
+      "1.1 Inclui parafusos e plaquetas.",
+      "2. Exclusoes: Danos por uso inadequado.",
+      "3. Reclamacoes: Apresentar comprovante original."
     ];
-    
-    let yGar = 35;
-    garantiaTxt.forEach((linha) => {
-      doc.text(linha, margemEsq, yGar);
-      yGar += 6;
+    let yG = 30;
+    linhas.forEach((l) => {
+      doc.text(l, 20, yG);
+      yG += 7;
     });
   }
 
-  const nomeArq = titulo + "_" + nomeCliente.replace(/\s+/g, '_') + ".pdf";
-  doc.save(nomeArq);
+  doc.save(titulo + "_" + nomeCli.replace(/\s+/g, '_') + ".pdf");
 };

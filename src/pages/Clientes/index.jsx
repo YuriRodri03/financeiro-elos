@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils'; // Importação da utilidade de PDF
+import { gerarPDFDocumento } from '../../documentosUtils'; 
 import './style.css';
 
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
@@ -58,10 +58,14 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
+  
+  // Estado para o formulário de configuração do recibo
+  const [dadosRecibo, setDadosRecibo] = useState(null);
 
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
+    setDadosRecibo(null);
   };
 
   const handleEditarDataVenda = (vendaId, dataAntiga) => {
@@ -241,24 +245,93 @@ export default function Clientes() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap' }}>
-                      <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
-                      
-                      <button 
-                        onClick={() => gerarPDFDocumento({
-                          numero: "017-2026", 
-                          data: new Date().toLocaleDateString('pt-BR'),
-                          cliente: clienteNoModal.nome,
-                          produto: "Produtos Ópticos / Lentes",
-                          valorTotal: clienteNoModal.totalGeralDevido || 0
-                        }, 'recibo')} 
-                        className="btn-editar-perfil" 
-                        style={{ background: '#4a5d4e', color: 'white' }}
-                      >
-                        📄 Gerar Recibo
-                      </button>
+                    <div style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #ddd' }}>
+                      {dadosRecibo ? (
+                        <div style={{ display: 'grid', gap: '10px' }}>
+                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#4a5d4e' }}>Configurar Recibo com Desconto</h4>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Valor Bruto (R$):</label>
+                              <input 
+                                type="number" 
+                                value={dadosRecibo.valor} 
+                                onChange={(e) => setDadosRecibo({...dadosRecibo, valor: e.target.value})}
+                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                              />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Desconto (R$):</label>
+                              <input 
+                                type="number" 
+                                value={dadosRecibo.desconto} 
+                                onChange={(e) => setDadosRecibo({...dadosRecibo, desconto: e.target.value})}
+                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', color: '#c62828' }}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Data:</label>
+                              <input 
+                                type="date" 
+                                value={dadosRecibo.data} 
+                                onChange={(e) => setDadosRecibo({...dadosRecibo, data: e.target.value})}
+                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                              />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Referente a:</label>
+                              <input 
+                                type="text" 
+                                value={dadosRecibo.produto} 
+                                onChange={(e) => setDadosRecibo({...dadosRecibo, produto: e.target.value})}
+                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                            <button 
+                              className="btn-baixa" 
+                              onClick={async () => {
+                                const valorBruto = Number(dadosRecibo.valor || 0);
+                                const desconto = Number(dadosRecibo.desconto || 0);
+                                await gerarPDFDocumento({
+                                  numero: "017-2026", 
+                                  data: dadosRecibo.data.split('-').reverse().join('/'), 
+                                  cliente: clienteNoModal.nome, 
+                                  produto: dadosRecibo.produto, 
+                                  valorProduto: valorBruto, 
+                                  desconto: desconto,
+                                  valorTotal: valorBruto - desconto 
+                                }, 'recibo');
+                                setDadosRecibo(null);
+                              }}
+                            >
+                              ✅ Gerar PDF (Líquido: R$ {(Number(dadosRecibo.valor) - Number(dadosRecibo.desconto)).toFixed(2)})
+                            </button>
+                            <button className="btn-sair" style={{ margin: 0 }} onClick={() => setDadosRecibo(null)}>Cancelar</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
+                          
+                          <button 
+                            onClick={() => setDadosRecibo({
+                              valor: clienteNoModal.totalGeralDevido, 
+                              desconto: 0,
+                              data: new Date().toISOString().split('T')[0],
+                              produto: "Produtos Ópticos / Lentes" 
+                            })} 
+                            className="btn-editar-perfil" 
+                            style={{ background: '#4a5d4e', color: 'white' }}
+                          >
+                            📄 Gerar Recibo
+                          </button>
 
-                      <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir</button>
+                          <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir</button>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
