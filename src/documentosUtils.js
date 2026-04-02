@@ -16,17 +16,11 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   const logoImg = await carregarLogo("/favicon.png");
 
+  // --- CABEÇALHO (PÁGINA 1) ---
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 15, 15, 15);
-  } else {
-    doc.setFillColor(74, 93, 78);
-    doc.circle(27, 22, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
-    doc.text("ELOS", 27, 23, { align: "center" });
   }
-
-  // --- CABEÇALHO ---
+  
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
@@ -39,7 +33,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text("Rua Viriato Ribeiro, 321, Bela Vista, Fortaleza-CE", 50, 35);
   doc.text("CEP 60442-642", 50, 39);
 
-  // --- CONTATOS ---
   doc.setTextColor(74, 93, 78);
   doc.setFont("helvetica", "italic");
   doc.text("Criando um elo com você!", 140, 22);
@@ -53,42 +46,30 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setDrawColor(200, 200, 200);
   doc.line(margemEsq, y, 190, y); 
 
-  // --- TÍTULO ---
+  // --- TÍTULO E CLIENTE ---
   y += 15;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   const titulo = tipo === 'recibo' ? "Recibo" : "Pedido";
-  const numDoc = dados.numero || "017-2026";
-  doc.text(titulo, margemEsq, y);
-  
-  doc.setFontSize(10);
-  doc.text(numDoc, margemEsq, y + 6);
+  doc.text(titulo + " " + (dados.numero || "017-2026"), margemEsq, y);
   doc.text(dados.data || "01/04/2026", 170, y, { align: "right" });
 
-  y += 20;
-  doc.setFont("helvetica", "normal");
-  const nomeCli = (dados.cliente || "Cliente").toUpperCase();
-  const vLiq = Number(dados.valorTotal || 0);
-  const vBru = Number(dados.valorProduto || vLiq);
-  const vDesc = Number(dados.desconto || 0);
+  y += 12;
+  doc.setFontSize(11);
+  doc.text("Cliente: " + (dados.cliente || "").toUpperCase(), margemEsq, y);
 
   if (tipo === 'recibo') {
-    const vTexto = vLiq.toFixed(2).replace('.', ',');
-    const txt = "Declaro que recebi de " + nomeCli + " o valor de R$ " + vTexto + " em " + (dados.data || "01/04/2026") + ", referente aos seguintes produtos:";
-    const splitTxt = doc.splitTextToSize(txt, 170);
-    doc.text(splitTxt, margemEsq, y);
-    y += (splitTxt.length * 5);
-  } else {
-    doc.text("Cliente: " + nomeCli, margemEsq, y);
+    y += 15;
+    const txtRecibo = "Declaro que recebi o valor de R$ " + Number(dados.valorTotal).toFixed(2).replace('.', ',') + " referente aos produtos listados abaixo:";
+    doc.text(doc.splitTextToSize(txtRecibo, 170), margemEsq, y);
     y += 10;
   }
 
-  // --- TABELA ---
-  y += 5;
+  // --- TABELA DE PRODUTOS ---
+  y += 10;
   doc.setFillColor(245, 245, 245);
   doc.rect(margemEsq, y, 170, 8, 'F');
-  doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.text("Descrição", margemEsq + 2, y + 5);
   doc.text("Qtd.", 140, y + 5);
@@ -96,65 +77,84 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   
   y += 12;
   doc.setFont("helvetica", "normal");
-  doc.text(dados.produto || "PRODUTOS OPTICOS", margemEsq + 2, y);
+  doc.text(dados.produto || "VISÃO SIMPLES 1.61 BLUE", margemEsq + 2, y);
   doc.text("1", 142, y);
-  doc.text("R$ " + vBru.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  doc.text("R$ " + Number(dados.valorProduto || 0).toFixed(2).replace('.', ','), 170, y, { align: "right" });
 
   // --- TOTAIS ---
   y += 15;
-  doc.setDrawColor(230, 230, 230);
-  doc.line(120, y, 190, y);
+  doc.text("Subtotal", 130, y);
+  doc.text("R$ " + Number(dados.valorProduto || 0).toFixed(2).replace('.', ','), 170, y, { align: "right" });
   
   y += 7;
-  doc.text("Subtotal", 120, y);
-  doc.text("R$ " + vBru.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  doc.setTextColor(198, 40, 40);
+  doc.text("Desconto", 130, y);
+  doc.text("- R$ " + Number(dados.desconto || 0).toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  
+  y += 7;
+  doc.setTextColor(74, 93, 78);
+  doc.setFont("helvetica", "bold");
+  doc.text("Total", 130, y);
+  doc.text("R$ " + Number(dados.valorTotal || 0).toFixed(2).replace('.', ','), 170, y, { align: "right" });
 
-  if (vDesc > 0) {
-    y += 7;
-    doc.setTextColor(198, 40, 40);
-    doc.text("Desconto", 120, y);
-    doc.text("- R$ " + vDesc.toFixed(2).replace('.', ','), 170, y, { align: "right" });
+  // --- PAGAMENTO E RODAPÉ (PÁGINA 1) ---
+  if (tipo === 'pedido') {
+    y += 15;
     doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text("Meios de pagamento:", margemEsq, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const meios = "Boleto, transferência bancária, dinheiro, cheque, cartão de crédito, cartão de débito, pix, fiado, picpay ou link de pagamento.";
+    doc.text(doc.splitTextToSize(meios, 170), margemEsq, y);
   }
 
-  y += 7;
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(74, 93, 78);
-  doc.text("Total", 120, y);
-  doc.text("R$ " + vLiq.toFixed(2).replace('.', ','), 170, y, { align: "right" });
-
-  // --- ASSINATURA ---
-  y = 240;
-  doc.setTextColor(150, 150, 150);
+  y = 270;
   doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
   doc.text("obrigado por construir esse elo conosco.", 105, y, { align: "center" });
-  
-  y += 20;
-  doc.line(70, y, 140, y);
-  y += 5;
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
-  doc.text("Ótica Elos", 105, y, { align: "center" });
 
-  // --- GARANTIA ---
+  // --- PÁGINA 2: GARANTIA DETALHADA ---
   if (tipo === 'pedido') {
     doc.addPage();
+    let yG = 20;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Garantia", 20, 20);
-    doc.setFontSize(9);
+    doc.text("Garantia", margemEsq, yG);
+    
+    yG += 10;
+    doc.setFontSize(10);
+    doc.text("1. Cobertura de Garantia", margemEsq, yG);
+    yG += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("1.1 A garantia cobre exclusivamente os serviços de manutenção e ajuste de óculos.", margemEsq, yG);
+    yG += 5; doc.text("1.2 A garantia inclui a substituição de parafusos, plaquetas e ajustes de armação.", margemEsq, yG);
+    yG += 5; doc.text("1.3 A garantia cobre a verificação e ajuste da prescrição óptica conforme necessário.", margemEsq, yG);
+
+    yG += 8; doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.text("2. Exclusões de Garantia", margemEsq, yG);
+    yG += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("2.1 A garantia não cobre danos causados por uso inadequado, negligência ou acidentes.", margemEsq, yG);
+    yG += 5; doc.text("2.2 A garantia não se aplica a serviços realizados por terceiros não autorizados.", margemEsq, yG);
+    yG += 5; doc.text("2.3 Não cobre alterações na prescrição devido a mudanças na visão do cliente.", margemEsq, yG);
+
+    yG += 8; doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.text("3. Reclamações de Garantia", margemEsq, yG);
+    yG += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("4.1 Para reivindicar a garantia, o cliente deve apresentar o comprovante original.", margemEsq, yG);
+    yG += 5; doc.text("5.2 A garantia é intransferível e só pode ser reivindicada pelo cliente original.", margemEsq, yG);
+
+    // Assinatura no final da Página 2
+    yG = 240;
+    doc.line(70, yG, 140, yG);
+    yG += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("Ótica Elos - Anderson Soares", 105, yG, { align: "center" });
+    yG += 5;
     doc.setFont("helvetica", "normal");
-    const linhas = [
-      "1. Cobertura: Manutencao e ajuste de oculos.",
-      "1.1 Inclui parafusos e plaquetas.",
-      "2. Exclusoes: Danos por uso inadequado.",
-      "3. Reclamacoes: Apresentar comprovante original."
-    ];
-    let yG = 30;
-    linhas.forEach((l) => {
-      doc.text(l, 20, yG);
-      yG += 7;
-    });
+    doc.text("Fortaleza, " + (dados.data || "01/04/2026"), 105, yG, { align: "center" });
   }
 
-  doc.save(titulo + "_" + nomeCli.replace(/\s+/g, '_') + ".pdf");
+  doc.save(titulo + "_" + dados.cliente.replace(/\s+/g, '_') + ".pdf");
 };
