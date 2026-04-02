@@ -54,7 +54,7 @@ function AppContent() {
         color: '#4a5d4e'
       }}>
         <h2 style={{ fontFamily: 'Georgia, serif' }}>Ótica Elos</h2>
-        <p>Sincronizando com o banco de dados... 🤓</p>
+        <p>Sincronizando com o banco de dados... 🍃</p>
       </div>
     );
   }

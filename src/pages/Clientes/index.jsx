@@ -66,15 +66,31 @@ export default function Clientes() {
     }
   };
 
-  const handleEditarCadastro = (cpfAntigo, nomeAntigo) => {
-    const novoNome = prompt("Digite o novo nome do cliente:", nomeAntigo);
-    const novoCpf = prompt("Digite o novo CPF (apenas números):", cpfAntigo);
-    if (novoNome && novoCpf) {
-      editarCliente(cpfAntigo, { nome: novoNome, cpf: novoCpf });
+  const handleEditarCadastro = (cliente) => {
+  const novoNome = prompt("Nome do cliente:", cliente.nome);
+  const novoCpf = prompt("CPF (apenas números):", cliente.cpf);
+  const novoTelefone = prompt("Telefone/WhatsApp:", cliente.telefone);
+  const novoEndereco = prompt("Endereço completo:", cliente.endereco);
+  const novasObs = prompt("Observações:", cliente.observacoes);
+
+  // Só prossegue se o nome e CPF (campos obrigatórios) forem preenchidos
+  if (novoNome && novoCpf) {
+    editarCliente(cliente.cpf, { 
+      nome: novoNome, 
+      cpf: novoCpf, 
+      telefone: novoTelefone || cliente.telefone,
+      endereco: novoEndereco || cliente.endereco,
+      observacoes: novasObs || cliente.observacoes
+    });
+    
+    // Se o CPF mudou, fechamos o modal para evitar erros de referência
+    if (novoCpf !== cliente.cpf) {
       fecharModal();
-      alert("Cadastro atualizado com sucesso!");
     }
-  };
+    
+    alert("Cadastro atualizado com sucesso!");
+  }
+};
 
   const listaFinalClientes = useMemo(() => {
     const todosCPFs = Array.from(new Set([
@@ -194,7 +210,12 @@ export default function Clientes() {
                   <p style={{margin: '5px 0'}}>📝 <strong>Observações:</strong> {clienteNoModal.observacoes || 'Nenhuma nota registrada'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                  <button onClick={() => handleEditarCadastro(clienteNoModal.cpf, clienteNoModal.nome)} className="btn-editar-perfil">✏️ Editar Nome/CPF</button>
+                  <button 
+  onClick={() => handleEditarCadastro(clienteNoModal)} 
+  className="btn-editar-perfil"
+>
+  ✏️ Editar Cadastro Completo
+</button>
                   <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
                 </div>
               </div>
