@@ -267,3 +267,32 @@
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+.form-group-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.form-group-edit label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--primary);
+  text-transform: uppercase;
+}
+
+.form-group-edit input, 
+.form-group-edit textarea {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: sans-serif;
+  font-size: 0.95rem;
+}
+
+.form-group-edit input:focus {
+  border-color: var(--primary);
+  outline: none;
+  background-color: #fffdfa;
+}

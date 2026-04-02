@@ -56,8 +56,14 @@ export default function Clientes() {
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
+  
+  // Estado para controlar se estamos editando e armazenar os dados temporários do formulário
+  const [editandoCadastro, setEditandoCadastro] = useState(null);
 
-  const fecharModal = () => setClienteSelecionadoCPF(null);
+  const fecharModal = () => {
+    setClienteSelecionadoCPF(null);
+    setEditandoCadastro(null);
+  };
 
   const handleEditarDataVenda = (vendaId, dataAntiga) => {
     const novaData = prompt("Altere a data da venda (AAAA-MM-DD):", dataAntiga);
@@ -66,26 +72,26 @@ export default function Clientes() {
     }
   };
 
-  const handleEditarCadastro = (cliente) => {
-    const novoNome = prompt("Nome do cliente:", cliente.nome);
-    const novoCpf = prompt("CPF (apenas números):", cliente.cpf);
-    const novoTelefone = prompt("Telefone/WhatsApp:", cliente.telefone);
-    const novoEndereco = prompt("Endereço completo:", cliente.endereco);
-    const novasObs = prompt("Observações:", cliente.observacoes);
+  const salvarEdicao = async () => {
+    if (!editandoCadastro.nome || !editandoCadastro.cpf) {
+      alert("Nome e CPF são obrigatórios!");
+      return;
+    }
 
-    if (novoNome && novoCpf) {
-      editarCliente(cliente.cpf, { 
-        nome: novoNome, 
-        cpf: novoCpf, 
-        telefone: novoTelefone || cliente.telefone,
-        endereco: novoEndereco || cliente.endereco,
-        observacoes: novasObs || cliente.observacoes
-      });
+    try {
+      // clienteSelecionadoCPF é o CPF atual (chave de busca)
+      // editandoCadastro contém os novos dados
+      await editarCliente(clienteSelecionadoCPF, editandoCadastro);
       
-      if (novoCpf !== cliente.cpf) {
+      // Se o CPF mudou, precisamos atualizar a referência ou fechar o modal
+      if (editandoCadastro.cpf !== clienteSelecionadoCPF) {
         fecharModal();
+      } else {
+        setEditandoCadastro(null);
       }
       alert("Cadastro atualizado com sucesso!");
+    } catch (err) {
+      alert("Erro ao atualizar cadastro.");
     }
   };
 
@@ -199,31 +205,57 @@ export default function Clientes() {
             <button onClick={fecharModal} className="btn-close">&times;</button>
             <header className="modal-header">
               <div style={{flex: 1}}>
-                <h2 style={{margin: 0, color: 'var(--primary)'}}>{clienteNoModal.nome}</h2>
+                <h2 style={{margin: 0, color: 'var(--primary)'}}>
+                  {editandoCadastro ? "Editando Cadastro" : clienteNoModal.nome}
+                </h2>
                 
-                {/* FICHA ORGANIZADA */}
-                <div className="dados-cadastro-box" style={{
-                  marginTop: '15px', 
-                  padding: '20px', 
-                  background: '#fdfaf5', 
-                  borderRadius: '12px', 
-                  border: '1px solid #d2b48c',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '15px'
-                }}>
-                  <p style={{margin: 0}}>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
-                  <p style={{margin: 0}}>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
-                  <p style={{margin: 0, gridColumn: 'span 2'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
-                  <p style={{margin: 0, gridColumn: 'span 2', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', borderTop: '1px solid #e8d5bc', paddingTop: '10px'}}>
-                    📝 {clienteNoModal.observacoes || 'Nenhuma nota registrada'}
-                  </p>
-                </div>
+                {editandoCadastro ? (
+                  /* FORMULÁRIO DE EDIÇÃO */
+                  <div className="dados-cadastro-box" style={{ marginTop: '15px', padding: '20px', background: '#fff', borderRadius: '12px', border: '2px solid var(--primary)', display: 'grid', gap: '12px' }}>
+                    <div className="form-group-edit">
+                      <label>Nome Completo:</label>
+                      <input type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} />
+                    </div>
+                    <div className="form-group-edit">
+                      <label>CPF:</label>
+                      <input type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} />
+                    </div>
+                    <div className="form-group-edit">
+                      <label>WhatsApp:</label>
+                      <input type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} />
+                    </div>
+                    <div className="form-group-edit">
+                      <label>Endereço:</label>
+                      <input type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} />
+                    </div>
+                    <div className="form-group-edit">
+                      <label>Observações:</label>
+                      <textarea value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" style={{width: '100%', resize: 'none'}} />
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button className="btn-baixa" onClick={salvarEdicao}>Salvar Alterações</button>
+                      <button className="btn-sair" style={{ margin: 0, background: '#eee', color: '#666' }} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  /* FICHA DE VISUALIZAÇÃO */
+                  <>
+                    <div className="dados-cadastro-box" style={{ marginTop: '15px', padding: '20px', background: '#fdfaf5', borderRadius: '12px', border: '1px solid #d2b48c', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      <p style={{margin: 0}}>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
+                      <p style={{margin: 0}}>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
+                      <p style={{margin: 0, gridColumn: 'span 2'}}>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
+                      <p style={{margin: 0, gridColumn: 'span 2', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', borderTop: '1px solid #e8d5bc', paddingTop: '10px'}}>
+                        📝 {clienteNoModal.observacoes || 'Nenhuma nota registrada'}
+                      </p>
+                    </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                  <button onClick={() => handleEditarCadastro(clienteNoModal)} className="btn-editar-perfil">✏️ Editar Cadastro Completo</button>
-                  <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
-                </div>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                      <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
+                      <button onClick={() => { excluirCliente(clienteNoModal.cpf); fecharModal(); }} className="btn-excluir-venda" style={{ marginTop: 0, width: 'auto', background: '#fff5f5' }}>🗑️ Excluir Cadastro</button>
+                    </div>
+                  </>
+                )}
               </div>
             </header>
             
