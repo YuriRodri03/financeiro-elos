@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFRelatorio } from '../../documentosUtils';
+import { gerarPDFSaudeFinanceira } from '../../documentosUtils';
 import './style.css';
 
 export default function Dashboard() {
@@ -11,28 +11,63 @@ export default function Dashboard() {
   const [anoFiltro, setAnoFiltro] = useState(dataAtual.getFullYear());
   const [modalTipo, setModalTipo] = useState(null);
 
-  // --- NOVOS ESTADOS PARA O RELATÓRIO PDF POR PERÍODO ---
+  // --- NOVOS ESTADOS PARA O RELATÓRIO DE SAÚDE FINANCEIRA POR PERÍODO ---
   const [relatorioInicio, setRelatorioInicio] = useState('');
   const [relatorioFim, setRelatorioFim] = useState('');
 
   if (carregando) return null;
 
-  // --- LÓGICA DO RELATÓRIO PDF ---
-  const vendasFiltradasRelatorio = useMemo(() => {
-    if (!relatorioInicio || !relatorioFim) return [];
-    return vendas.filter(v => v.dataVenda >= relatorioInicio && v.dataVenda <= relatorioFim);
-  }, [vendas, relatorioInicio, relatorioFim]);
-
-  const handleGerarRelatorioPDF = () => {
-    if (vendasFiltradasRelatorio.length === 0) {
-      alert("Nenhuma venda encontrada para o período selecionado.");
+  // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA (PDF) ---
+  const handleGerarRelatorioSaude = () => {
+    if (!relatorioInicio || !relatorioFim) {
+      alert("Por favor, selecione as datas de início e fim.");
       return;
     }
-    const periodo = {
+
+    // 1. Filtrar ENTRADAS (Dinheiro que REALMENTE entrou no caixa no período)
+    let entradasPeriodo = [];
+    vendas.forEach(venda => {
+      (venda.listaParcelas || []).forEach(p => {
+        if (p.paga && p.dataPagamento >= relatorioInicio && p.dataPagamento <= relatorioFim) {
+          entradasPeriodo.push({ 
+            nome: venda.cliente, 
+            valor: p.valor, 
+            data: p.dataPagamento.split('-').reverse().join('/') 
+          });
+        }
+      });
+    });
+
+    // 2. Filtrar SAÍDAS (Despesas do período)
+    const saidasPeriodo = despesas.filter(d => 
+      d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim
+    ).map(d => ({ 
+      nome: d.descricao, 
+      valor: d.valor, 
+      data: d.vencimento.split('-').reverse().join('/') 
+    }));
+
+    const totalEntradas = entradasPeriodo.reduce((acc, i) => acc + i.valor, 0);
+    const totalSaidas = saidasPeriodo.reduce((acc, i) => acc + i.valor, 0);
+
+    if (entradasPeriodo.length === 0 && saidasPeriodo.length === 0) {
+      alert("Nenhuma movimentação encontrada neste período.");
+      return;
+    }
+
+    const dadosRelatorio = {
+      entradas: entradasPeriodo,
+      saidas: saidasPeriodo,
+      totalEntradas,
+      totalSaidas
+    };
+
+    const periodoFmt = {
       inicio: relatorioInicio.split('-').reverse().join('/'),
       fim: relatorioFim.split('-').reverse().join('/')
     };
-    gerarPDFRelatorio(vendasFiltradasRelatorio, periodo);
+
+    gerarPDFSaudeFinanceira(dadosRelatorio, periodoFmt);
   };
 
   // --- SEUS CÁLCULOS MENSAIS ORIGINAIS (MANTIDOS) ---
@@ -131,35 +166,30 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* --- NOVA SEÇÃO: GERAR RELATÓRIO FINANCEIRO EM PDF --- */}
-      <h2 className="secao-titulo">Relatórios Exportáveis</h2>
+      {/* --- SEÇÃO: ANÁLISE DE SAÚDE FINANCEIRA (NOVO) --- */}
+      <h2 className="secao-titulo">Análise de Saúde Financeira</h2>
       <section className="dashboard-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #eee', marginBottom: '30px' }}>
-        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '15px' }}>📊 Gerar Relatório por Período Personalizado</h3>
+        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '15px' }}>🏥 Gerar Balanço de Fluxo de Caixa (Entradas vs Saídas)</h3>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="filtro-group">
-            <label style={{fontSize: '12px'}}>Início:</label>
+            <label style={{fontSize: '12px'}}>Início do Período:</label>
             <input type="date" value={relatorioInicio} onChange={(e) => setRelatorioInicio(e.target.value)} />
           </div>
           <div className="filtro-group">
-            <label style={{fontSize: '12px'}}>Fim:</label>
+            <label style={{fontSize: '12px'}}>Fim do Período:</label>
             <input type="date" value={relatorioFim} onChange={(e) => setRelatorioFim(e.target.value)} />
           </div>
           <button 
-            onClick={handleGerarRelatorioPDF}
+            onClick={handleGerarRelatorioSaude}
             className="btn-gerar"
             style={{ padding: '10px 20px', backgroundColor: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
           >
-            📄 Baixar Relatório (PDF)
+            📊 Baixar Saúde Financeira (PDF)
           </button>
         </div>
-        {relatorioInicio && relatorioFim && (
-          <p style={{marginTop: '10px', fontSize: '13px', color: '#666'}}>
-            Encontradas: <strong>{vendasFiltradasRelatorio.length} vendas</strong> no período selecionado.
-          </p>
-        )}
       </section>
 
-      {/* --- SEU CONTEÚDO ORIGINAL ABAIXO (INTACTO) --- */}
+      {/* --- FLUXO MENSAL --- */}
       <h2 className="secao-titulo">Fluxo de Caixa Mensal ({mesFiltro}/{anoFiltro})</h2>
       <section className="resumo-cards">
         <div className="card entrada clicavel" onClick={() => setModalTipo('entradas')}>
@@ -180,7 +210,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <h2 className="secao-titulo">Análise de Saúde Financeira</h2>
+      {/* --- ANÁLISE DE SAÚDE MENSAL --- */}
+      <h2 className="secao-titulo">Análise de Desempenho Mensal</h2>
       <section className="analise-economica">
         <div className="card-analise">
           <h4>Eficiência de Caixa</h4>
@@ -215,7 +246,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* MODAL MULTIFUNÇÃO */}
+      {/* MODAL MULTIFUNÇÃO (MANTIDO) */}
       {modalTipo && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -237,7 +268,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* RESUMO ANUAL */}
+      {/* RESUMO ANUAL (MANTIDO) */}
       <h2 className="secao-titulo">Resumo Anual ({anoFiltro})</h2>
       <section className="resumo-cards">
         <div className="card entrada" style={{borderColor: '#2e7d32'}}>
@@ -254,7 +285,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* LISTA DE VENDAS RECENTES */}
+      {/* LISTA DE VENDAS RECENTES (MANTIDO) */}
       <div className="lista-recente">
         <h3>Vendas de {mesFiltro}/{anoFiltro}</h3>
         {vendasNovasNoMes.length > 0 ? (

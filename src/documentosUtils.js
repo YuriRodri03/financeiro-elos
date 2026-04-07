@@ -213,54 +213,88 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.save(txtT + "_" + nCli.replace(/\s+/g, "_") + ".pdf");
 };
 
-export const gerarPDFRelatorio = (vendasFiltradas, periodo) => {
+export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   const doc = new jsPDF();
   const verdeElos = [74, 93, 78];
+  const margemEsq = 20;
   let y = 20;
 
-  // Cabeçalho Simples
+  // Cabeçalho
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("Ótica Elos - Relatório Financeiro", 105, y, { align: "center" });
+  doc.text("Ótica Elos - Saúde Financeira", 105, y, { align: "center" });
   
   y += 10;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Período: " + periodo.inicio + " até " + periodo.fim, 105, y, { align: "center" });
+  doc.text("Período Analisado: " + periodo.inicio + " até " + periodo.fim, 105, y, { align: "center" });
 
+  // --- SEÇÃO 1: ENTRADAS (DINHEIRO QUE ENTROU) ---
   y += 15;
-  // Tabela de Vendas
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
-  doc.rect(20, y, 170, 8, "F");
+  doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
-  doc.text("Data", 22, y + 5);
-  doc.text("Cliente", 50, y + 5);
-  doc.text("Método", 120, y + 5);
-  doc.text("Valor", 185, y + 5, { align: "right" });
-
+  doc.setFont("helvetica", "bold");
+  doc.text("ENTRADAS (Recebimentos)", margemEsq + 2, y + 5);
+  
   y += 13;
   doc.setTextColor(0, 0, 0);
-  let totalGeral = 0;
+  doc.setFontSize(9);
+  doc.text("Origem / Cliente", margemEsq, y);
+  doc.text("Valor", 185, y, { align: "right" });
+  y += 2;
+  doc.line(margemEsq, y, 190, y);
+  y += 6;
 
-  vendasFiltradas.forEach((v) => {
-    const dataFmt = v.dataVenda.split('-').reverse().join('/');
-    doc.text(dataFmt, 22, y);
-    doc.text(v.cliente.substring(0, 20), 50, y);
-    doc.text(v.metodoPagamento, 120, y);
-    doc.text("R$ " + v.valorTotal.toFixed(2), 185, y, { align: "right" });
-    totalGeral += v.valorTotal;
-    y += 7;
-
-    // Adiciona nova página se o relatório for longo
+  dadosRelatorio.entradas.forEach(item => {
+    doc.text(item.nome.substring(0, 35), margemEsq, y);
+    doc.text("R$ " + item.valor.toFixed(2).replace('.', ','), 185, y, { align: "right" });
+    y += 6;
     if (y > 270) { doc.addPage(); y = 20; }
   });
 
+  // --- SEÇÃO 2: SAÍDAS (DESPESAS) ---
   y += 10;
+  doc.setFillColor(198, 40, 40); // Vermelho para saídas
+  doc.rect(margemEsq, y, 170, 8, "F");
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFillColor(245, 245, 245);
-  doc.rect(120, y - 5, 70, 10, "F");
-  doc.text("TOTAL DO PERÍODO:", 122, y + 2);
-  doc.text("R$ " + totalGeral.toFixed(2), 185, y + 2, { align: "right" });
+  doc.text("SAÍDAS (Despesas e Contas)", margemEsq + 2, y + 5);
 
-  doc.save("Relatorio_Financeiro_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
+  y += 13;
+  doc.setTextColor(0, 0, 0);
+  doc.text("Descrição", margemEsq, y);
+  doc.text("Valor", 185, y, { align: "right" });
+  y += 2;
+  doc.line(margemEsq, y, 190, y);
+  y += 6;
+
+  dadosRelatorio.saidas.forEach(item => {
+    doc.text(item.nome.substring(0, 35), margemEsq, y);
+    doc.text("- R$ " + item.valor.toFixed(2).replace('.', ','), 185, y, { align: "right" });
+    y += 6;
+    if (y > 270) { doc.addPage(); y = 20; }
+  });
+
+  // --- RESUMO FINAL ---
+  y += 15;
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margemEsq, y, 170, 25, "F");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(11);
+  
+  doc.text("Total de Entradas:", margemEsq + 5, y + 7);
+  doc.text("R$ " + dadosRelatorio.totalEntradas.toFixed(2).replace('.', ','), 185, y + 7, { align: "right" });
+  
+  doc.text("Total de Saídas:", margemEsq + 5, y + 14);
+  doc.setTextColor(198, 40, 40);
+  doc.text("- R$ " + dadosRelatorio.totalSaidas.toFixed(2).replace('.', ','), 185, y + 14, { align: "right" });
+  
+  const saldo = dadosRelatorio.totalEntradas - dadosRelatorio.totalSaidas;
+  doc.setTextColor(saldo >= 0 ? verdeElos[0] : 198, 40, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("LUCRO / SALDO LÍQUIDO:", margemEsq + 5, y + 21);
+  doc.text("R$ " + saldo.toFixed(2).replace('.', ','), 185, y + 21, { align: "right" });
+
+  doc.save("Saude_Financeira_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
 };
