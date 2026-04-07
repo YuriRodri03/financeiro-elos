@@ -58,8 +58,6 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
-  
-  // Estado para o formulário de configuração do recibo
   const [dadosRecibo, setDadosRecibo] = useState(null);
 
   const fecharModal = () => {
@@ -140,7 +138,7 @@ export default function Clientes() {
   return (
     <div className="clientes-container">
       <header className="clientes-header">
-        <h1>Carteira de Clientes - Ótica Elos</h1>
+        <h1>Carteira de Clientes - Ótica Elos [cite: 2]</h1>
       </header>
 
       <div className="busca-secao">
@@ -248,7 +246,7 @@ export default function Clientes() {
                     <div style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #ddd' }}>
                       {dadosRecibo ? (
                         <div style={{ display: 'grid', gap: '10px' }}>
-                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#4a5d4e' }}>Configurar Recibo com Desconto</h4>
+                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#4a5d4e' }}>Configurar Recibo [cite: 12]</h4>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <div style={{ flex: 1 }}>
                               <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Valor Bruto (R$):</label>
@@ -271,20 +269,25 @@ export default function Clientes() {
                           </div>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <div style={{ flex: 1 }}>
-                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Data:</label>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Forma de Pagamento: [cite: 27]</label>
+                              <select 
+                                value={dadosRecibo.metodoPagamento} 
+                                onChange={(e) => setDadosRecibo({...dadosRecibo, metodoPagamento: e.target.value})}
+                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                              >
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Pix">Pix</option>
+                                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                <option value="Cartão de Débito">Cartão de Débito</option>
+                                <option value="Boleto / Crediário">Boleto / Crediário</option>
+                              </select>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Data: [cite: 14]</label>
                               <input 
                                 type="date" 
                                 value={dadosRecibo.data} 
                                 onChange={(e) => setDadosRecibo({...dadosRecibo, data: e.target.value})}
-                                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                              />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Referente a:</label>
-                              <input 
-                                type="text" 
-                                value={dadosRecibo.produto} 
-                                onChange={(e) => setDadosRecibo({...dadosRecibo, produto: e.target.value})}
                                 style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                               />
                             </div>
@@ -302,7 +305,8 @@ export default function Clientes() {
                                   produto: dadosRecibo.produto, 
                                   valorProduto: valorBruto, 
                                   desconto: desconto,
-                                  valorTotal: valorBruto - desconto 
+                                  valorTotal: valorBruto - desconto,
+                                  metodoPagamento: dadosRecibo.metodoPagamento 
                                 }, 'recibo');
                                 setDadosRecibo(null);
                               }}
@@ -321,7 +325,8 @@ export default function Clientes() {
                               valor: clienteNoModal.totalGeralDevido, 
                               desconto: 0,
                               data: new Date().toISOString().split('T')[0],
-                              produto: "Produtos Ópticos / Lentes" 
+                              produto: "Produtos Ópticos / Lentes",
+                              metodoPagamento: "Dinheiro" 
                             })} 
                             className="btn-editar-perfil" 
                             style={{ background: '#4a5d4e', color: 'white' }}
@@ -360,7 +365,8 @@ export default function Clientes() {
                             produto: venda.produto || "Produtos Ópticos",
                             valorProduto: venda.valorTotal + (venda.desconto || 0),
                             desconto: venda.desconto || 0,
-                            valorTotal: venda.valorTotal
+                            valorTotal: venda.valorTotal,
+                            metodoPagamento: venda.metodoPagamento 
                           }, 'pedido')}
                           style={{ 
                             padding: '4px 8px', 
@@ -371,7 +377,7 @@ export default function Clientes() {
                             borderRadius: '4px' 
                           }}
                         >
-                          📄 Pedido/Garantia
+                          📄 Pedido/Garantia [cite: 54]
                         </button>
                       </div>
                     </div>
