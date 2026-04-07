@@ -83,18 +83,21 @@ export default function Vendas() {
     }
 
     try {
-      await adicionarVenda(dadosParaSalvar);
+      // Salva a venda e recupera o resultado (que deve conter o ID/Número gerado pelo banco)
+      const novaVendaSalva = await adicionarVenda(dadosParaSalvar);
       
       const imprimir = confirm("Venda registrada com sucesso! 👓\nDeseja gerar o Pedido com Garantia agora?");
       if (imprimir) {
         gerarPDFDocumento({
-          numero: "017-2026", 
+          // Pega o número real da venda salva ou gera um baseado no horário
+          numero: novaVendaSalva?.numeroPedido || novaVendaSalva?.id || "PED-" + Date.now().toString().slice(-6), 
           data: venda.dataVenda.split('-').reverse().join('/'),
           cliente: venda.cliente,
           produto: venda.produto || "PRODUTOS ÓPTICOS",
           valorProduto: valorTotalLimpio + descontoLimpio,
           desconto: descontoLimpio,
-          valorTotal: valorTotalLimpio
+          valorTotal: valorTotalLimpio,
+          metodoPagamento: venda.metodoPagamento // Adicionado para ser dinâmico no PDF
         }, 'pedido'); 
       }
 
@@ -113,7 +116,7 @@ export default function Vendas() {
     } catch (error) {
       alert("Erro ao salvar a venda.");
     }
-  }; // Fechamento da função handleSalvar
+  };
 
   return (
     <div className="vendas-container">

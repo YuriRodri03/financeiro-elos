@@ -17,6 +17,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   const logoImg = await carregarLogo("/favicon.png");
 
+  // --- CABEÇALHO ---
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 15, 15, 15);
   }
@@ -46,6 +47,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setDrawColor(200, 200, 200);
   doc.line(margemEsq, y, 190, y); 
 
+  // --- TÍTULO ---
   y += 10;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 10, "F");
@@ -53,10 +55,15 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   const txtT = tipo === "recibo" ? "Recibo" : "Pedido";
-  doc.text(txtT + " " + (dados.numero || "017-2026"), margemEsq + 5, y + 7);
+  
+  // NÚMERO DINÂMICO: Usa o que vier de 'dados.numero'
+  const numeroExibicao = dados.numero || "S/N";
+  doc.text(txtT + " " + numeroExibicao, margemEsq + 5, y + 7);
+  
   doc.setFontSize(10);
   doc.text(dados.data || "01/04/2026", 185, y + 7, { align: "right" });
 
+  // --- CORPO DO TEXTO ---
   y += 18;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(11);
@@ -72,6 +79,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     y += 10;
   }
 
+  // --- PRODUTOS ---
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
@@ -93,6 +101,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const pUni = Number(dados.valorProduto || 0).toFixed(2).replace(".", ",");
   doc.text("R$ " + pUni, 185, y, { align: "right" });
 
+  // --- VALORES ---
   y += 15;
   doc.text("Subtotal", 130, y);
   doc.text("R$ " + pUni, 185, y, { align: "right" });
@@ -109,6 +118,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text("Total", 130, y);
   doc.text("R$ " + vTotal, 185, y, { align: "right" });
 
+  // --- PAGAMENTO ---
   y += 15;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
@@ -124,50 +134,70 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const pgto = dados.metodoPagamento || "Dinheiro";
   doc.text(pgto, margemEsq, y);
 
-  y = 245;
-  doc.setDrawColor(0, 0, 0);
-  doc.line(70, y, 140, y);
-  y += 5;
-  doc.setFont("helvetica", "bold");
-  doc.text("Ótica Elos - Anderson Soares", 105, y, { align: "center" });
-  y += 5;
-  doc.setFont("helvetica", "normal");
-  doc.text("Fortaleza, " + (dados.data || "01/04/2026"), 105, y, { align: "center" });
+  // FUNÇÃO AUXILIAR PARA ASSINATURAS
+  const desenharAssinaturas = (posY) => {
+    doc.setDrawColor(0, 0, 0);
+    // Linha Ótica
+    doc.line(margemEsq, posY, 90, posY);
+    // Linha Cliente
+    doc.line(110, posY, 190, posY);
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Ótica Elos (Anderson Soares)", 55, posY + 5, { align: "center" });
+    doc.text(nCli, 150, posY + 5, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Fortaleza, " + (dados.data || "01/04/2026"), 105, posY + 15, { align: "center" });
+    
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("obrigado por construir esse elo conosco.", 105, posY + 25, { align: "center" });
+  };
 
+  // Se for Recibo, assina no fim da primeira página
+  if (tipo === "recibo") {
+    desenharAssinaturas(245);
+  }
+
+  // --- SEGUNDA PÁGINA (PEDIDO) ---
   if (tipo === "pedido") {
     doc.addPage();
     doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
     doc.rect(margemEsq, 20, 170, 10, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
     doc.text("Garantia", margemEsq + 5, 27);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
+    
     const g = [
       "1. Cobertura de Garantia",
-      "1.1 A garantia cobre exclusivamente os serviços de manutenção e ajuste de óculos fornecidos pela ótica. [cite: 57]",
-      "1.2 A garantia inclui a substituição de parafusos, plaquetas e ajustes de armação sem custo adicional. [cite: 58]",
-      "1.3 A garantia cobre a verificação e ajuste da prescrição óptica conforme necessário. [cite: 59]",
+      "1.1 A garantia cobre exclusivamente os serviços de manutenção e ajuste de óculos fornecidos pela ótica.",
+      "1.2 A garantia inclui a substituição de parafusos, plaquetas e ajustes de armação sem custo adicional.",
+      "1.3 A garantia cobre a verificação e ajuste da prescrição óptica conforme necessário.",
       "",
       "2. Exclusões de Garantia",
-      "2.1 A garantia não cobre danos causados por uso inadequado, negligência ou acidentes. [cite: 61]",
-      "2.2 A garantia não se aplica a serviços realizados por terceiros não autorizados pela ótica. [cite: 62]",
-      "2.3 A garantia não cobre alterações na prescrição devido a mudanças na visão do cliente. [cite: 63]",
+      "2.1 A garantia não cobre danos causados por uso inadequado, negligência ou acidentes.",
+      "2.2 A garantia não se aplica a serviços realizados por terceiros não autorizados pela ótica.",
+      "2.3 A garantia não cobre alterações na prescrição devido a mudanças na visão do cliente.",
       "",
       "3. Remédios de Garantia",
-      "3.1 Em caso de defeito nos serviços, a ótica realizará os reparos necessários sem custo. [cite: 65]",
-      "3.2 Se os reparos não forem possíveis, poderá ser oferecido serviço equivalente. [cite: 66]",
+      "3.1 Em caso de defeito nos serviços, a ótica realizará os reparos necessários sem custo.",
+      "3.2 Se os reparos não forem possíveis, poderá ser oferecido serviço equivalente.",
       "",
       "4. Reclamações de Garantia",
-      "4.1 Para reivindicar a garantia, o cliente deve apresentar o comprovante de serviço original. [cite: 68]",
-      "4.2 As reclamações devem ser feitas diretamente na ótica onde o serviço foi prestado. [cite: 69]",
+      "4.1 Para reivindicar a garantia, o cliente deve apresentar o comprovante de serviço original.",
+      "4.2 As reclamações devem ser feitas diretamente na ótica onde o serviço foi prestado.",
       "",
       "5. Limitações de Garantia",
-      "5.1 A garantia é limitada aos serviços especificados e não cobre outros custos incorridos. [cite: 72]",
-      "5.2 A garantia é intransferível e só pode ser reivindicada pelo cliente original. [cite: 73]"
+      "5.1 A garantia é limitada aos serviços especificados e não cobre outros custos incorridos.",
+      "5.2 A garantia é intransferível e só pode ser reivindicada pelo cliente original."
     ];
+
     let yG = 40;
     for (let i = 0; i < g.length; i++) {
       if (g[i] === "") { yG += 4; continue; }
@@ -175,6 +205,9 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
       doc.text(splitG, margemEsq, yG);
       yG += (splitG.length * 5);
     }
+
+    // Assina no fim da garantia (Página 2)
+    desenharAssinaturas(yG + 20);
   }
 
   doc.save(txtT + "_" + nCli.replace(/\s+/g, "_") + ".pdf");

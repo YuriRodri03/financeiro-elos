@@ -138,7 +138,7 @@ export default function Clientes() {
   return (
     <div className="clientes-container">
       <header className="clientes-header">
-        <h1>Carteira de Clientes - Ótica Elos [cite: 2]</h1>
+        <h1>Carteira de Clientes - Ótica Elos</h1>
       </header>
 
       <div className="busca-secao">
@@ -246,7 +246,7 @@ export default function Clientes() {
                     <div style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #ddd' }}>
                       {dadosRecibo ? (
                         <div style={{ display: 'grid', gap: '10px' }}>
-                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#4a5d4e' }}>Configurar Recibo [cite: 12]</h4>
+                          <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#4a5d4e' }}>Configurar Recibo</h4>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <div style={{ flex: 1 }}>
                               <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Valor Bruto (R$):</label>
@@ -269,7 +269,7 @@ export default function Clientes() {
                           </div>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <div style={{ flex: 1 }}>
-                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Forma de Pagamento: [cite: 27]</label>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Forma de Pagamento:</label>
                               <select 
                                 value={dadosRecibo.metodoPagamento} 
                                 onChange={(e) => setDadosRecibo({...dadosRecibo, metodoPagamento: e.target.value})}
@@ -283,7 +283,7 @@ export default function Clientes() {
                               </select>
                             </div>
                             <div style={{ flex: 1 }}>
-                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Data: [cite: 14]</label>
+                              <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Data:</label>
                               <input 
                                 type="date" 
                                 value={dadosRecibo.data} 
@@ -299,7 +299,7 @@ export default function Clientes() {
                                 const valorBruto = Number(dadosRecibo.valor || 0);
                                 const desconto = Number(dadosRecibo.desconto || 0);
                                 await gerarPDFDocumento({
-                                  numero: "017-2026", 
+                                  numero: "REC-" + Date.now().toString().slice(-4), 
                                   data: dadosRecibo.data.split('-').reverse().join('/'), 
                                   cliente: clienteNoModal.nome, 
                                   produto: dadosRecibo.produto, 
@@ -359,7 +359,7 @@ export default function Clientes() {
                         </span>
                         <button 
                           onClick={() => gerarPDFDocumento({
-                            numero: venda.numeroPedido || "017-2026",
+                            numero: venda.numeroPedido || venda.id || "017-2026",
                             data: venda.dataVenda.split('-').reverse().join('/'),
                             cliente: clienteNoModal.nome,
                             produto: venda.produto || "Produtos Ópticos",
