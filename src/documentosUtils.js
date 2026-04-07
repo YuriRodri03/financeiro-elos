@@ -17,7 +17,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   const logoImg = await carregarLogo("/favicon.png");
 
-  // --- CABECALHO ---
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 15, 15, 15);
   }
@@ -25,7 +24,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("Otica Elos", 50, 22);
+  doc.text("Ótica Elos", 50, 22);
   
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -36,7 +35,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.setFont("helvetica", "italic");
-  doc.text("Criando um elo com voce!", 140, 22);
+  doc.text("Criando um elo com você!", 140, 22);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100, 100, 100);
   doc.text("oticaelos@hotmail.com", 140, 27);
@@ -47,40 +46,32 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setDrawColor(200, 200, 200);
   doc.line(margemEsq, y, 190, y); 
 
-  // --- TITULO COM FUNDO VERDE ---
   y += 10;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 10, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  
-  const txtTitulo = tipo === "recibo" ? "Recibo" : "Pedido";
-  const numDocumento = dados.numero || "017-2026";
-  const dataDocumento = dados.data || "01/04/2026";
-  
-  doc.text(txtTitulo + " " + numDocumento, margemEsq + 5, y + 7);
+  const txtT = tipo === "recibo" ? "Recibo" : "Pedido";
+  doc.text(txtT + " " + (dados.numero || "017-2026"), margemEsq + 5, y + 7);
   doc.setFontSize(10);
-  doc.text(dataDocumento, 185, y + 7, { align: "right" });
+  doc.text(dados.data || "01/04/2026", 185, y + 7, { align: "right" });
 
-  // --- CORPO ---
   y += 18;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(11);
-  const nomeCliente = (dados.cliente || "CLIENTE").toUpperCase();
-  const valorTotalStr = Number(dados.valorTotal || 0).toFixed(2).replace(".", ",");
+  const nCli = (dados.cliente || "CLIENTE").toUpperCase();
+  const vTotal = Number(dados.valorTotal || 0).toFixed(2).replace(".", ",");
 
   if (tipo === "recibo") {
-    const fraseRecibo = "Declaro que recebi de " + nomeCliente + " o valor de R$ " + valorTotalStr + " em " + dataDocumento + ", referente aos seguintes produtos:";
-    const splitRecibo = doc.splitTextToSize(fraseRecibo, 170);
-    doc.text(splitRecibo, margemEsq, y);
-    y += (splitRecibo.length * 6);
+    const frase = "Declaro que recebi de " + nCli + " o valor de R$ " + vTotal + " em " + (dados.data || "01/04/2026") + ", referente aos seguintes produtos:";
+    doc.text(doc.splitTextToSize(frase, 170), margemEsq, y);
+    y += 12;
   } else {
-    doc.text("Cliente: " + nomeCliente, margemEsq, y);
+    doc.text("Cliente: " + nCli, margemEsq, y);
     y += 10;
   }
 
-  // --- PRODUTOS (Fundo Verde) ---
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
@@ -91,37 +82,33 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFillColor(245, 245, 245);
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(0, 0, 0);
-  doc.text("Descricao", margemEsq + 2, y + 5);
+  doc.text("Descrição", margemEsq + 2, y + 5);
   doc.text("Qtd.", 140, y + 5);
-  doc.text("Preco", 185, y + 5, { align: "right" });
+  doc.text("Preço", 185, y + 5, { align: "right" });
   
   y += 12;
   doc.setFont("helvetica", "normal");
-  const descProd = dados.produto || "VISAO SIMPLES 1.61 BLUE";
-  const precoUnid = Number(dados.valorProduto || 0).toFixed(2).replace(".", ",");
-  
-  doc.text(descProd, margemEsq + 2, y);
+  doc.text(dados.produto || "VISÃO SIMPLES 1.61 BLUE", margemEsq + 2, y);
   doc.text("1", 142, y);
-  doc.text("R$ " + precoUnid, 185, y, { align: "right" });
+  const pUni = Number(dados.valorProduto || 0).toFixed(2).replace(".", ",");
+  doc.text("R$ " + pUni, 185, y, { align: "right" });
 
-  // --- VALORES ---
   y += 15;
   doc.text("Subtotal", 130, y);
-  doc.text("R$ " + precoUnid, 185, y, { align: "right" });
+  doc.text("R$ " + pUni, 185, y, { align: "right" });
   
   y += 7;
   doc.setTextColor(198, 40, 40);
-  const valorDesc = Number(dados.desconto || 0).toFixed(2).replace(".", ",");
+  const vDesc = Number(dados.desconto || 0).toFixed(2).replace(".", ",");
   doc.text("Desconto sobre produtos", 130, y);
-  doc.text("- R$ " + valorDesc, 185, y, { align: "right" });
+  doc.text("- R$ " + vDesc, 185, y, { align: "right" });
   
   y += 7;
   doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.setFont("helvetica", "bold");
   doc.text("Total", 130, y);
-  doc.text("R$ " + valorTotalStr, 185, y, { align: "right" });
+  doc.text("R$ " + vTotal, 185, y, { align: "right" });
 
-  // --- PAGAMENTO ---
   y += 15;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
@@ -130,7 +117,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   
   y += 12;
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
   doc.text("Meios de pagamento:", margemEsq, y);
   y += 5;
   doc.setFont("helvetica", "normal");
@@ -138,23 +124,16 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const pgto = dados.metodoPagamento || "Dinheiro";
   doc.text(pgto, margemEsq, y);
 
-  // --- ASSINATURA ---
   y = 245;
   doc.setDrawColor(0, 0, 0);
   doc.line(70, y, 140, y);
   y += 5;
   doc.setFont("helvetica", "bold");
-  doc.text("Otica Elos - Anderson Soares", 105, y, { align: "center" });
+  doc.text("Ótica Elos - Anderson Soares", 105, y, { align: "center" });
   y += 5;
   doc.setFont("helvetica", "normal");
-  doc.text("Fortaleza, " + dataDocumento, 105, y, { align: "center" });
+  doc.text("Fortaleza, " + (dados.data || "01/04/2026"), 105, y, { align: "center" });
 
-  y = 275;
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text("obrigado por construir esse elo conosco.", 105, y, { align: "center" });
-
-  // --- GARANTIA ---
   if (tipo === "pedido") {
     doc.addPage();
     doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
@@ -166,19 +145,37 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    const gar = [
-      "1. Cobertura: Manutencao e ajuste de oculos.",
-      "1.1 Inclui substituicao de parafusos e plaquetas.",
-      "2. Exclusoes: Danos por uso inadequado ou acidentes.",
-      "3. Reclamacoes: Apresentar o comprovante original."
+    const g = [
+      "1. Cobertura de Garantia",
+      "1.1 A garantia cobre exclusivamente os serviços de manutenção e ajuste de óculos fornecidos pela ótica. [cite: 57]",
+      "1.2 A garantia inclui a substituição de parafusos, plaquetas e ajustes de armação sem custo adicional. [cite: 58]",
+      "1.3 A garantia cobre a verificação e ajuste da prescrição óptica conforme necessário. [cite: 59]",
+      "",
+      "2. Exclusões de Garantia",
+      "2.1 A garantia não cobre danos causados por uso inadequado, negligência ou acidentes. [cite: 61]",
+      "2.2 A garantia não se aplica a serviços realizados por terceiros não autorizados pela ótica. [cite: 62]",
+      "2.3 A garantia não cobre alterações na prescrição devido a mudanças na visão do cliente. [cite: 63]",
+      "",
+      "3. Remédios de Garantia",
+      "3.1 Em caso de defeito nos serviços, a ótica realizará os reparos necessários sem custo. [cite: 65]",
+      "3.2 Se os reparos não forem possíveis, poderá ser oferecido serviço equivalente. [cite: 66]",
+      "",
+      "4. Reclamações de Garantia",
+      "4.1 Para reivindicar a garantia, o cliente deve apresentar o comprovante de serviço original. [cite: 68]",
+      "4.2 As reclamações devem ser feitas diretamente na ótica onde o serviço foi prestado. [cite: 69]",
+      "",
+      "5. Limitações de Garantia",
+      "5.1 A garantia é limitada aos serviços especificados e não cobre outros custos incorridos. [cite: 72]",
+      "5.2 A garantia é intransferível e só pode ser reivindicada pelo cliente original. [cite: 73]"
     ];
     let yG = 40;
-    for (let i = 0; i < gar.length; i++) {
-      doc.text(gar[i], margemEsq, yG);
-      yG += 7;
+    for (let i = 0; i < g.length; i++) {
+      if (g[i] === "") { yG += 4; continue; }
+      const splitG = doc.splitTextToSize(g[i], 170);
+      doc.text(splitG, margemEsq, yG);
+      yG += (splitG.length * 5);
     }
   }
 
-  const nomeArquivo = txtTitulo + "_" + nomeCliente.replace(/\s+/g, "_") + ".pdf";
-  doc.save(nomeArquivo);
+  doc.save(txtT + "_" + nCli.replace(/\s+/g, "_") + ".pdf");
 };

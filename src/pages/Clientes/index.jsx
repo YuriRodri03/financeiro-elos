@@ -377,7 +377,7 @@ export default function Clientes() {
                             borderRadius: '4px' 
                           }}
                         >
-                          📄 Pedido/Garantia [cite: 54]
+                          📄 Pedido/Garantia
                         </button>
                       </div>
                     </div>
