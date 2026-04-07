@@ -212,3 +212,55 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   doc.save(txtT + "_" + nCli.replace(/\s+/g, "_") + ".pdf");
 };
+
+export const gerarPDFRelatorio = (vendasFiltradas, periodo) => {
+  const doc = new jsPDF();
+  const verdeElos = [74, 93, 78];
+  let y = 20;
+
+  // Cabeçalho Simples
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("Ótica Elos - Relatório Financeiro", 105, y, { align: "center" });
+  
+  y += 10;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Período: " + periodo.inicio + " até " + periodo.fim, 105, y, { align: "center" });
+
+  y += 15;
+  // Tabela de Vendas
+  doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+  doc.rect(20, y, 170, 8, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.text("Data", 22, y + 5);
+  doc.text("Cliente", 50, y + 5);
+  doc.text("Método", 120, y + 5);
+  doc.text("Valor", 185, y + 5, { align: "right" });
+
+  y += 13;
+  doc.setTextColor(0, 0, 0);
+  let totalGeral = 0;
+
+  vendasFiltradas.forEach((v) => {
+    const dataFmt = v.dataVenda.split('-').reverse().join('/');
+    doc.text(dataFmt, 22, y);
+    doc.text(v.cliente.substring(0, 20), 50, y);
+    doc.text(v.metodoPagamento, 120, y);
+    doc.text("R$ " + v.valorTotal.toFixed(2), 185, y, { align: "right" });
+    totalGeral += v.valorTotal;
+    y += 7;
+
+    // Adiciona nova página se o relatório for longo
+    if (y > 270) { doc.addPage(); y = 20; }
+  });
+
+  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.setFillColor(245, 245, 245);
+  doc.rect(120, y - 5, 70, 10, "F");
+  doc.text("TOTAL DO PERÍODO:", 122, y + 2);
+  doc.text("R$ " + totalGeral.toFixed(2), 185, y + 2, { align: "right" });
+
+  doc.save("Relatorio_Financeiro_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
+};

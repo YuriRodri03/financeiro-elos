@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
+import { gerarPDFRelatorio } from '../../documentosUtils';
 import './style.css';
 
 export default function Dashboard() {
@@ -10,9 +11,31 @@ export default function Dashboard() {
   const [anoFiltro, setAnoFiltro] = useState(dataAtual.getFullYear());
   const [modalTipo, setModalTipo] = useState(null);
 
+  // --- NOVOS ESTADOS PARA O RELATÓRIO PDF POR PERÍODO ---
+  const [relatorioInicio, setRelatorioInicio] = useState('');
+  const [relatorioFim, setRelatorioFim] = useState('');
+
   if (carregando) return null;
 
-  // --- CÁLCULOS MENSAIS ---
+  // --- LÓGICA DO RELATÓRIO PDF ---
+  const vendasFiltradasRelatorio = useMemo(() => {
+    if (!relatorioInicio || !relatorioFim) return [];
+    return vendas.filter(v => v.dataVenda >= relatorioInicio && v.dataVenda <= relatorioFim);
+  }, [vendas, relatorioInicio, relatorioFim]);
+
+  const handleGerarRelatorioPDF = () => {
+    if (vendasFiltradasRelatorio.length === 0) {
+      alert("Nenhuma venda encontrada para o período selecionado.");
+      return;
+    }
+    const periodo = {
+      inicio: relatorioInicio.split('-').reverse().join('/'),
+      fim: relatorioFim.split('-').reverse().join('/')
+    };
+    gerarPDFRelatorio(vendasFiltradasRelatorio, periodo);
+  };
+
+  // --- SEUS CÁLCULOS MENSAIS ORIGINAIS (MANTIDOS) ---
   const detalhesAReceber = useMemo(() => {
     let lista = [];
     vendas.forEach(venda => {
@@ -71,7 +94,7 @@ export default function Dashboard() {
   const totalEsperadoMes = totalNoCaixaMes + totalAReceberMes;
   const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberMes / totalEsperadoMes) * 100 : 0;
 
-  // --- CÁLCULOS ANUAIS ---
+  // --- SEUS CÁLCULOS ANUAIS ORIGINAIS (MANTIDOS) ---
   const totalNoCaixaAno = vendas.reduce((acc, venda) => {
     const parcelasPagasNoAno = (venda.listaParcelas || []).filter(p => {
       if (!p.paga || !p.dataPagamento) return false;
@@ -108,6 +131,35 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* --- NOVA SEÇÃO: GERAR RELATÓRIO FINANCEIRO EM PDF --- */}
+      <h2 className="secao-titulo">Relatórios Exportáveis</h2>
+      <section className="dashboard-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #eee', marginBottom: '30px' }}>
+        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '15px' }}>📊 Gerar Relatório por Período Personalizado</h3>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="filtro-group">
+            <label style={{fontSize: '12px'}}>Início:</label>
+            <input type="date" value={relatorioInicio} onChange={(e) => setRelatorioInicio(e.target.value)} />
+          </div>
+          <div className="filtro-group">
+            <label style={{fontSize: '12px'}}>Fim:</label>
+            <input type="date" value={relatorioFim} onChange={(e) => setRelatorioFim(e.target.value)} />
+          </div>
+          <button 
+            onClick={handleGerarRelatorioPDF}
+            className="btn-gerar"
+            style={{ padding: '10px 20px', backgroundColor: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            📄 Baixar Relatório (PDF)
+          </button>
+        </div>
+        {relatorioInicio && relatorioFim && (
+          <p style={{marginTop: '10px', fontSize: '13px', color: '#666'}}>
+            Encontradas: <strong>{vendasFiltradasRelatorio.length} vendas</strong> no período selecionado.
+          </p>
+        )}
+      </section>
+
+      {/* --- SEU CONTEÚDO ORIGINAL ABAIXO (INTACTO) --- */}
       <h2 className="secao-titulo">Fluxo de Caixa Mensal ({mesFiltro}/{anoFiltro})</h2>
       <section className="resumo-cards">
         <div className="card entrada clicavel" onClick={() => setModalTipo('entradas')}>
