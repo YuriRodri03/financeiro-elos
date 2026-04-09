@@ -1,4 +1,6 @@
-/* Container Geral */
+/* ==========================================================================
+   CONFIGURAÇÕES GERAIS E CONTAINER
+   ========================================================================== */
 .clientes-container {
   padding: 20px;
   max-width: 1100px;
@@ -8,19 +10,16 @@
   align-items: center;
 }
 
-/* --- SEÇÃO DE FILTROS (ESTILO PREMIUM) --- */
+/* --- SEÇÃO DE FILTROS (ESTILO PÍLULA PREMIUM) --- */
 .filtros-clientes {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 0; /* Vamos grudar os botões ou deixá-los como pílulas isoladas */
   margin-bottom: 30px;
-  background: rgba(74, 93, 78, 0.05); /* Fundo bem suave verde */
+  background: rgba(74, 93, 78, 0.05);
   padding: 8px;
-  border-radius: 50px; /* Formato de pílula para o container */
+  border-radius: 50px;
   max-width: fit-content;
-  margin-left: auto;
-  margin-right: auto;
   border: 1px solid rgba(74, 93, 78, 0.1);
 }
 
@@ -33,7 +32,7 @@
   font-weight: 700 !important;
   cursor: pointer;
   border-radius: 40px !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s ease;
   min-width: 150px;
   display: flex;
   align-items: center;
@@ -41,80 +40,58 @@
   gap: 8px;
 }
 
-/* Estado Ativo: O botão ganha destaque total */
 .btn-filtro.active {
-  background-color: var(--primary) !important; /* Verde Musgo */
+  background-color: var(--primary) !important;
   color: white !important;
   box-shadow: 0 4px 15px rgba(74, 93, 78, 0.3);
-  transform: scale(1.05);
 }
 
-/* Efeito ao passar o mouse (PC) */
-.btn-filtro:hover:not(.active) {
-  background-color: rgba(74, 93, 78, 0.1);
-}
-
-/* Ajuste específico para o botão de Alerta/Inadimplentes */
 .btn-filtro.active-alert {
-  background-color: var(--danger) !important; /* Vermelho para Inadimplentes */
+  background-color: var(--danger) !important;
   color: white !important;
   box-shadow: 0 4px 15px rgba(198, 40, 40, 0.3);
 }
 
-/* --- BARRA DE BUSCA COMPLETA E IMPONENTE --- */
+/* --- BARRA DE BUSCA --- */
 .busca-secao {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 0 10px; /* Garante que não cole na beirada da tela */
+  padding: 0 10px;
 }
 
 .input-busca {
-  width: 100% !important; /* Força ocupação total */
-  max-width: 800px !important; /* Aumentei o limite para PCs */
+  width: 100% !important;
+  max-width: 800px !important;
   padding: 15px 25px !important; 
-  border-radius: 50px !important; /* Estilo pílula moderno */
-  border: 2px solid var(--primary); /* Borda na cor da Ótica */
+  border-radius: 50px !important;
+  border: 2px solid var(--primary);
   box-shadow: 0 8px 25px rgba(0,0,0,0.1);
   font-size: 1.1rem !important;
-  line-height: 1.4;
   margin-bottom: 30px;
-  background-color: white;
   outline: none;
-  transition: all 0.3s ease;
 }
 
-/* Feedback visual ao clicar para digitar */
-.input-busca:focus {
-  box-shadow: 0 8px 30px rgba(74, 93, 78, 0.2);
-  border-color: var(--accent); /* Muda para o amadeirado ao focar */
-  transform: translateY(-2px);
-}
-
-/* Ajuste específico para o texto interno (placeholder) */
-.input-busca::placeholder {
-  color: #999;
-  font-size: 1rem;
-}
-
-/* --- TABELA DE CLIENTES --- */
+/* ==========================================================================
+   TABELA RESPONSIVA (CORREÇÃO PARA CELULAR)
+   ========================================================================== */
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: auto; /* Permite scroll lateral se a tabela for larga */
+  -webkit-overflow-scrolling: touch;
 }
 
 .clientes-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0 10px;
-  min-width: 700px;
+  min-width: 600px; /* Garante que no PC ela não esmague */
 }
 
 .clientes-table th {
   padding: 15px 20px;
   color: var(--primary);
   text-align: left;
-  font-size: 0.95rem;
   font-weight: bold;
 }
 
@@ -124,175 +101,155 @@
 }
 
 .clientes-table td {
-  padding: 20px !important;
-  font-size: 1rem;
+  padding: 15px 20px !important;
   color: var(--text);
 }
 
+/* Bordas arredondadas nas linhas da tabela */
 .clientes-table tr td:first-child { border-radius: 12px 0 0 12px; }
 .clientes-table tr td:last-child { border-radius: 0 12px 12px 0; }
 
-/* --- BADGES E BOTÕES --- */
+/* --- BADGES E STATUS --- */
 .status-badge {
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: bold;
-  display: inline-block;
 }
+.status-badge.pendente { background: #ffebee; color: #c62828; border: 1px solid #c62828; }
+.status-badge.pago { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
 
-.status-badge.pendente { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; }
-.status-badge.pago { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
-
-.btn-detalhes {
-  background-color: var(--primary);
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-/* --- MODAL (CORRIGIDO PARA SCROLL NO CELULAR) --- */
+/* ==========================================================================
+   MODAL CORRIGIDO (SCROLL E CELULAR)
+   ========================================================================== */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start; /* Alinha no topo para o scroll começar de cima */
   z-index: 9999;
-  padding: 15px;
+  overflow-y: auto; /* Permite rolar a tela toda se o modal for longo */
+  padding: 20px 10px;
 }
 
 .modal-content {
   background: var(--white);
-  width: 98%;
-  max-width: 800px;
-  max-height: 90vh; /* Ocupa no máximo 90% da altura da tela */
-  border-radius: var(--radius);
+  width: 100%;
+  max-width: 750px;
+  margin: auto; /* Centraliza verticalmente se o conteúdo for pequeno */
+  border-radius: 20px;
   padding: 25px !important;
   position: relative;
-  display: flex;
-  flex-direction: column; /* Organiza Topo, Meio e Rodapé */
-  box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
   animation: modalEntrada 0.3s ease-out;
 }
 
 .modal-body {
-  overflow-y: auto; /* Permite rolar apenas o conteúdo interno */
-  flex: 1; /* Faz o corpo crescer e empurrar o botão de sair para o fim */
-  margin-top: 15px;
-  padding-right: 5px;
-  -webkit-overflow-scrolling: touch; /* Scroll suave no iPhone */
+  margin-top: 20px;
+  /* Removemos o max-height fixo aqui para o scroll ser fluido no overlay */
 }
 
 .btn-close {
   position: absolute;
-  top: 10px;
-  right: 15px;
-  background: none;
-  border: none;
-  font-size: 32px;
-  color: #999;
+  top: 15px; right: 15px;
+  background: none; border: none;
+  font-size: 28px; color: #bbb;
   cursor: pointer;
-  z-index: 10;
 }
 
-.btn-sair {
-  width: 100%;
-  margin-top: 15px;
-  background-color: #eee;
-  color: #333;
-  border: none;
-  padding: 12px;
-  border-radius: 8px;
-  font-weight: bold;
-}
-
-/* --- CARDS DE HISTÓRICO DENTRO DO MODAL --- */
+/* ==========================================================================
+   PAGAMENTO PARCIAL E HISTÓRICO
+   ========================================================================== */
 .card-venda-historico {
-  background: #f9f9f9;
-  padding: 15px;
-  border-radius: 12px;
-  margin-bottom: 15px;
+  background: #fdfaf5;
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 20px;
   border: 1px solid #eee;
 }
 
-/* --- RESPONSIVIDADE MOBILE --- */
+.input-parcial {
+  width: 100px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-weight: bold;
+  color: var(--primary);
+  outline: none;
+}
+
+.input-parcial:focus { border-color: var(--primary); }
+
+.btn-baixa {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: opacity 0.2s;
+}
+
+.btn-baixa:hover { opacity: 0.9; }
+
+/* ==========================================================================
+   MEDIA QUERIES (COMPACTAÇÃO MOBILE)
+   ========================================================================== */
 @media (max-width: 768px) {
+  /* Filtros viram coluna ou pílulas menores */
+  .filtros-clientes {
+    flex-direction: column;
+    border-radius: 20px;
+    width: 100%;
+  }
+  .btn-filtro { width: 100%; min-width: unset; }
+
+  /* Tabela vira Cards para não quebrar layout vertical */
   .clientes-table thead { display: none; }
-  
   .clientes-table, .clientes-table tbody, .clientes-table tr, .clientes-table td {
     display: block;
     width: 100%;
   }
-
   .clientes-table tr {
-    margin-bottom: 20px;
-    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #eee;
     border-radius: 12px;
+    overflow: hidden;
   }
-
   .clientes-table td {
     text-align: right;
-    padding: 12px 10px !important;
-    border-bottom: 1px solid #f0f0f0;
-    position: relative;
-    font-size: 0.95rem;
+    padding: 12px 15px !important;
+    border-bottom: 1px solid #f9f9f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
-
-  .clientes-table td:before {
-    content: attr(data-label);
-    position: absolute;
-    left: 10px;
+  .clientes-table td::before {
+    content: attr(data-label); /* Usa o texto do HTML */
     font-weight: bold;
     color: var(--primary);
+    font-size: 0.85rem;
   }
 
-  .clientes-table td:last-child {
-    border-bottom: none;
-    text-align: center;
-  }
-
+  /* Ajustes do Modal no celular */
   .modal-content {
     padding: 20px 15px !important;
+    border-radius: 15px;
   }
+  
+  /* Inputs de pagamento parcial lado a lado no celular */
+  .linha-parcela > div:last-child {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .input-parcial { width: 100%; }
 }
 
 @keyframes modalEntrada {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.form-group-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
-}
-
-.form-group-edit label {
-  font-size: 0.75rem;
-  font-weight: bold;
-  color: var(--primary);
-  text-transform: uppercase;
-}
-
-.form-group-edit input, 
-.form-group-edit textarea {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-family: sans-serif;
-  font-size: 0.95rem;
-}
-
-.form-group-edit input:focus {
-  border-color: var(--primary);
-  outline: none;
-  background-color: #fffdfa;
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }

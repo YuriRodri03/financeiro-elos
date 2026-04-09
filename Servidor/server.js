@@ -16,16 +16,29 @@ mongoose.connect(MONGO_URI)
 // --- MODELOS (SCHEMAS) ---
 
 const Cliente = mongoose.model('Cliente', {
-  nome: String, cpf: String, telefone: String, endereco: String, observacoes: String
+  nome: String, 
+  cpf: String, 
+  telefone: String, 
+  endereco: String, 
+  observacoes: String
 });
 
 const Venda = mongoose.model('Venda', {
-  cliente: String, cpf: String, produto: String, valorTotal: Number,
-  listaParcelas: Array, dataVenda: String, metodoPagamento: String
+  cliente: String, 
+  cpf: String, 
+  produto: String, 
+  valorTotal: Number,
+  listaParcelas: Array, // Array de objetos { numero, valor, paga, dataPagamento, vencimentoOriginal, observacao }
+  dataVenda: String, 
+  metodoPagamento: String
 });
 
 const Despesa = mongoose.model('Despesa', {
-  descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
+  descricao: String, 
+  valor: Number, 
+  categoria: String, 
+  vencimento: String, 
+  paga: Boolean
 });
 
 // --- ROTAS API ---
@@ -35,8 +48,10 @@ app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
 app.put('/api/clientes/:cpf', async (req, res) => {
-  const atualizado = await Cliente.findOneAndUpdate({ cpf: req.params.cpf }, req.body, { new: true });
-  res.json(atualizado);
+  try {
+    const atualizado = await Cliente.findOneAndUpdate({ cpf: req.params.cpf }, req.body, { new: true });
+    res.json(atualizado);
+  } catch (err) { res.status(500).json({ error: "Erro ao editar cliente" }); }
 });
 
 app.delete('/api/clientes/:cpf', async (req, res) => {
@@ -75,47 +90,51 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     const venda = await Venda.findById(id);
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
-    // Encontra o índice da parcela que está sendo paga
+    // Encontra o índice da parcela usando parseFloat para suportar números decimais (ex: 1.5)
     const index = venda.listaParcelas.findIndex(p => p.numero === parseFloat(numero));
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
     const parcelaOriginal = venda.listaParcelas[index];
 
-    // Se houver um valorPago e ele for menor que o valor da parcela...
-    if (valorPago && valorPago < parcelaOriginal.valor && paga === true) {
-      const sobra = parcelaOriginal.valor - valorPago;
+    // Lógica de Pagamento Parcial
+    // Verifica se o valor pago é menor que o valor atual da parcela e se estamos tentando pagar (paga === true)
+    if (valorPago && Number(valorPago) < Number(parcelaOriginal.valor) && paga === true) {
+      const sobra = Number(parcelaOriginal.valor) - Number(valorPago);
 
-      // 1. Atualiza a parcela atual para o valor que entrou de fato
-      venda.listaParcelas[index].valor = valorPago;
+      // 1. Atualiza a parcela atual com o valor que entrou
+      venda.listaParcelas[index].valor = Number(valorPago);
       venda.listaParcelas[index].paga = true;
       venda.listaParcelas[index].dataPagamento = dataPagamento;
 
-      // 2. Cria a parcela residual (sobra)
-      // O número da parcela ganha um sufixo .5 para indicar que é um resto
+      // 2. Cria a parcela residual com a diferença
       const novaParcela = {
         ...parcelaOriginal,
-        numero: parseFloat(numero) + 0.5,
+        numero: parseFloat(numero) + 0.5, // Gera um número intermediário
         valor: sobra,
         paga: false,
-        dataPagamento: null
+        dataPagamento: null,
+        observacao: `Restante da parcela ${numero}`
       };
 
       venda.listaParcelas.push(novaParcela);
       
-      // Ordena as parcelas para que a sobra fique logo abaixo da original
+      // Reordena para manter a sequência visual
       venda.listaParcelas.sort((a, b) => a.numero - b.numero);
     } else {
-      // Baixa normal (valor total ou estorno)
+      // Baixa normal (valor total pago ou estorno)
       venda.listaParcelas[index].paga = paga;
-      venda.listaParcelas[index].dataPagamento = dataPagamento;
+      venda.listaParcelas[index].dataPagamento = paga ? dataPagamento : null;
+      
+      // Se for um estorno e o valor tiver sido alterado anteriormente, você pode querer restaurar o original aqui
+      // mas como o sistema cria novas parcelas, o estorno apenas limpa o pagamento desta parcela específica.
     }
     
-    // Marca o array como modificado para o Mongoose salvar corretamente
+    // Indica ao Mongoose que o array interno mudou (Essencial para persistência no MongoDB)
     venda.markModified('listaParcelas');
     await venda.save();
     res.json(venda);
   } catch (err) {
-    console.error(err);
+    console.error("Erro no processamento da parcela:", err);
     res.status(500).json({ error: "Erro ao processar pagamento" });
   }
 });

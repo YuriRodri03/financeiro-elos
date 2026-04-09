@@ -10,6 +10,7 @@ export function FinanceiroProvider({ children }) {
   const [despesas, setDespesas] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
+  // --- CARREGAMENTO INICIAL ---
   useEffect(() => {
     async function carregarDados() {
       try {
@@ -19,7 +20,7 @@ export function FinanceiroProvider({ children }) {
           fetch(`${API_URL}/despesas`)
         ]);
         
-        if (!resVendas.ok || !resClientes.ok) throw new Error("Erro na rede");
+        if (!resVendas.ok || !resClientes.ok) throw new Error("Erro ao buscar dados do servidor");
 
         const dadosVendas = await resVendas.json();
         const dadosClientes = await resClientes.json();
@@ -60,6 +61,7 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify(dadosNovos)
       });
       setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? { ...c, ...dadosNovos } : c));
+      // Atualiza também as vendas vinculadas a este cliente caso o nome ou CPF mude
       setVendas(prev => prev.map(v => v.cpf === cpfAntigo ? { ...v, cliente: dadosNovos.nome, cpf: dadosNovos.cpf } : v));
     } catch (err) { alert("Erro ao editar cliente."); }
   };
@@ -109,8 +111,13 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vendaCompleta)
       });
-      return await res.json(); // Retorna o objeto para uso no PDF
-    } catch (err) { alert("Erro ao registrar venda."); }
+      const vendaSalva = await res.json();
+      setVendas(prev => [...prev, vendaSalva]);
+      return vendaSalva; // Retorna para que o componente possa usar o ID real no PDF
+    } catch (err) { 
+      alert("Erro ao registrar venda."); 
+      throw err;
+    }
   };
 
   const editarDataVenda = async (vendaId, novaData) => {
@@ -124,7 +131,7 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao atualizar data."); }
   };
 
-  // --- FUNÇÃO ATUALIZADA: BAIXA COM PAGAMENTO PARCIAL ---
+  // --- BAIXA DE PARCELA (COM LÓGICA DE PAGAMENTO PARCIAL) ---
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento, valorPago) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
     const valorPagoNum = Number(valorPago);
@@ -136,21 +143,20 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify({ 
           paga: true, 
           dataPagamento: dataFinal,
-          valorPago: valorPagoNum // Enviamos o valor que foi realmente pago
+          valorPago: valorPagoNum // Enviado para o server tratar a divisão se necessário
         })
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error("Erro na comunicação com o servidor");
 
       const vendaAtualizada = await res.json();
       
-      // Atualiza o estado local com a nova lista de parcelas que vem do backend
-      // (O backend deve tratar a criação da parcela residual de 50 reais se for parcial)
+      // Atualiza o estado local substituindo a venda antiga pela atualizada retornada pelo server
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
       
       alert("Recebimento registrado com sucesso!");
     } catch (err) { 
-      alert("Erro ao dar baixa. Verifique se o valor é válido."); 
+      alert("Erro ao dar baixa. Verifique o valor informado."); 
     }
   };
 
@@ -162,13 +168,17 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paga: false, dataPagamento: null })
       });
+      
+      if (!res.ok) throw new Error();
       const vendaAtualizada = await res.json();
+      
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
+      alert("Estorno realizado.");
     } catch (err) { alert("Erro ao estornar."); }
   };
 
   const excluirVenda = async (vendaId) => {
-    if (!window.confirm("Excluir venda do banco?")) return;
+    if (!window.confirm("Excluir venda do banco permanentemente?")) return;
     try {
       await fetch(`${API_URL}/vendas/${vendaId}`, { method: 'DELETE' });
       setVendas(prev => prev.filter(v => (v._id !== vendaId && v.id !== vendaId)));
