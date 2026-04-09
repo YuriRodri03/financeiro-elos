@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrende
 export function FinanceiroProvider({ children }) {
   const [vendas, setVendas] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [despesas, setDespesas] = useState([]); // Movido para dentro
+  const [despesas, setDespesas] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
@@ -16,7 +16,7 @@ export function FinanceiroProvider({ children }) {
         const [resVendas, resClientes, resDespesas] = await Promise.all([
           fetch(`${API_URL}/vendas`),
           fetch(`${API_URL}/clientes`),
-          fetch(`${API_URL}/despesas`) // Adicionado busca de despesas
+          fetch(`${API_URL}/despesas`)
         ]);
         
         if (!resVendas.ok || !resClientes.ok) throw new Error("Erro na rede");
@@ -109,8 +109,7 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vendaCompleta)
       });
-      const vendaSalva = await res.json();
-      setVendas(prev => [...prev, vendaSalva]);
+      return await res.json(); // Retorna o objeto para uso no PDF
     } catch (err) { alert("Erro ao registrar venda."); }
   };
 
@@ -125,39 +124,46 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao atualizar data."); }
   };
 
-  const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento) => {
+  // --- FUNÇÃO ATUALIZADA: BAIXA COM PAGAMENTO PARCIAL ---
+  const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento, valorPago) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
+    const valorPagoNum = Number(valorPago);
+
     try {
-      await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
+      const res = await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paga: true, dataPagamento: dataFinal })
+        body: JSON.stringify({ 
+          paga: true, 
+          dataPagamento: dataFinal,
+          valorPago: valorPagoNum // Enviamos o valor que foi realmente pago
+        })
       });
-      setVendas(prev => prev.map(v => {
-        if (v._id === vendaId || v.id === vendaId) {
-          const novasParcelas = v.listaParcelas.map(p => p.numero === numeroParcela ? { ...p, paga: true, dataPagamento: dataFinal } : p);
-          return { ...v, listaParcelas: novasParcelas };
-        }
-        return v;
-      }));
-    } catch (err) { alert("Erro ao dar baixa."); }
+
+      if (!res.ok) throw new Error();
+
+      const vendaAtualizada = await res.json();
+      
+      // Atualiza o estado local com a nova lista de parcelas que vem do backend
+      // (O backend deve tratar a criação da parcela residual de 50 reais se for parcial)
+      setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
+      
+      alert("Recebimento registrado com sucesso!");
+    } catch (err) { 
+      alert("Erro ao dar baixa. Verifique se o valor é válido."); 
+    }
   };
 
   const estornarBaixaParcela = async (vendaId, numeroParcela) => {
     if (!window.confirm("Deseja estornar o pagamento desta parcela?")) return;
     try {
-      await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
+      const res = await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paga: false, dataPagamento: null })
       });
-      setVendas(prev => prev.map(v => {
-        if (v._id === vendaId || v.id === vendaId) {
-          const novasParcelas = v.listaParcelas.map(p => p.numero === numeroParcela ? { ...p, paga: false, dataPagamento: null } : p);
-          return { ...v, listaParcelas: novasParcelas };
-        }
-        return v;
-      }));
+      const vendaAtualizada = await res.json();
+      setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
     } catch (err) { alert("Erro ao estornar."); }
   };
 
@@ -169,7 +175,7 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao excluir."); }
   };
 
-  // --- FUNÇÕES DE DESPESA (ORGANIZADAS) ---
+  // --- FUNÇÕES DE DESPESA ---
   const adicionarDespesa = async (novaDespesa) => {
     try {
       const res = await fetch(`${API_URL}/despesas`, {

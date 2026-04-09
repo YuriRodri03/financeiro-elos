@@ -24,13 +24,8 @@ const Venda = mongoose.model('Venda', {
   listaParcelas: Array, dataVenda: String, metodoPagamento: String
 });
 
-// NOVO MODELO: Despesa
 const Despesa = mongoose.model('Despesa', {
-  descricao: String,
-  valor: Number,
-  categoria: String,
-  vencimento: String,
-  paga: Boolean
+  descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
 // --- ROTAS API ---
@@ -53,7 +48,6 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
 app.post('/api/vendas', async (req, res) => res.json(await new Venda(req.body).save()));
 
-// Rota para Editar Data da Venda (PATCH)
 app.patch('/api/vendas/:id', async (req, res) => {
   try {
     const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -72,35 +66,63 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// BAIXA DE PARCELA
+// --- BAIXA DE PARCELA COM LÓGICA DE PAGAMENTO PARCIAL ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
-    const { paga, dataPagamento } = req.body;
+    const { paga, dataPagamento, valorPago } = req.body;
     
     const venda = await Venda.findById(id);
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
-    venda.listaParcelas = venda.listaParcelas.map(p => 
-      p.numero === parseInt(numero) ? { ...p, paga, dataPagamento } : p
-    );
+    // Encontra o índice da parcela que está sendo paga
+    const index = venda.listaParcelas.findIndex(p => p.numero === parseFloat(numero));
+    if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
+
+    const parcelaOriginal = venda.listaParcelas[index];
+
+    // Se houver um valorPago e ele for menor que o valor da parcela...
+    if (valorPago && valorPago < parcelaOriginal.valor && paga === true) {
+      const sobra = parcelaOriginal.valor - valorPago;
+
+      // 1. Atualiza a parcela atual para o valor que entrou de fato
+      venda.listaParcelas[index].valor = valorPago;
+      venda.listaParcelas[index].paga = true;
+      venda.listaParcelas[index].dataPagamento = dataPagamento;
+
+      // 2. Cria a parcela residual (sobra)
+      // O número da parcela ganha um sufixo .5 para indicar que é um resto
+      const novaParcela = {
+        ...parcelaOriginal,
+        numero: parseFloat(numero) + 0.5,
+        valor: sobra,
+        paga: false,
+        dataPagamento: null
+      };
+
+      venda.listaParcelas.push(novaParcela);
+      
+      // Ordena as parcelas para que a sobra fique logo abaixo da original
+      venda.listaParcelas.sort((a, b) => a.numero - b.numero);
+    } else {
+      // Baixa normal (valor total ou estorno)
+      venda.listaParcelas[index].paga = paga;
+      venda.listaParcelas[index].dataPagamento = dataPagamento;
+    }
     
+    // Marca o array como modificado para o Mongoose salvar corretamente
+    venda.markModified('listaParcelas');
     await venda.save();
     res.json(venda);
   } catch (err) {
-    res.status(500).json({ error: "Erro ao dar baixa" });
+    console.error(err);
+    res.status(500).json({ error: "Erro ao processar pagamento" });
   }
 });
 
-// --- ROTAS DE DESPESAS (ADICIONADAS) ---
-
-app.get('/api/despesas', async (req, res) => {
-  res.json(await Despesa.find());
-});
-
-app.post('/api/despesas', async (req, res) => {
-  res.json(await new Despesa(req.body).save());
-});
+// DESPESAS
+app.get('/api/despesas', async (req, res) => res.json(await Despesa.find()));
+app.post('/api/despesas', async (req, res) => res.json(await new Despesa(req.body).save()));
 
 app.patch('/api/despesas/:id', async (req, res) => {
   try {

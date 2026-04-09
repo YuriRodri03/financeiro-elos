@@ -3,13 +3,25 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils'; 
 import './style.css';
 
+// Componente de Linha de Parcela atualizado para aceitar valor de recebimento
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
+  const [valorRecebido, setValorRecebido] = useState(p.valor); // Estado para o valor parcial
+
+  const handleBaixa = () => {
+    const valor = parseFloat(valorRecebido);
+    if (isNaN(valor) || valor <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
+    // Passamos o valorRecebido para a função de baixa
+    darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
+  };
 
   return (
     <div className="linha-parcela" style={{ borderBottom: '1px solid #eee', padding: '12px 0' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span>{p.numero}ª Parcela - <strong>R$ {p.valor.toFixed(2)}</strong></span>
+        <span>{p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} - <strong>R$ {p.valor.toFixed(2)}</strong></span>
         {p.paga && (
           <small style={{ color: '#4a5d4e', fontWeight: 'bold' }}>
             🗓️ Recebido em: {p.dataPagamento?.split('-').reverse().join('/')}
@@ -28,9 +40,18 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '5px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '5px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={{ fontSize: '10px', color: '#666', marginBottom: '2px' }}>Data do Recebimento:</label>
+            <label style={{ fontSize: '10px', color: '#666' }}>Quanto foi pago?</label>
+            <input 
+              type="number" 
+              value={valorRecebido} 
+              onChange={(e) => setValorRecebido(e.target.value)}
+              style={{ padding: '4px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc', width: '80px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label style={{ fontSize: '10px', color: '#666' }}>Data:</label>
             <input 
               type="date" 
               value={dataBaixa} 
@@ -40,10 +61,10 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
           </div>
           <button 
             className="btn-baixa" 
-            onClick={() => darBaixaParcela(vendaId, p.numero, dataBaixa)}
+            onClick={handleBaixa}
             style={{ padding: '8px 12px', fontSize: '12px', alignSelf: 'flex-end' }}
           >
-            Dar Baixa
+            Confirmar
           </button>
         </div>
       )}
@@ -383,7 +404,13 @@ export default function Clientes() {
                     </div>
                     <div className="venda-parcelas">
                       {venda.listaParcelas.map(p => (
-                        <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                        <LinhaParcela 
+                          key={p.numero} 
+                          p={p} 
+                          vendaId={venda._id || venda.id} 
+                          darBaixaParcela={darBaixaParcela} 
+                          estornarBaixaParcela={estornarBaixaParcela} 
+                        />
                       ))}
                     </div>
                     <button className="btn-excluir-venda" onClick={() => excluirVenda(venda._id || venda.id)}>🗑️ Excluir Registro de Venda</button>
