@@ -16,29 +16,16 @@ mongoose.connect(MONGO_URI)
 // --- MODELOS (SCHEMAS) ---
 
 const Cliente = mongoose.model('Cliente', {
-  nome: String, 
-  cpf: String, 
-  telefone: String, 
-  endereco: String, 
-  observacoes: String
+  nome: String, cpf: String, telefone: String, endereco: String, observacoes: String
 });
 
 const Venda = mongoose.model('Venda', {
-  cliente: String, 
-  cpf: String, 
-  produto: String, 
-  valorTotal: Number,
-  listaParcelas: Array, 
-  dataVenda: String, 
-  metodoPagamento: String
+  cliente: String, cpf: String, produto: String, valorTotal: Number,
+  listaParcelas: Array, dataVenda: String, metodoPagamento: String
 });
 
 const Despesa = mongoose.model('Despesa', {
-  descricao: String, 
-  valor: Number, 
-  categoria: String, 
-  vencimento: String, 
-  paga: Boolean
+  descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
 // --- ROTAS API ---
@@ -81,7 +68,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA (COM LOGICA DE RECOMPOSIÇÃO) ---
+// --- BAIXA E ESTORNO DE PARCELA (VERSÃO BLINDADA) ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -91,61 +78,67 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
     const numAtual = parseFloat(numero);
-    const index = venda.listaParcelas.findIndex(p => p.numero === numAtual);
+    
+    // Criamos uma cópia profunda das parcelas para evitar mexer na referência original durante o cálculo
+    let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas));
+    
+    const index = novasParcelas.findIndex(p => p.numero === numAtual);
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
     // --- CASO 1: ESTORNO (paga === false) ---
-    // Se estornar, vamos ver se existe uma parcela "sobra" (ex: 1.5) e somar de volta
     if (paga === false) {
-      const parcelaFilhaIndex = venda.listaParcelas.findIndex(p => p.numero === (numAtual + 0.5));
-      
+      const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === (numAtual + 0.5));
       if (parcelaFilhaIndex !== -1) {
-        // Recupera o valor da sobra e soma na parcela original
-        venda.listaParcelas[index].valor += venda.listaParcelas[parcelaFilhaIndex].valor;
-        // Remove a parcela sobra do array
-        venda.listaParcelas.splice(parcelaFilhaIndex, 1);
+        // Devolve o valor da sobra para a original e remove a sobra
+        novasParcelas[index].valor = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
+        novasParcelas.splice(parcelaFilhaIndex, 1);
       }
-      
-      venda.listaParcelas[index].paga = false;
-      venda.listaParcelas[index].dataPagamento = null;
+      novasParcelas[index].paga = false;
+      novasParcelas[index].dataPagamento = null;
     } 
     
-    // --- CASO 2: PAGAMENTO PARCIAL (paga === true e valor menor) ---
-    else if (valorPago && Number(valorPago) < Number(venda.listaParcelas[index].valor)) {
-      const valorOriginalDestaParcela = Number(venda.listaParcelas[index].valor);
+    // --- CASO 2: PAGAMENTO PARCIAL (paga === true e valor menor que a dívida) ---
+    else if (valorPago && Number(valorPago) < Number(novasParcelas[index].valor)) {
+      const valorTotalDaParcela = Number(novasParcelas[index].valor);
       const valorRecebido = Number(valorPago);
-      const diferenca = valorOriginalDestaParcela - valorRecebido;
+      const diferenca = valorTotalDaParcela - valorRecebido;
 
-      // Atualiza a parcela atual para o que foi pago
-      venda.listaParcelas[index].valor = valorRecebido;
-      venda.listaParcelas[index].paga = true;
-      venda.listaParcelas[index].dataPagamento = dataPagamento;
-
-      // Cria a nova parcela com o resto
-      venda.listaParcelas.push({
-        ...venda.listaParcelas[index],
+      // Cria a sobra baseada nos dados da original ANTES de alterar a original
+      const novaParcelaSobra = {
+        ...novasParcelas[index],
         numero: numAtual + 0.5,
         valor: diferenca,
         paga: false,
         dataPagamento: null,
-        observacao: `Restante da parcela ${numAtual}`
-      });
+        observacao: `Restante da parc. ${numAtual}`
+      };
 
-      // Reordena para ficar 1 -> 1.5 -> 2
-      venda.listaParcelas.sort((a, b) => a.numero - b.numero);
+      // Atualiza a original
+      novasParcelas[index].valor = valorRecebido;
+      novasParcelas[index].paga = true;
+      novasParcelas[index].dataPagamento = dataPagamento;
+
+      // Adiciona a sobra e ordena
+      novasParcelas.push(novaParcelaSobra);
     } 
     
-    // --- CASO 3: BAIXA NORMAL (valor total ou maior) ---
+    // --- CASO 3: BAIXA NORMAL (valor total ou estorno simples) ---
     else {
-      venda.listaParcelas[index].paga = paga;
-      venda.listaParcelas[index].dataPagamento = paga ? dataPagamento : null;
+      novasParcelas[index].paga = paga;
+      novasParcelas[index].dataPagamento = paga ? dataPagamento : null;
     }
-    
+
+    // Ordenação final para garantir que nada saia do lugar
+    novasParcelas.sort((a, b) => a.numero - b.numero);
+
+    // Substituímos o array inteiro no banco e salvamos
+    venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
     await venda.save();
+    
     res.json(venda);
   } catch (err) {
-    console.error("Erro na parcela:", err);
+    console.error("Erro fatal na parcela:", err);
     res.status(500).json({ error: "Erro ao processar alteração na parcela" });
   }
 });
