@@ -99,23 +99,27 @@ export default function Clientes() {
   };
 
   const salvarEdicao = async () => {
+    // Pegamos o objeto original do useMemo antes de salvar
+    const original = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
+    
     if (!editandoCadastro?.nome || !editandoCadastro?.cpf) {
       alert("Nome e CPF são obrigatórios!");
       return;
     }
+
+    // Se por algum motivo o ID não estiver acessível, usamos o CPF (Fallback)
+    const identificador = original?._id || clienteSelecionadoCPF;
+
     try {
-      const cpfOriginal = clienteSelecionadoCPF;
-      const novoCPF = editandoCadastro.cpf;
+      await editarCliente(identificador, editandoCadastro);
       
-      await editarCliente(cpfOriginal, editandoCadastro);
-      
-      // Sincroniza o CPF selecionado com o novo CPF para manter o vínculo
-      setClienteSelecionadoCPF(novoCPF);
+      // Sincroniza a seleção para o novo CPF (caso tenha mudado)
+      setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       alert("Cadastro atualizado com sucesso!");
     } catch (err) {
       console.error(err);
-      alert("Erro ao atualizar cadastro.");
+      // O erro é tratado no FinanceiroContext
     }
   };
 
@@ -136,6 +140,7 @@ export default function Clientes() {
       }, 0);
 
       return {
+        _id: dadosCad?._id, // Mantemos o ID do MongoDB aqui
         nome: dadosCad?.nome || vendasCli[0]?.cliente || "Sem Nome",
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
@@ -155,11 +160,9 @@ export default function Clientes() {
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? c.totalGeralDevido > 0.01 : true;
     const termo = busca.toLowerCase();
-    const termoApenasNumeros = termo.replace(/\D/g, '');
-    const cpfBancoApenasNumeros = (c.cpf || '').replace(/\D/g, '');
     const passaBuscaNome = (c.nome || '').toLowerCase().includes(termo);
-    const passaBuscaCPF = cpfBancoApenasNumeros.includes(termoApenasNumeros);
-    return passaFiltroStatus && (passaBuscaNome || (termoApenasNumeros !== '' && passaBuscaCPF));
+    const passaBuscaCPF = (c.cpf || '').includes(termo);
+    return passaFiltroStatus && (passaBuscaNome || passaBuscaCPF);
   });
 
   if (carregando) return null;
@@ -234,7 +237,6 @@ export default function Clientes() {
             <button onClick={fecharModal} className="btn-close">&times;</button>
             <header className="modal-header">
               <h2 style={{margin: 0, color: 'var(--primary)'}}>
-                {/* SOLUÇÃO PARA O ERRO: Prioriza o estado editandoCadastro, que nunca é nulo durante a edição */}
                 {editandoCadastro ? `Editando: ${editandoCadastro.nome || ''}` : (clienteNoModal?.nome || "Ficha do Cliente")}
               </h2>
             </header>
@@ -338,7 +340,7 @@ export default function Clientes() {
                   ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra registrada.</p>}
                 </>
               ) : (
-                <p>Dados não encontrados.</p>
+                <p>Carregando dados do cliente...</p>
               )}
             </div>
             <button onClick={fecharModal} className="btn-sair">Voltar para a Lista</button>

@@ -28,24 +28,34 @@ const Despesa = mongoose.model('Despesa', {
   descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
-// --- ROTAS API ---
+// --- ROTAS API: CLIENTES ---
 
 app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
+
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
-app.put('/api/clientes/:cpf', async (req, res) => {
+// Edição por ID (Evita erro 404 causado por pontos/traços no CPF na URL)
+app.put('/api/clientes/:id', async (req, res) => {
   try {
-    const atualizado = await Cliente.findOneAndUpdate({ cpf: req.params.cpf }, req.body, { new: true });
+    const atualizado = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!atualizado) return res.status(404).json({ error: "Cliente não encontrado" });
     res.json(atualizado);
-  } catch (err) { res.status(500).json({ error: "Erro ao editar cliente" }); }
+  } catch (err) { 
+    console.error("Erro na edição:", err);
+    res.status(500).json({ error: "Erro ao editar cliente" }); 
+  }
 });
 
+// Exclusão por CPF (Mantida conforme original)
 app.delete('/api/clientes/:cpf', async (req, res) => {
   await Cliente.deleteOne({ cpf: req.params.cpf });
   res.json({ message: "Removido" });
 });
 
+// --- ROTAS API: VENDAS ---
+
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
+
 app.post('/api/vendas', async (req, res) => res.json(await new Venda(req.body).save()));
 
 app.patch('/api/vendas/:id', async (req, res) => {
@@ -66,7 +76,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA (LÓGICA DE AMORTIZAÇÃO CORRIGIDA) ---
+// --- BAIXA E ESTORNO DE PARCELA (LÓGICA DE AMORTIZAÇÃO E SEGURANÇA) ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -81,11 +91,12 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     const index = novasParcelas.findIndex(p => p.numero === numAtual);
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
-    // --- CASO 1: ESTORNO ---
+    // --- CASO 1: ESTORNO (paga === false) ---
     if (paga === false) {
       const proximoNumero = numAtual + 0.5;
       const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === proximoNumero);
       
+      // Só reintegra se a próxima for uma "sobra" (.5) e não uma parcela inteira original
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
@@ -96,16 +107,15 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       novasParcelas[index].dataPagamento = null;
     } 
     
-    // --- CASO 2: PAGAMENTO ---
+    // --- CASO 2: PAGAMENTO (paga === true) ---
     else {
       let valorInformado = Number(valorPago || novasParcelas[index].valor);
       let valorOriginalDaParcela = Number(novasParcelas[index].valor);
 
-      // A) Se o cliente pagou MAIS que o valor atual da parcela
+      // A) Se pagou MAIS (Amortização)
       if (valorInformado > valorOriginalDaParcela) {
         let excesso = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
         
-        // Tenta amortizar esse excesso nas próximas parcelas não pagas
         for (let i = index + 1; i < novasParcelas.length; i++) {
           if (excesso <= 0) break;
           if (novasParcelas[i].paga) continue;
@@ -113,26 +123,22 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
           let valorDaProxima = Number(novasParcelas[i].valor);
 
           if (excesso >= valorDaProxima) {
-            // "Engole" a próxima parcela inteira
             novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + valorDaProxima).toFixed(2));
             excesso = parseFloat((excesso - valorDaProxima).toFixed(2));
             novasParcelas.splice(i, 1); 
-            i--; // Ajusta o ponteiro pois o array encolheu
+            i--; 
           } else {
-            // Subtrai apenas uma parte da próxima parcela
             novasParcelas[i].valor = parseFloat((valorDaProxima - excesso).toFixed(2));
             novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + excesso).toFixed(2));
             excesso = 0;
           }
         }
-        
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
       } 
-      // B) Se o cliente pagou MENOS que o valor atual (Cria sobra .5)
+      // B) Se pagou MENOS (Cria resíduo .5)
       else if (valorInformado < valorOriginalDaParcela) {
         const valorSobra = parseFloat((valorOriginalDaParcela - valorInformado).toFixed(2));
-        
         novasParcelas[index].valor = valorInformado;
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
@@ -165,8 +171,10 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   }
 });
 
-// DESPESAS
+// --- ROTAS API: DESPESAS ---
+
 app.get('/api/despesas', async (req, res) => res.json(await Despesa.find()));
+
 app.post('/api/despesas', async (req, res) => res.json(await new Despesa(req.body).save()));
 
 app.patch('/api/despesas/:id', async (req, res) => {

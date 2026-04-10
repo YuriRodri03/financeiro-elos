@@ -53,31 +53,37 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao salvar cliente."); }
   };
 
-  // --- CORREÇÃO CRÍTICA AQUI: EDITAR CLIENTE ---
-  const editarCliente = async (cpfAntigo, dadosNovos) => {
+  // --- CORREÇÃO DEFINITIVA: EDITAR CLIENTE VIA ID ---
+  const editarCliente = async (clienteId, dadosNovos) => {
     try {
-      const res = await fetch(`${API_URL}/clientes/${cpfAntigo}`, {
+      // Enviamos para a rota /clientes/:id para evitar erros de caractere no CPF
+      const res = await fetch(`${API_URL}/clientes/${clienteId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dadosNovos)
       });
 
-      if (!res.ok) throw new Error("Erro ao salvar alterações no servidor");
+      if (!res.ok) {
+        const erroJson = await res.json();
+        throw new Error(erroJson.error || "Erro ao salvar alterações no servidor");
+      }
 
       const clienteAtualizado = await res.json();
 
-      // 1. Atualiza a lista de clientes com o objeto REAL vindo do banco
-      setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? clienteAtualizado : c));
+      // 1. Atualiza a lista de clientes usando o ID único do MongoDB
+      setClientes(prev => prev.map(c => (c._id === clienteId || c.id === clienteId) ? clienteAtualizado : c));
       
-      // 2. Atualiza as vendas vinculadas para refletir o novo Nome/CPF e evitar conflito de cache
+      // 2. Sincroniza as vendas vinculadas para refletir o novo Nome/CPF e evitar conflito de cache visual
       setVendas(prev => prev.map(v => 
-        v.cpf === cpfAntigo ? { ...v, cliente: clienteAtualizado.nome, cpf: clienteAtualizado.cpf } : v
+        v.cpf === dadosNovos.cpf || v.cliente === clienteAtualizado.nome 
+          ? { ...v, cliente: clienteAtualizado.nome, cpf: clienteAtualizado.cpf } 
+          : v
       ));
 
       return clienteAtualizado;
     } catch (err) { 
-      console.error(err);
-      alert("Erro ao editar cliente. Tente novamente."); 
+      console.error("Erro no Contexto:", err);
+      alert(err.message); 
       throw err;
     }
   };
@@ -147,7 +153,6 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao atualizar data."); }
   };
 
-  // --- BAIXA DE PARCELA ---
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento, valorPago) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
     const valorPagoNum = Number(valorPago);
