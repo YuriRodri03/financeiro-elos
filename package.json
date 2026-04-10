@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
+  "dev": "vite",
+  "build": "vite build",
+  "lint": "eslint .",
+  "preview": "vite preview",
+  "postinstall": "npm install tailwindcss postcss autoprefixer --legacy-peer-deps"
+},
   "dependencies": {
     "jspdf": "^4.2.1",
     "react": "^19.2.4",
