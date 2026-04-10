@@ -36,7 +36,6 @@ function AppContent() {
 
   if (!autenticado) return <Login onLogin={realizarLogin} />;
 
-  // Tela de Carregamento com Tailwind
   if (carregando) {
     return (
       <div className="h-screen flex flex-col justify-center items-center bg-elos-fundo text-elos-verde">
@@ -49,39 +48,33 @@ function AppContent() {
   return (
     <Router>
       <div className="min-h-screen bg-elos-fundo">
-        {/* NAVBAR PROFISSIONAL */}
-        <nav className="bg-white border-b border-elos-bege/20 shadow-soft sticky top-0 z-40">
+        {/* NAVBAR ADAPTADA PARA TABLET */}
+        <nav className="bg-white border-b border-elos-bege/20 shadow-soft sticky top-0 z-40 overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 md:px-8">
-            <div className="flex justify-between items-center h-20">
+            <div className="flex justify-between items-center h-20 gap-4">
               
-              {/* Logo */}
-              <div className="font-tradicional text-2xl text-elos-verde italic font-bold">
+              {/* Logo - Mantém fixa na esquerda */}
+              <div className="font-tradicional text-xl md:text-2xl text-elos-verde italic font-bold whitespace-nowrap">
                 Ótica Elos
               </div>
 
-              {/* Menu Desktop */}
-              <div className="hidden lg:flex items-center gap-1">
-                <Link to="/" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Dashboard</Link>
-                <Link to="/vendas" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Vendas</Link>
-                <Link to="/despesas" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Gastos</Link>
-                <Link to="/clientes" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Clientes</Link>
-                <Link to="/cadastro-clientes" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Novo Cliente</Link> 
-                <Link to="/relatorios" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Cobrança</Link>
+              {/* Menu com Scroll Horizontal para Tablets (no-scrollbar) */}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-2">
+                <Link to="/" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Dashboard</Link>
+                <Link to="/vendas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Vendas</Link>
+                <Link to="/despesas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Gastos</Link>
+                <Link to="/clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Clientes</Link>
+                <Link to="/cadastro-clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Novo</Link> 
+                <Link to="/relatorios" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Cobrança</Link>
                 
                 <button 
                   onClick={realizarLogout} 
-                  className="ml-4 px-5 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                  className="ml-2 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all whitespace-nowrap"
                 >
                   Sair
                 </button>
               </div>
 
-              {/* Menu Mobile (Simples) */}
-              <div className="lg:hidden flex gap-2">
-                 <Link to="/" className="p-2 text-elos-verde">📊</Link>
-                 <Link to="/vendas" className="p-2 text-elos-verde">💰</Link>
-                 <button onClick={realizarLogout} className="p-2 text-red-600">✕</button>
-              </div>
             </div>
           </div>
         </nav>
