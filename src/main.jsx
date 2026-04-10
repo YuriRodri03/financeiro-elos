@@ -3,27 +3,23 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
-// 1. Importando suas páginas
 import Dashboard from './pages/Dashboard';
 import Vendas from './pages/Vendas';
 import Clientes from './pages/Clientes';
 import CadastroClientes from './pages/CadastroClientes';
 import RelatorioInadimplencia from './pages/Relatorios';
-import Despesas from './pages/Despesas'; // NOVO: Importando Despesas
+import Despesas from './pages/Despesas';
 import Login from './pages/Login';
 
 import './index.css'; 
 
-// 3. Componente de Proteção e Renderização
 function AppContent() {
   const [autenticado, setAutenticado] = useState(false);
   const { carregando } = useFinanceiro();
 
   useEffect(() => {
     const auth = localStorage.getItem('otica_elos_auth');
-    if (auth === 'true') {
-      setAutenticado(true);
-    }
+    if (auth === 'true') setAutenticado(true);
   }, []);
 
   const realizarLogin = () => {
@@ -38,52 +34,70 @@ function AppContent() {
     }
   };
 
-  if (!autenticado) {
-    return <Login onLogin={realizarLogin} />;
-  }
+  if (!autenticado) return <Login onLogin={realizarLogin} />;
 
+  // Tela de Carregamento com Tailwind
   if (carregando) {
     return (
-      <div style={{
-        height: '100vh', 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        backgroundColor: '#fdfaf5', 
-        color: '#4a5d4e'
-      }}>
-        <h2 style={{ fontFamily: 'Georgia, serif' }}>Ótica Elos</h2>
-        <p>Sincronizando com o banco de dados... 🍃</p>
+      <div className="h-screen flex flex-col justify-center items-center bg-elos-fundo text-elos-verde">
+        <h2 className="font-tradicional text-4xl mb-2 animate-pulse italic">Ótica Elos</h2>
+        <p className="text-xs uppercase tracking-[0.3em] font-bold opacity-60">Sincronizando dados...</p>
       </div>
     );
   }
 
   return (
     <Router>
-      <nav className="navbar-container">
-        <div className="logo-loja">
-          Ótica Elos
-        </div>
-        <div className="nav-menu">
-          <Link to="/" className="nav-link">Dashboard</Link>
-          <Link to="/vendas" className="nav-link">Vendas</Link>
-          <Link to="/despesas" className="nav-link">Gastos</Link>
-          <Link to="/clientes" className="nav-link">Clientes</Link>
-          <Link to="/cadastro-clientes" className="nav-link">Novo Cliente</Link> 
-          <Link to="/relatorios" className="nav-link">Cobrança</Link>
-          <button onClick={realizarLogout} className="btn-logout">Sair</button>
-        </div>
-      </nav>
+      <div className="min-h-screen bg-elos-fundo">
+        {/* NAVBAR PROFISSIONAL */}
+        <nav className="bg-white border-b border-elos-bege/20 shadow-soft sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 md:px-8">
+            <div className="flex justify-between items-center h-20">
+              
+              {/* Logo */}
+              <div className="font-tradicional text-2xl text-elos-verde italic font-bold">
+                Ótica Elos
+              </div>
 
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/vendas" element={<Vendas />} />
-        <Route path="/despesas" element={<Despesas />} />
-        <Route path="/clientes" element={<Clientes />} />
-        <Route path="/cadastro-clientes" element={<CadastroClientes />} />
-        <Route path="/relatorios" element={<RelatorioInadimplencia />} />
-      </Routes>
+              {/* Menu Desktop */}
+              <div className="hidden lg:flex items-center gap-1">
+                <Link to="/" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Dashboard</Link>
+                <Link to="/vendas" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Vendas</Link>
+                <Link to="/despesas" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Gastos</Link>
+                <Link to="/clientes" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Clientes</Link>
+                <Link to="/cadastro-clientes" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Novo Cliente</Link> 
+                <Link to="/relatorios" className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all">Cobrança</Link>
+                
+                <button 
+                  onClick={realizarLogout} 
+                  className="ml-4 px-5 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                >
+                  Sair
+                </button>
+              </div>
+
+              {/* Menu Mobile (Simples) */}
+              <div className="lg:hidden flex gap-2">
+                 <Link to="/" className="p-2 text-elos-verde">📊</Link>
+                 <Link to="/vendas" className="p-2 text-elos-verde">💰</Link>
+                 <button onClick={realizarLogout} className="p-2 text-red-600">✕</button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        {/* ÁREA DE CONTEÚDO */}
+        <main className="animate-in fade-in duration-500">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/vendas" element={<Vendas />} />
+            <Route path="/despesas" element={<Despesas />} />
+            <Route path="/clientes" element={<Clientes />} />
+            <Route path="/cadastro-clientes" element={<CadastroClientes />} />
+            <Route path="/relatorios" element={<RelatorioInadimplencia />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   );
 }
