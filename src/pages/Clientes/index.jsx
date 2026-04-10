@@ -109,11 +109,12 @@ export default function Clientes() {
       
       await editarCliente(cpfOriginal, editandoCadastro);
       
-      // Atualiza o estado de seleção para o novo CPF para manter o modal aberto corretamente
+      // Sincroniza o CPF selecionado com o novo CPF para manter o vínculo
       setClienteSelecionadoCPF(novoCPF);
       setEditandoCadastro(null);
       alert("Cadastro atualizado com sucesso!");
     } catch (err) {
+      console.error(err);
       alert("Erro ao atualizar cadastro.");
     }
   };
@@ -148,7 +149,7 @@ export default function Clientes() {
 
   const clienteNoModal = useMemo(() => {
     if (!clienteSelecionadoCPF) return null;
-    return listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
+    return listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF) || null;
   }, [clienteSelecionadoCPF, listaFinalClientes]);
 
   const clientesExibidos = listaFinalClientes.filter(c => {
@@ -233,7 +234,8 @@ export default function Clientes() {
             <button onClick={fecharModal} className="btn-close">&times;</button>
             <header className="modal-header">
               <h2 style={{margin: 0, color: 'var(--primary)'}}>
-                {editandoCadastro ? "Editando Cadastro" : (clienteNoModal?.nome || "Carregando...")}
+                {/* SOLUÇÃO PARA O ERRO: Prioriza o estado editandoCadastro, que nunca é nulo durante a edição */}
+                {editandoCadastro ? `Editando: ${editandoCadastro.nome || ''}` : (clienteNoModal?.nome || "Ficha do Cliente")}
               </h2>
             </header>
             
@@ -336,7 +338,7 @@ export default function Clientes() {
                   ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra registrada.</p>}
                 </>
               ) : (
-                <p>Carregando dados do cliente...</p>
+                <p>Dados não encontrados.</p>
               )}
             </div>
             <button onClick={fecharModal} className="btn-sair">Voltar para a Lista</button>
