@@ -151,7 +151,6 @@ input, select, textarea {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 600px; /* Garante que a tabela não esprema demais */
 }
 
 table th, table td {
