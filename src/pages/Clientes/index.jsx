@@ -102,11 +102,9 @@ export default function Clientes() {
     }
     try {
       await editarCliente(clienteSelecionadoCPF, editandoCadastro);
-      if (editandoCadastro.cpf !== clienteSelecionadoCPF) {
-        fecharModal();
-      } else {
-        setEditandoCadastro(null);
-      }
+      // Se o CPF mudou, precisamos atualizar a seleção para o novo CPF para o modal não fechar ou bugar
+      setClienteSelecionadoCPF(editandoCadastro.cpf);
+      setEditandoCadastro(null);
       alert("Cadastro atualizado com sucesso!");
     } catch (err) {
       alert("Erro ao atualizar cadastro.");
@@ -142,6 +140,7 @@ export default function Clientes() {
   }, [vendas, clientes]);
 
   const clienteNoModal = useMemo(() => {
+    if (!clienteSelecionadoCPF) return null;
     return listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
   }, [clienteSelecionadoCPF, listaFinalClientes]);
 
@@ -149,8 +148,8 @@ export default function Clientes() {
     const passaFiltroStatus = filtro === 'pendentes' ? c.totalGeralDevido > 0.01 : true;
     const termo = busca.toLowerCase();
     const termoApenasNumeros = termo.replace(/\D/g, '');
-    const cpfBancoApenasNumeros = c.cpf.replace(/\D/g, '');
-    const passaBuscaNome = c.nome.toLowerCase().includes(termo);
+    const cpfBancoApenasNumeros = (c.cpf || '').replace(/\D/g, '');
+    const passaBuscaNome = (c.nome || '').toLowerCase().includes(termo);
     const passaBuscaCPF = cpfBancoApenasNumeros.includes(termoApenasNumeros);
     return passaFiltroStatus && (passaBuscaNome || (termoApenasNumeros !== '' && passaBuscaCPF));
   });
@@ -221,30 +220,31 @@ export default function Clientes() {
         </table>
       </div>
 
-      {clienteNoModal && (
+      {/* SEGURANÇA: Verificamos o CPF primeiro */}
+      {clienteSelecionadoCPF && (
         <div className="modal-overlay" onClick={fecharModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <button onClick={fecharModal} className="btn-close">&times;</button>
             <header className="modal-header">
               <h2 style={{margin: 0, color: 'var(--primary)'}}>
-                {editandoCadastro ? "Editando Cadastro" : clienteNoModal.nome}
+                {editandoCadastro ? "Editando Cadastro" : (clienteNoModal?.nome || "Carregando...")}
               </h2>
             </header>
             
             <div className="modal-body">
               {editandoCadastro ? (
                 <div className="dados-cadastro-box" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '2px solid var(--primary)', display: 'grid', gap: '12px' }}>
-                  <div className="form-group-edit"><label>Nome Completo:</label><input type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>CPF:</label><input type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>WhatsApp:</label><input type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>Endereço:</label><input type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>Observações:</label><textarea value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" /></div>
+                  <div className="form-group-edit"><label>Nome Completo:</label><input type="text" value={editandoCadastro.nome || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
+                  <div className="form-group-edit"><label>CPF:</label><input type="text" value={editandoCadastro.cpf || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
+                  <div className="form-group-edit"><label>WhatsApp:</label><input type="text" value={editandoCadastro.telefone || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
+                  <div className="form-group-edit"><label>Endereço:</label><input type="text" value={editandoCadastro.endereco || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
+                  <div className="form-group-edit"><label>Observações:</label><textarea value={editandoCadastro.observacoes || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" /></div>
                   <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                     <button className="btn-baixa" onClick={salvarEdicao}>Salvar Alterações</button>
                     <button className="btn-sair" style={{ margin: 0, background: '#eee', color: '#666' }} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
                   </div>
                 </div>
-              ) : (
+              ) : clienteNoModal ? (
                 <>
                   <div className="dados-cadastro-box" style={{ padding: '20px', background: '#fdfaf5', borderRadius: '12px', border: '1px solid #d2b48c', marginBottom: '20px' }}>
                     <p>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
@@ -294,16 +294,16 @@ export default function Clientes() {
                   </div>
 
                   <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Histórico de Compras</h3>
-                  {clienteNoModal.historicoVendas.length > 0 ? (
+                  {clienteNoModal.historicoVendas?.length > 0 ? (
                     clienteNoModal.historicoVendas.map((venda) => (
                       <div key={venda._id || venda.id} className="card-venda-historico">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                           <strong>📦 {venda.produto || 'Óculos'}</strong>
                           <div style={{display: 'flex', gap: '8px'}}>
-                            <small style={{cursor: 'pointer', textDecoration: 'underline'}} onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>{venda.dataVenda.split('-').reverse().join('/')} ✏️</small>
+                            <small style={{cursor: 'pointer', textDecoration: 'underline'}} onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>{venda.dataVenda?.split('-').reverse().join('/')} ✏️</small>
                             <button onClick={() => gerarPDFDocumento({
                               numero: venda.numeroPedido || "017-2026",
-                              data: venda.dataVenda.split('-').reverse().join('/'),
+                              data: venda.dataVenda?.split('-').reverse().join('/'),
                               cliente: clienteNoModal.nome,
                               produto: venda.produto || "Produtos Ópticos",
                               valorProduto: venda.valorTotal + (venda.desconto || 0),
@@ -314,7 +314,7 @@ export default function Clientes() {
                           </div>
                         </div>
                         <div className="venda-parcelas">
-                          {venda.listaParcelas.map(p => (
+                          {venda.listaParcelas?.map(p => (
                             <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                           ))}
                         </div>
@@ -329,6 +329,8 @@ export default function Clientes() {
                     ))
                   ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra registrada.</p>}
                 </>
+              ) : (
+                <p>Carregando dados do cliente...</p>
               )}
             </div>
             <button onClick={fecharModal} className="btn-sair">Voltar para a Lista</button>
