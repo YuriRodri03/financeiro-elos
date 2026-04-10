@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --primary: #4a5d4e;      /* Verde Musgo */
   --primary-light: #f1f3f1;

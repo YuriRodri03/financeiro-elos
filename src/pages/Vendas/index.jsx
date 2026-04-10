@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils'; 
-import './style.css';
+import { gerarPDFDocumento } from '../../documentosUtils';
 
 export default function Vendas() {
   const { adicionarVenda, clientes } = useFinanceiro();
@@ -83,13 +82,11 @@ export default function Vendas() {
     }
 
     try {
-      // Salva a venda e recupera o resultado (que deve conter o ID/Número gerado pelo banco)
       const novaVendaSalva = await adicionarVenda(dadosParaSalvar);
       
       const imprimir = confirm("Venda registrada com sucesso! 👓\nDeseja gerar o Pedido com Garantia agora?");
       if (imprimir) {
         gerarPDFDocumento({
-          // Pega o número real da venda salva ou gera um baseado no horário
           numero: novaVendaSalva?.numeroPedido || novaVendaSalva?.id || "PED-" + Date.now().toString().slice(-6), 
           data: venda.dataVenda.split('-').reverse().join('/'),
           cliente: venda.cliente,
@@ -97,19 +94,13 @@ export default function Vendas() {
           valorProduto: valorTotalLimpio + descontoLimpio,
           desconto: descontoLimpio,
           valorTotal: valorTotalLimpio,
-          metodoPagamento: venda.metodoPagamento // Adicionado para ser dinâmico no PDF
+          metodoPagamento: venda.metodoPagamento 
         }, 'pedido'); 
       }
 
       setVenda({
-        cliente: '',
-        cpf: '',
-        produto: '',
-        valorTotal: '',
-        valorEntrada: '',
-        desconto: '',
-        parcelas: 1,
-        metodoPagamento: 'Dinheiro',
+        cliente: '', cpf: '', produto: '', valorTotal: '', valorEntrada: '',
+        desconto: '', parcelas: 1, metodoPagamento: 'Dinheiro',
         dataVenda: new Date().toISOString().split('T')[0],
         dataPrimeiraParcela: new Date().toISOString().split('T')[0]
       });
@@ -119,71 +110,126 @@ export default function Vendas() {
   };
 
   return (
-    <div className="vendas-container">
-      <header className="vendas-header">
-        <h1>Nova Venda - Ótica Elos</h1>
-      </header>
+    <div className="min-h-screen bg-accent-light p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        
+        <header className="mb-8 text-center md:text-left">
+          <h1 className="font-serif text-3xl md:text-4xl text-primary italic border-b-2 border-primary/10 pb-4 inline-block">
+            Nova Venda - Ótica Elos
+          </h1>
+        </header>
 
-      <form className="vendas-form" onSubmit={handleSalvar}>
-        <div className="form-group">
-          <label>CPF do Cliente</label>
-          <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" />
-        </div>
-
-        <div className="form-group">
-          <label>Nome do Cliente</label>
-          <input type="text" name="cliente" value={venda.cliente} onChange={handleChange} required placeholder="Nome Completo" />
-        </div>
-
-        <div className="form-group full-width">
-          <label>Produto / Armação</label>
-          <input type="text" name="produto" value={venda.produto} onChange={handleChange} placeholder="Ex: Ray-Ban Aviator" />
-        </div>
-
-        <div className="form-group">
-          <label>Data da Venda</label>
-          <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} />
-        </div>
-
-        <div className="form-group">
-          <label>Preço de Venda (Final)</label>
-          <input type="text" name="valorTotal" value={venda.valorTotal} onChange={handleChange} required placeholder="R$ 0,00" />
-        </div>
-
-        <div className="form-group">
-          <label>Desconto Concedido</label>
-          <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" />
-        </div>
-
-        <div className="form-group">
-          <label>Valor de Entrada</label>
-          <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" />
-        </div>
-
-        <div className="form-group">
-          <label>Forma de Pagamento</label>
-          <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange}>
-            <option value="Dinheiro">Dinheiro</option>
-            <option value="Pix">Pix</option>
-            <option value="Cartão de Crédito">Cartão de Crédito</option>
-            <option value="Boleto / Crediário">Boleto / Crediário</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Nº de Parcelas (Restante)</label>
-          <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} />
-        </div>
-
-        {venda.metodoPagamento === 'Boleto / Crediário' && (
-          <div className="form-group">
-            <label style={{color: 'var(--primary)', fontWeight: 'bold'}}>🗓️ Vencimento da 1ª Parcela</label>
-            <input type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange} style={{borderColor: 'var(--primary)', backgroundColor: '#f0f4f0'}} />
+        <form onSubmit={handleSalvar} className="bg-white rounded-3xl shadow-soft p-6 md:p-10 space-y-8">
+          
+          {/* SEÇÃO: DADOS DO CLIENTE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">CPF do Cliente</label>
+              <input 
+                type="text" name="cpf" value={venda.cpf} onChange={handleChange} required 
+                placeholder="000.000.000-00"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Nome do Cliente</label>
+              <input 
+                type="text" name="cliente" value={venda.cliente} onChange={handleChange} required 
+                placeholder="Nome Completo"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              />
+            </div>
           </div>
-        )}
 
-        <button type="submit" className="btn-salvar">Finalizar e Gerar Pedido</button>
-      </form>
+          {/* SEÇÃO: PRODUTO */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Produto / Armação</label>
+            <input 
+              type="text" name="produto" value={venda.produto} onChange={handleChange} 
+              placeholder="Ex: Ray-Ban Aviator ou Lentes Varilux"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+            />
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* SEÇÃO: FINANCEIRO */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Data da Venda</label>
+              <input 
+                type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Preço Final</label>
+              <input 
+                type="text" name="valorTotal" value={venda.valorTotal} onChange={handleChange} required 
+                placeholder="R$ 0,00"
+                className="w-full px-4 py-3 bg-green-50 border border-green-100 text-green-900 font-bold rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Desconto</label>
+              <input 
+                type="text" name="desconto" value={venda.desconto} onChange={handleChange} 
+                placeholder="R$ 0,00"
+                className="w-full px-4 py-3 bg-red-50 border border-red-100 text-red-900 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Valor de Entrada</label>
+              <input 
+                type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} 
+                placeholder="R$ 0,00"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Pagamento</label>
+              <select 
+                name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              >
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Pix">Pix</option>
+                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                <option value="Boleto / Crediário">Boleto / Crediário</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-widest ml-1">Nº Parcelas</label>
+              <input 
+                type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {/* VENCIMENTO ESPECIAL */}
+          {venda.metodoPagamento === 'Boleto / Crediário' && (
+            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 animate-pulse">
+              <label className="block text-sm font-bold text-primary mb-3">🗓️ Vencimento da 1ª Parcela</label>
+              <input 
+                type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange}
+                className="w-full px-4 py-3 border-2 border-primary rounded-xl outline-none"
+              />
+              <p className="text-[10px] text-primary/60 mt-2 uppercase font-bold tracking-tighter">Atenção: Sistema de crediário próprio selecionado.</p>
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            className="w-full bg-primary hover:bg-[#3a4a3e] text-white font-bold py-5 rounded-2xl shadow-lg shadow-primary/20 transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest"
+          >
+            Finalizar e Gerar Pedido
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils'; 
-import './style.css';
+import { gerarPDFDocumento } from '../../documentosUtils';
 
-// --- COMPONENTE DE LINHA DE PARCELA ---
+// --- COMPONENTE DE LINHA DE PARCELA (Refatorado com Tailwind) ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -20,51 +19,52 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   };
 
   return (
-    <div className="linha-parcela" style={{ borderBottom: '1px solid #eee', padding: '12px 0' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span>{p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} - <strong>R$ {(p.valor || 0).toFixed(2)}</strong></span>
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4">
+      <div className="flex flex-col">
+        <span className="font-bold text-elos-texto">
+          {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
+          <span className="text-elos-verde ml-1">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
+        </span>
         {p.paga && (
-          <small style={{ color: '#4a5d4e', fontWeight: 'bold' }}>
+          <small className="text-elos-verde font-bold text-[10px] uppercase tracking-tighter">
             🗓️ Recebido em: {p.dataPagamento?.split('-').reverse().join('/')}
           </small>
         )}
       </div>
 
       {p.paga ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px' }}>
-          <span style={{ color: 'green', fontWeight: 'bold' }}>✅ Paga</span>
+        <div className="flex items-center gap-3">
+          <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase">✅ Paga</span>
           <button 
             onClick={() => estornarBaixaParcela(vendaId, p.numero)} 
-            style={{ fontSize: '11px', background: 'none', border: 'none', textDecoration: 'underline', color: '#999', cursor: 'pointer' }}
+            className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors"
           >
             (Estornar)
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: '100px' }}>
-            <label style={{ fontSize: '10px', color: '#666' }}>Quanto foi pago?</label>
+        <div className="flex flex-wrap gap-2 items-end w-full md:w-auto">
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-black text-gray-400 uppercase">Valor Pago</label>
             <input 
               type="number" 
-              className="input-parcial"
+              className="w-24 p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
               value={valorRecebido} 
               onChange={(e) => setValorRecebido(e.target.value)}
-              style={{ padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }}
             />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: '100px' }}>
-            <label style={{ fontSize: '10px', color: '#666' }}>Data:</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-black text-gray-400 uppercase">Data</label>
             <input 
               type="date" 
+              className="p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
               value={dataBaixa} 
               onChange={(e) => setDataBaixa(e.target.value)}
-              style={{ padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }}
             />
           </div>
           <button 
-            className="btn-baixa" 
+            className="bg-elos-verde text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-elos-verde/90 transition-all active:scale-95 shadow-md shadow-elos-verde/10"
             onClick={handleBaixa}
-            style={{ padding: '10px 15px', fontSize: '12px', alignSelf: 'flex-end' }}
           >
             Confirmar
           </button>
@@ -74,7 +74,6 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   );
 }
 
-// --- COMPONENTE PRINCIPAL ---
 export default function Clientes() {
   const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, editarDataVenda, carregando } = useFinanceiro();
   
@@ -97,36 +96,25 @@ export default function Clientes() {
     }
   };
 
-  // --- FUNÇÃO DE SALVAR REESCRITA ---
   const salvarEdicao = async () => {
-    // 1. Buscamos o cliente na lista final que contém o _id vindo do MongoDB
     const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
-    
     if (!editandoCadastro?.nome || !editandoCadastro?.cpf) {
       alert("Nome e CPF são obrigatórios!");
       return;
     }
-
-    // 2. Verificação de ID CRÍTICA
     const idMongo = clienteParaEditar?._id;
-    
     if (!idMongo) {
-      console.error("DEBUG - Cliente sem ID:", clienteParaEditar);
-      alert("Erro: ID interno do cliente não encontrado. Tente recarregar a página.");
+      alert("Erro: ID interno do cliente não encontrado.");
       return;
     }
 
-    console.log("Enviando atualização para o ID:", idMongo);
-
     try {
-      // 3. Chamamos o contexto passando obrigatoriamente o ID
       await editarCliente(idMongo, editandoCadastro);
-      
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
-      alert("Cadastro atualizado com sucesso!");
+      alert("Cadastro atualizado!");
     } catch (err) {
-      console.error("Erro ao salvar cadastro:", err);
+      console.error(err);
     }
   };
 
@@ -139,15 +127,12 @@ export default function Clientes() {
     return todosCPFs.map(cpf => {
       const dadosCad = (clientes || []).find(c => c.cpf === cpf);
       const vendasCli = (vendas || []).filter(v => v.cpf === cpf);
-      
       const totalDevido = vendasCli.reduce((acc, v) => {
-        return acc + (v.listaParcelas || [])
-          .filter(p => !p.paga)
-          .reduce((soma, p) => soma + (p.valor || 0), 0);
+        return acc + (v.listaParcelas || []).filter(p => !p.paga).reduce((soma, p) => soma + (p.valor || 0), 0);
       }, 0);
 
       return {
-        _id: dadosCad?._id || dadosCad?.id, // Captura o ID de qualquer forma que venha do banco
+        _id: dadosCad?._id || dadosCad?.id,
         nome: dadosCad?.nome || vendasCli[0]?.cliente || "Sem Nome",
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
@@ -167,190 +152,224 @@ export default function Clientes() {
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? (c.totalGeralDevido || 0) > 0.01 : true;
     const termo = busca.toLowerCase();
-    const passaBuscaNome = (c.nome || '').toLowerCase().includes(termo);
-    const passaBuscaCPF = (c.cpf || '').includes(termo);
-    return passaFiltroStatus && (passaBuscaNome || passaBuscaCPF);
+    return passaFiltroStatus && (c.nome.toLowerCase().includes(termo) || c.cpf.includes(termo));
   });
 
   if (carregando) return null;
 
   return (
-    <div className="clientes-container">
-      <header className="clientes-header">
-        <h1>Carteira de Clientes - Ótica Elos</h1>
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans">
+      
+      {/* HEADER */}
+      <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+        <div>
+          <h1 className="font-tradicional text-4xl text-elos-verde italic">Carteira de Clientes</h1>
+          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold italic">Base de dados unificada</p>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+          <input 
+            type="text" 
+            className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none focus:ring-2 focus:ring-elos-bege text-sm w-full md:w-80"
+            placeholder="🔍 Buscar por nome ou CPF..." 
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <div className="flex bg-white p-1 rounded-2xl shadow-soft border border-elos-bege/10">
+            <button 
+              onClick={() => setFiltro('todos')} 
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filtro === 'todos' ? 'bg-elos-verde text-white' : 'text-gray-400'}`}
+            >
+              TODOS ({listaFinalClientes.length})
+            </button>
+            <button 
+              onClick={() => setFiltro('pendentes')} 
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filtro === 'pendentes' ? 'bg-red-600 text-white' : 'text-gray-400'}`}
+            >
+              ⚠️ INADIMPLENTES
+            </button>
+          </div>
+        </div>
       </header>
 
-      <div className="busca-secao">
-        <input 
-          type="text" 
-          className="input-busca"
-          placeholder="🔍 Buscar por nome ou CPF..." 
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
-      </div>
-
-      <div className="filtros-clientes">
-        <button onClick={() => setFiltro('todos')} className={`btn-filtro ${filtro === 'todos' ? 'active' : ''}`}>
-          👥 Todos ({listaFinalClientes.length})
-        </button>
-        <button onClick={() => setFiltro('pendentes')} className={`btn-filtro ${filtro === 'pendentes' ? 'active-alert' : ''}`}>
-          ⚠️ Inadimplentes
-        </button>
-      </div>
-
-      <div className="table-wrapper">
-        <table className="clientes-table">
-          <thead>
-            <tr>
-              <th>Cliente / CPF</th>
-              <th>Contato</th>
-              <th>Saldo Devedor</th>
-              <th>Status</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientesExibidos.map((cliente) => (
-              <tr key={cliente.cpf}>
-                <td data-label="Cliente">
-                  <div className="cliente-nome">{cliente.nome}</div>
-                  <div className="cliente-cpf" style={{fontSize: '0.8rem', color: '#666'}}>{cliente.cpf}</div>
-                </td>
-                <td data-label="Contato">{cliente.telefone}</td>
-                <td data-label="Saldo" style={{ color: cliente.totalGeralDevido > 0 ? '#c62828' : '#4a5d4e', fontWeight: 'bold' }}>
-                  R$ {(cliente.totalGeralDevido || 0).toFixed(2)}
-                </td>
-                <td data-label="Status">
-                  <span className={`status-badge ${cliente.totalGeralDevido > 0 ? 'pendente' : 'pago'}`}>
-                    {cliente.totalGeralDevido > 0 ? 'Em Aberto' : 'Quitado'}
-                  </span>
-                </td>
-                <td data-label="Ações">
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button className="btn-detalhes" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>Ver Ficha</button>
-                    <button className="btn-excluir-venda" style={{ marginTop: 0, width: '40px', padding: '5px' }} onClick={() => excluirCliente(cliente.cpf)}>🗑️</button>
-                  </div>
-                </td>
+      {/* TABELA */}
+      <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-elos-fundo/50 border-b border-gray-100">
+              <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <th className="px-8 py-5">Cliente / CPF</th>
+                <th className="px-8 py-5">Contato</th>
+                <th className="px-8 py-5 text-center">Saldo Devedor</th>
+                <th className="px-8 py-5 text-center">Status</th>
+                <th className="px-8 py-5 text-right">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {clientesExibidos.map((cliente) => (
+                <tr key={cliente.cpf} className="hover:bg-elos-fundo/30 transition-colors group">
+                  <td className="px-8 py-5">
+                    <div className="font-bold text-elos-verde group-hover:underline cursor-pointer" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>{cliente.nome}</div>
+                    <div className="text-[10px] text-gray-400 font-mono">{cliente.cpf}</div>
+                  </td>
+                  <td className="px-8 py-5 text-sm font-medium text-gray-500">{cliente.telefone}</td>
+                  <td className={`px-8 py-5 text-center font-black ${cliente.totalGeralDevido > 0 ? 'text-red-600' : 'text-elos-verde'}`}>
+                    R$ {(cliente.totalGeralDevido || 0).toFixed(2).replace('.', ',')}
+                  </td>
+                  <td className="px-8 py-5 text-center">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${cliente.totalGeralDevido > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {cliente.totalGeralDevido > 0 ? 'Pendente' : 'Quitado'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="p-2 bg-elos-fundo text-elos-verde rounded-xl hover:bg-elos-verde hover:text-white transition-all">
+                        📄 Ficha
+                      </button>
+                      <button onClick={() => { if(confirm("Deseja excluir este cliente?")) excluirCliente(cliente.cpf) }} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all">
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      {/* MODAL FICHA DO CLIENTE */}
       {clienteSelecionadoCPF && (
-        <div className="modal-overlay" onClick={fecharModal}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <button onClick={fecharModal} className="btn-close">&times;</button>
-            <header className="modal-header">
-              <h2 style={{margin: 0, color: 'var(--primary)'}}>
-                {editandoCadastro ? `Editando: ${editandoCadastro.nome || ''}` : (clienteNoModal?.nome || "Ficha do Cliente")}
+        <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative">
+            
+            <button onClick={fecharModal} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-elos-fundo rounded-full text-2xl text-gray-400 hover:text-red-500 z-10">&times;</button>
+            
+            <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20">
+              <h2 className="font-tradicional text-3xl text-elos-verde italic">
+                {editandoCadastro ? `Editando Perfil` : (clienteNoModal?.nome)}
               </h2>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                {editandoCadastro ? 'Alteração de dados cadastrais' : 'Ficha de Acompanhamento Financeiro'}
+              </p>
             </header>
             
-            <div className="modal-body">
+            <div className="p-10 overflow-y-auto flex-1 bg-white">
               {editandoCadastro ? (
-                <div className="dados-cadastro-box" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '2px solid var(--primary)', display: 'grid', gap: '12px' }}>
-                  <div className="form-group-edit"><label>Nome Completo:</label><input type="text" value={editandoCadastro.nome || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>CPF:</label><input type="text" value={editandoCadastro.cpf || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>WhatsApp:</label><input type="text" value={editandoCadastro.telefone || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>Endereço:</label><input type="text" value={editandoCadastro.endereco || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>Observações:</label><textarea value={editandoCadastro.observacoes || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" /></div>
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                    <button className="btn-baixa" onClick={salvarEdicao}>Salvar Alterações</button>
-                    <button className="btn-sair" style={{ margin: 0, background: '#eee', color: '#666' }} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
+                /* FORMULÁRIO DE EDIÇÃO */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-8 rounded-3xl border-2 border-elos-bege/30">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-elos-verde uppercase ml-1">Nome Completo</label>
+                    <input className="p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-elos-bege" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-elos-verde uppercase ml-1">CPF</label>
+                    <input className="p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-elos-bege" type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-elos-verde uppercase ml-1">WhatsApp</label>
+                    <input className="p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-elos-bege" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-elos-verde uppercase ml-1">Endereço</label>
+                    <input className="p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-elos-bege" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1 md:col-span-2">
+                    <label className="text-[10px] font-black text-elos-verde uppercase ml-1">Observações Internas</label>
+                    <textarea className="p-3 rounded-xl border-none shadow-sm focus:ring-2 focus:ring-elos-bege" rows="3" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} />
+                  </div>
+                  <div className="flex gap-3 md:col-span-2 mt-4">
+                    <button onClick={salvarEdicao} className="flex-1 bg-elos-verde text-white py-3 rounded-2xl font-bold shadow-lg shadow-elos-verde/20">Salvar Alterações</button>
+                    <button onClick={() => setEditandoCadastro(null)} className="flex-1 bg-gray-100 text-gray-500 py-3 rounded-2xl font-bold">Cancelar</button>
                   </div>
                 </div>
               ) : clienteNoModal ? (
+                /* VISUALIZAÇÃO DA FICHA */
                 <>
-                  <div className="dados-cadastro-box" style={{ padding: '20px', background: '#fdfaf5', borderRadius: '12px', border: '1px solid #d2b48c', marginBottom: '20px' }}>
-                    <p>🆔 <strong>CPF:</strong> {clienteNoModal.cpf}</p>
-                    <p>📱 <strong>WhatsApp:</strong> {clienteNoModal.telefone}</p>
-                    <p>🏠 <strong>Endereço:</strong> {clienteNoModal.endereco}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <div className="bg-elos-fundo p-6 rounded-3xl border border-elos-bege/20 flex flex-col justify-center">
+                      <span className="text-[10px] font-black text-gray-400 uppercase italic">Dados de Contato</span>
+                      <p className="font-bold text-elos-texto mt-1">{clienteNoModal.telefone}</p>
+                      <p className="text-xs text-gray-500 truncate">{clienteNoModal.endereco}</p>
+                    </div>
+                    <div className="bg-elos-fundo p-6 rounded-3xl border border-elos-bege/20 flex flex-col justify-center">
+                      <span className="text-[10px] font-black text-gray-400 uppercase italic">Documento</span>
+                      <p className="font-bold text-elos-texto mt-1 font-mono">{clienteNoModal.cpf}</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="w-full py-3 bg-white border-2 border-elos-bege text-elos-bege font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Ficha</button>
+                      <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="w-full py-3 bg-elos-verde text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-elos-verde/10">📄 Gerar Recibo</button>
+                    </div>
                   </div>
 
-                  <div style={{ marginBottom: '20px' }}>
-                    {dadosRecibo ? (
-                      <div className="dados-cadastro-box" style={{ display: 'grid', gap: '10px', background: '#f9f9f9', border: '1px solid #ddd' }}>
-                        <h4>Configurar Recibo</h4>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <input type="number" value={dadosRecibo.valor} onChange={(e) => setDadosRecibo({...dadosRecibo, valor: e.target.value})} placeholder="Valor Bruto" style={{flex: 1}}/>
-                          <input type="number" value={dadosRecibo.desconto} onChange={(e) => setDadosRecibo({...dadosRecibo, desconto: e.target.value})} placeholder="Desconto" style={{flex: 1}}/>
-                        </div>
-                        <select value={dadosRecibo.metodoPagamento} onChange={(e) => setDadosRecibo({...dadosRecibo, metodoPagamento: e.target.value})}>
-                          <option value="Dinheiro">Dinheiro</option>
-                          <option value="Pix">Pix</option>
-                          <option value="Cartão de Crédito">Cartão de Crédito</option>
-                          <option value="Cartão de Débito">Cartão de Débito</option>
+                  {/* CONFIGURAÇÃO DE RECIBO RÁPIDO */}
+                  {dadosRecibo && (
+                    <div className="mb-10 p-8 bg-primary text-white rounded-[32px] animate-in fade-in zoom-in duration-300">
+                      <h4 className="font-tradicional italic text-xl mb-4">Emissão de Recibo Avulso</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input className="p-3 rounded-xl bg-white/10 border-white/20 text-white placeholder-white/40" type="number" value={dadosRecibo.valor} onChange={(e) => setDadosRecibo({...dadosRecibo, valor: e.target.value})} placeholder="Valor Bruto" />
+                        <input className="p-3 rounded-xl bg-white/10 border-white/20 text-white placeholder-white/40" type="number" value={dadosRecibo.desconto} onChange={(e) => setDadosRecibo({...dadosRecibo, desconto: e.target.value})} placeholder="Desconto" />
+                        <select className="col-span-2 p-3 rounded-xl bg-white/10 border-white/20 text-white" value={dadosRecibo.metodoPagamento} onChange={(e) => setDadosRecibo({...dadosRecibo, metodoPagamento: e.target.value})}>
+                          <option className="text-black" value="Dinheiro">Dinheiro</option>
+                          <option className="text-black" value="Pix">Pix</option>
+                          <option className="text-black" value="Cartão de Crédito">Cartão de Crédito</option>
                         </select>
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                          <button className="btn-baixa" onClick={async () => {
-                            const vB = Number(dadosRecibo.valor);
-                            const vD = Number(dadosRecibo.desconto);
-                            await gerarPDFDocumento({
-                              numero: "REC-" + Date.now().toString().slice(-4), 
-                              data: (dadosRecibo.data || '').split('-').reverse().join('/'), 
-                              cliente: clienteNoModal.nome, 
-                              produto: dadosRecibo.produto, 
-                              valorProduto: vB, 
-                              desconto: vD,
-                              valorTotal: vB - vD,
-                              metodoPagamento: dadosRecibo.metodoPagamento 
-                            }, 'recibo');
-                            setDadosRecibo(null);
-                          }}>✅ Gerar PDF</button>
-                          <button className="btn-sair" style={{margin: 0}} onClick={() => setDadosRecibo(null)}>Cancelar</button>
-                        </div>
+                        <button className="col-span-1 bg-white text-primary py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest" onClick={async () => {
+                          await gerarPDFDocumento({
+                            numero: "REC-" + Date.now().toString().slice(-4), 
+                            data: new Date().toLocaleDateString('pt-BR'), 
+                            cliente: clienteNoModal.nome, 
+                            produto: dadosRecibo.produto, 
+                            valorProduto: Number(dadosRecibo.valor), 
+                            desconto: Number(dadosRecibo.desconto),
+                            valorTotal: Number(dadosRecibo.valor) - Number(dadosRecibo.desconto),
+                            metodoPagamento: dadosRecibo.metodoPagamento 
+                          }, 'recibo');
+                          setDadosRecibo(null);
+                        }}>✅ Gerar PDF</button>
+                        <button className="col-span-1 bg-red-900/30 text-white py-3 rounded-2xl font-black text-[10px] uppercase" onClick={() => setDadosRecibo(null)}>Cancelar</button>
                       </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
-                        <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="btn-editar-perfil" style={{ background: '#4a5d4e', color: 'white' }}>📄 Gerar Recibo</button>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Histórico de Compras</h3>
-                  {(clienteNoModal.historicoVendas || []).length > 0 ? (
-                    clienteNoModal.historicoVendas.map((venda) => (
-                      <div key={venda._id || venda.id} className="card-venda-historico">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                          <strong>📦 {venda.produto || 'Óculos'}</strong>
-                          <div style={{display: 'flex', gap: '8px'}}>
-                            <small style={{cursor: 'pointer', textDecoration: 'underline'}} onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>{venda.dataVenda?.split('-').reverse().join('/')} ✏️</small>
-                            <button onClick={() => gerarPDFDocumento({
-                              numero: venda.numeroPedido || "017-2026",
-                              data: (venda.dataVenda || '').split('-').reverse().join('/'),
-                              cliente: clienteNoModal.nome,
-                              produto: venda.produto || "Produtos Ópticos",
-                              valorProduto: venda.valorTotal + (venda.desconto || 0),
-                              desconto: venda.desconto || 0,
-                              valorTotal: venda.valorTotal,
-                              metodoPagamento: venda.metodoPagamento 
-                            }, 'pedido')} className="btn-pdf-mini">📄 Pedido</button>
+                  <h3 className="font-tradicional text-2xl text-elos-verde italic mb-6 border-b border-gray-100 pb-4">Histórico de Compras</h3>
+                  <div className="space-y-8">
+                    {(clienteNoModal.historicoVendas || []).length > 0 ? (
+                      clienteNoModal.historicoVendas.map((venda) => (
+                        <div key={venda._id || venda.id} className="bg-elos-fundo/20 p-8 rounded-[32px] border border-gray-100 relative group">
+                          <div className="flex justify-between items-start mb-6">
+                            <div>
+                              <strong className="text-xl text-elos-texto block">📦 {venda.produto || 'Produtos Ópticos'}</strong>
+                              <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest cursor-pointer hover:underline" onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>
+                                Data: {venda.dataVenda?.split('-').reverse().join('/')} ✏️
+                              </span>
+                            </div>
+                            <button onClick={() => gerarPDFDocumento({...venda, cliente: clienteNoModal.nome}, 'pedido')} className="bg-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm border border-gray-100 hover:shadow-md transition-all">📄 Reemitir Pedido</button>
                           </div>
+                          
+                          <div className="bg-white rounded-2xl p-4 shadow-inner border border-gray-50">
+                            {(venda.listaParcelas || []).map((p, idx) => (
+                              <LinhaParcela key={p.numero || idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                            ))}
+                          </div>
+
+                          <button 
+                            className="mt-6 text-[10px] font-bold text-red-300 hover:text-red-600 uppercase tracking-tighter transition-colors"
+                            onClick={() => { if(confirm("Excluir esta venda permanentemente?")) excluirVenda(venda._id || venda.id) }}
+                          >
+                            🗑️ Excluir registro desta venda
+                          </button>
                         </div>
-                        <div className="venda-parcelas">
-                          {(venda.listaParcelas || []).map((p, idx) => (
-                            <LinhaParcela key={p.numero || idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
-                          ))}
-                        </div>
-                        <button 
-                          className="btn-excluir-venda" 
-                          onClick={() => excluirVenda(venda._id || venda.id)}
-                          style={{ marginTop: '15px', width: '100%', fontSize: '11px', background: '#fff5f5', color: '#c62828', border: '1px solid #ffebee' }}
-                        >
-                          🗑️ Excluir Registro de Venda
-                        </button>
-                      </div>
-                    ))
-                  ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra registrada.</p>}
+                      ))
+                    ) : <p className="text-center text-gray-300 italic py-10">Nenhuma compra registrada até o momento.</p>}
+                  </div>
                 </>
-              ) : (
-                <p>Carregando dados do cliente...</p>
-              )}
+              ) : null}
             </div>
-            <button onClick={fecharModal} className="btn-sair">Voltar para a Lista</button>
+            
+            <footer className="p-6 bg-elos-fundo border-t flex justify-center">
+              <button onClick={fecharModal} className="bg-elos-texto text-white px-12 py-3 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-elos-verde transition-all shadow-xl">Voltar para a Lista</button>
+            </footer>
           </div>
         </div>
       )}

@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFSaudeFinanceira } from '../../documentosUtils';
-import './style.css';
 
 export default function Dashboard() {
   const { vendas, despesas, carregando } = useFinanceiro();
@@ -11,20 +10,18 @@ export default function Dashboard() {
   const [anoFiltro, setAnoFiltro] = useState(dataAtual.getFullYear());
   const [modalTipo, setModalTipo] = useState(null);
 
-  // --- NOVOS ESTADOS PARA O RELATÓRIO DE SAÚDE FINANCEIRA POR PERÍODO ---
   const [relatorioInicio, setRelatorioInicio] = useState('');
   const [relatorioFim, setRelatorioFim] = useState('');
 
   if (carregando) return null;
 
-  // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA (PDF) ---
+  // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA ---
   const handleGerarRelatorioSaude = () => {
     if (!relatorioInicio || !relatorioFim) {
       alert("Por favor, selecione as datas de início e fim.");
       return;
     }
 
-    // 1. Filtrar ENTRADAS (Dinheiro que REALMENTE entrou no caixa no período)
     let entradasPeriodo = [];
     vendas.forEach(venda => {
       (venda.listaParcelas || []).forEach(p => {
@@ -38,7 +35,6 @@ export default function Dashboard() {
       });
     });
 
-    // 2. Filtrar SAÍDAS (Despesas do período)
     const saidasPeriodo = despesas.filter(d => 
       d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim
     ).map(d => ({ 
@@ -55,22 +51,13 @@ export default function Dashboard() {
       return;
     }
 
-    const dadosRelatorio = {
-      entradas: entradasPeriodo,
-      saidas: saidasPeriodo,
-      totalEntradas,
-      totalSaidas
-    };
-
-    const periodoFmt = {
-      inicio: relatorioInicio.split('-').reverse().join('/'),
-      fim: relatorioFim.split('-').reverse().join('/')
-    };
+    const dadosRelatorio = { entradas: entradasPeriodo, saidas: saidasPeriodo, totalEntradas, totalSaidas };
+    const periodoFmt = { inicio: relatorioInicio.split('-').reverse().join('/'), fim: relatorioFim.split('-').reverse().join('/') };
 
     gerarPDFSaudeFinanceira(dadosRelatorio, periodoFmt);
   };
 
-  // --- SEUS CÁLCULOS MENSAIS ORIGINAIS (MANTIDOS) ---
+  // --- CÁLCULOS (MANTIDOS) ---
   const detalhesAReceber = useMemo(() => {
     let lista = [];
     vendas.forEach(venda => {
@@ -129,7 +116,6 @@ export default function Dashboard() {
   const totalEsperadoMes = totalNoCaixaMes + totalAReceberMes;
   const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberMes / totalEsperadoMes) * 100 : 0;
 
-  // --- SEUS CÁLCULOS ANUAIS ORIGINAIS (MANTIDOS) ---
   const totalNoCaixaAno = vendas.reduce((acc, venda) => {
     const parcelasPagasNoAno = (venda.listaParcelas || []).filter(p => {
       if (!p.paga || !p.dataPagamento) return false;
@@ -150,160 +136,159 @@ export default function Dashboard() {
   }, 0);
 
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div><h1>Painel Financeiro</h1><p>Ótica Elos — Gestão de Resultados</p></div>
-        <div className="filtros-periodo">
-          <div className="filtro-group">
-            <label>Mês</label>
-            <select value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}>
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+      
+      {/* HEADER */}
+      <header className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-elos-bege/30 pb-6 gap-6">
+        <div className="text-center md:text-left">
+          <h1 className="font-tradicional text-4xl text-elos-verde italic">Painel Financeiro</h1>
+          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold">Ótica Elos — Gestão de Resultados</p>
+        </div>
+        
+        <div className="flex gap-4 bg-white p-4 rounded-2xl shadow-soft border border-elos-bege/10">
+          <div className="flex flex-col">
+            <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Mês</label>
+            <select className="bg-transparent font-bold outline-none cursor-pointer" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}>
               {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
               ))}
             </select>
           </div>
-          <div className="filtro-group"><label>Ano</label><input type="number" value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} /></div>
+          <div className="w-[1px] bg-gray-100 mx-2"></div>
+          <div className="flex flex-col">
+            <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Ano</label>
+            <input type="number" className="bg-transparent font-bold w-16 outline-none" value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} />
+          </div>
         </div>
       </header>
 
-      {/* --- SEÇÃO: ANÁLISE DE SAÚDE FINANCEIRA (NOVO) --- */}
-      <h2 className="secao-titulo">Análise de Saúde Financeira</h2>
-      <section className="dashboard-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #eee', marginBottom: '30px' }}>
-        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '15px' }}>🏥 Gerar Balanço de Fluxo de Caixa (Entradas vs Saídas)</h3>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div className="filtro-group">
-            <label style={{fontSize: '12px'}}>Início do Período:</label>
-            <input type="date" value={relatorioInicio} onChange={(e) => setRelatorioInicio(e.target.value)} />
+      {/* SAÚDE FINANCEIRA */}
+      <section className="bg-white p-6 rounded-3xl shadow-soft border border-elos-bege/20 mb-10">
+        <h3 className="font-tradicional text-lg text-elos-verde mb-4 flex items-center gap-2">🏥 Saúde Financeira <span className="text-xs font-sans text-gray-400 font-normal uppercase italic tracking-tighter">(PDF por Período)</span></h3>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Início</label>
+            <input type="date" className="p-2 bg-elos-fundo rounded-xl border-none text-sm" value={relatorioInicio} onChange={(e) => setRelatorioInicio(e.target.value)} />
           </div>
-          <div className="filtro-group">
-            <label style={{fontSize: '12px'}}>Fim do Período:</label>
-            <input type="date" value={relatorioFim} onChange={(e) => setRelatorioFim(e.target.value)} />
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Fim</label>
+            <input type="date" className="p-2 bg-elos-fundo rounded-xl border-none text-sm" value={relatorioFim} onChange={(e) => setRelatorioFim(e.target.value)} />
           </div>
-          <button 
-            onClick={handleGerarRelatorioSaude}
-            className="btn-gerar"
-            style={{ padding: '10px 20px', backgroundColor: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            📊 Baixar Saúde Financeira (PDF)
+          <button onClick={handleGerarRelatorioSaude} className="bg-elos-verde hover:bg-elos-verde/90 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-lg shadow-elos-verde/20">
+            📊 Baixar Balanço
           </button>
         </div>
       </section>
 
-      {/* --- FLUXO MENSAL --- */}
-      <h2 className="secao-titulo">Fluxo de Caixa Mensal ({mesFiltro}/{anoFiltro})</h2>
-      <section className="resumo-cards">
-        <div className="card entrada clicavel" onClick={() => setModalTipo('entradas')}>
-          <h3>Recebido (Entradas)</h3>
-          <p>R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
-          <small>Ver recebimentos do mês</small>
+      {/* CARDS PRINCIPAIS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
+          <p className="text-3xl font-black text-green-700 mt-2 whitespace-nowrap">R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold tracking-tighter italic">Clique para ver detalhes</p>
         </div>
-        <div className="card saida clicavel" style={{ borderLeft: '5px solid #c62828' }} onClick={() => setModalTipo('despesas')}>
-          <h3>Contas (Despesas)</h3>
-          <p style={{ color: '#c62828' }}>- R$ {totalDespesasMes.toFixed(2).replace('.', ',')}</p>
-          <small>Ver lista de contas</small>
+        <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.02] transition-transform">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contas (Saídas)</h3>
+          <p className="text-3xl font-black text-red-700 mt-2 whitespace-nowrap">- R$ {totalDespesasMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold tracking-tighter italic">Clique para ver detalhes</p>
         </div>
-        <div className="card saldo" style={{ borderLeft: '5px solid #1565c0' }}>
-          <h3>Saldo Líquido</h3>
-          <p className={saldoLiquidoMes >= 0 ? 'valor-positivo' : 'valor-negativo'}>
+        <div className={`p-8 rounded-3xl shadow-soft border-t-8 bg-white transition-transform ${saldoLiquidoMes >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido</h3>
+          <p className={`text-3xl font-black mt-2 whitespace-nowrap ${saldoLiquidoMes >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
             R$ {saldoLiquidoMes.toFixed(2).replace('.', ',')}
           </p>
+          <div className="h-1 w-full bg-gray-100 rounded-full mt-4 overflow-hidden">
+            <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasMes || 1)) * 100, 100)}%`}}></div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      {/* --- ANÁLISE DE SAÚDE MENSAL --- */}
-      <h2 className="secao-titulo">Análise de Desempenho Mensal</h2>
-      <section className="analise-economica">
-        <div className="card-analise">
-          <h4>Eficiência de Caixa</h4>
-          <div className="progresso-container"><div className="progresso-barra" style={{ width: `${Math.min(margemCaixa, 100)}%` }}></div></div>
-          <p>{margemCaixa.toFixed(1)}% das vendas viraram caixa.</p>
+      {/* ANÁLISE DE DESEMPENHO */}
+      <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Análise de Desempenho</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="bg-elos-bege/10 p-6 rounded-3xl border border-elos-bege/20">
+          <h4 className="text-xs font-black uppercase text-elos-bege mb-4 tracking-tighter">Eficiência de Caixa</h4>
+          <div className="w-full h-2 bg-white rounded-full mb-3"><div className="h-full bg-elos-verde rounded-full" style={{ width: `${Math.min(margemCaixa, 100)}%` }}></div></div>
+          <p className="text-sm font-bold text-elos-verde">{margemCaixa.toFixed(1)}% das vendas já entraram.</p>
         </div>
-        <div className="card-analise">
-          <h4>Ponto de Equilíbrio</h4>
-          <strong style={{ color: faltamParaCusto <= 0 ? '#2e7d32' : '#c62828' }}>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
+          <h4 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-tighter">Ponto de Equilíbrio</h4>
+          <strong className={`text-xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `Faltam R$ ${faltamParaCusto.toFixed(2)}`}
           </strong>
-          <p>Para quitar as despesas do mês.</p>
         </div>
-        <div className="card-analise">
-          <h4>Risco de Crédito</h4>
-          <strong style={{ color: indiceInadimplencia > 30 ? '#c62828' : '#d2b48c' }}>{indiceInadimplencia.toFixed(1)}%</strong>
-          <p>Inadimplência sobre o esperado.</p>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
+          <h4 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-tighter">Risco de Crédito</h4>
+          <strong className={`text-xl ${indiceInadimplencia > 30 ? 'text-red-600' : 'text-elos-bege'}`}>{indiceInadimplencia.toFixed(1)}%</strong>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Inadimplência Projetada</p>
         </div>
-      </section>
+      </div>
 
-      <h2 className="secao-titulo">Gestão de Crédito e Faturamento</h2>
-      <section className="resumo-cards">
-        <div className="card inadimplencia clicavel" onClick={() => setModalTipo('receber')}>
-          <h3>A Receber (No Mês)</h3>
-          <p>R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
-          <small>Ver quem deve pagar este mês</small>
+      {/* GESTÃO DE CRÉDITO */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div onClick={() => setModalTipo('receber')} className="bg-white p-8 rounded-3xl shadow-soft border-l-8 border-elos-bege cursor-pointer hover:bg-elos-fundo transition-all">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Mês)</h3>
+          <p className="text-3xl font-black text-elos-bege mt-2">R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
         </div>
-        <div className="card vendas-total">
-          <h3>Faturamento Bruto</h3>
-          <p>R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
-          <small>Total em novos contratos</small>
+        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white">
+          <h3 className="text-xs font-bold text-elos-verde/40 uppercase tracking-widest">Faturamento Bruto</h3>
+          <p className="text-3xl font-black mt-2">R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
         </div>
-      </section>
+      </div>
 
-      {/* MODAL MULTIFUNÇÃO (MANTIDO) */}
+      {/* VENDAS RECENTES */}
+      <div className="bg-white rounded-3xl shadow-soft p-8">
+        <h3 className="font-tradicional text-xl italic text-elos-verde mb-6">Contratos de {mesFiltro}/{anoFiltro}</h3>
+        {vendasNovasNoMes.length > 0 ? (
+          <div className="space-y-4">
+            {vendasNovasNoMes.map(v => (
+              <div key={v._id || v.id} className="flex justify-between items-center p-4 rounded-2xl hover:bg-elos-fundo transition-colors border-b border-gray-50">
+                <div className="flex flex-col">
+                  <span className="font-bold text-elos-verde">{v.cliente}</span>
+                  <small className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Realizada em {v.dataVenda.split('-').reverse().join('/')}</small>
+                </div>
+                <strong className="text-lg font-black text-elos-texto italic">R$ {Number(v.valorTotal).toFixed(2).replace('.', ',')}</strong>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-center text-gray-300 italic py-10">Nenhuma venda nova neste mês.</p>}
+      </div>
+
+      {/* MODAL */}
       {modalTipo && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <button className="btn-close" onClick={() => setModalTipo(null)}>&times;</button>
-            <h2>{modalTipo === 'receber' ? "Contas a Receber" : modalTipo === 'entradas' ? "Entradas no Caixa" : "Detalhamento de Despesas"} — {mesFiltro}/{anoFiltro}</h2>
-            <div className="modal-body">
+        <div className="fixed inset-0 bg-primary/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <header className="p-6 bg-elos-fundo flex justify-between items-center border-b">
+              <h2 className="font-tradicional text-xl text-elos-verde">Detalhamento Financeiro</h2>
+              <button onClick={() => setModalTipo(null)} className="text-2xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
+            </header>
+            <div className="p-6 overflow-y-auto flex-1">
               {(() => {
                 const dados = modalTipo === 'receber' ? detalhesAReceber : modalTipo === 'entradas' ? detalhesEntradas : detalhesDespesas;
                 return dados.length > 0 ? (
-                  <table className="tabela-detalhes">
-                    <thead><tr><th>{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th><th>{modalTipo === 'despesas' ? 'Status' : modalTipo === 'entradas' ? 'Data Pagto' : 'Parcela'}</th><th>Valor</th></tr></thead>
-                    <tbody>{dados.map((item, idx) => (<tr key={idx}><td>{item.nome}</td><td>{item.info}</td><td><strong>R$ {item.valor.toFixed(2).replace('.', ',')}</strong></td></tr>))}</tbody>
+                  <table className="w-full text-left">
+                    <thead className="text-xs uppercase text-gray-400 border-b">
+                      <tr><th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th><th className="pb-3 text-center">{modalTipo === 'despesas' ? 'Status' : 'Info'}</th><th className="pb-3 text-right">Valor</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {dados.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-elos-fundo/30">
+                          <td className="py-4 font-bold text-elos-verde">{item.nome}</td>
+                          <td className="py-4 text-center text-xs text-gray-500 font-bold">{item.info}</td>
+                          <td className="py-4 text-right font-black">R$ {item.valor.toFixed(2).replace('.', ',')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
-                ) : <p>Nenhum registro encontrado para este período.</p>;
+                ) : <p className="text-center text-gray-400 py-10 italic">Nenhum registro encontrado.</p>;
               })()}
             </div>
-            <button className="btn-sair" onClick={() => setModalTipo(null)}>Fechar</button>
+            <footer className="p-4 bg-gray-50 text-right">
+              <button onClick={() => setModalTipo(null)} className="bg-elos-verde text-white px-8 py-2 rounded-xl font-bold">Fechar</button>
+            </footer>
           </div>
         </div>
       )}
-
-      {/* RESUMO ANUAL (MANTIDO) */}
-      <h2 className="secao-titulo">Resumo Anual ({anoFiltro})</h2>
-      <section className="resumo-cards">
-        <div className="card entrada" style={{borderColor: '#2e7d32'}}>
-          <h3>Recebido (Ano)</h3>
-          <p>R$ {totalNoCaixaAno.toFixed(2).replace('.', ',')}</p>
-        </div>
-        <div className="card saida" style={{borderColor: '#c62828'}}>
-          <h3>Despesas (Ano)</h3>
-          <p>R$ {totalDespesasAno.toFixed(2).replace('.', ',')}</p>
-        </div>
-        <div className="card saldo" style={{borderColor: '#1565c0'}}>
-          <h3>Vendas Brutas (Ano)</h3>
-          <p>R$ {volumeVendasAno.toFixed(2).replace('.', ',')}</p>
-        </div>
-      </section>
-
-      {/* LISTA DE VENDAS RECENTES (MANTIDO) */}
-      <div className="lista-recente">
-        <h3>Vendas de {mesFiltro}/{anoFiltro}</h3>
-        {vendasNovasNoMes.length > 0 ? (
-          <ul className="movimentacoes-lista">
-            {vendasNovasNoMes.map(v => (
-              <li key={v._id || v.id} className="item-venda">
-                <div className="venda-info">
-                  <span className="cliente-nome">{v.cliente}</span>
-                  <small className="venda-detalhe">Realizada em {v.dataVenda.split('-').reverse().join('/')}</small>
-                </div>
-                <div className="venda-valor">
-                  <strong className="valor-total">R$ {Number(v.valorTotal).toFixed(2).replace('.', ',')}</strong>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : <p className="placeholder-vazio">Nenhuma venda nova neste mês.</p>}
-      </div>
     </div>
   );
 }
