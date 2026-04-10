@@ -3,7 +3,7 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils'; 
 import './style.css';
 
-// Componente de Linha de Parcela atualizado para aceitar valor de recebimento
+// --- COMPONENTE DE LINHA DE PARCELA ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p.valor);
@@ -72,6 +72,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   );
 }
 
+// --- COMPONENTE PRINCIPAL ---
 export default function Clientes() {
   const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, editarDataVenda, carregando } = useFinanceiro();
   
@@ -106,9 +107,9 @@ export default function Clientes() {
       } else {
         setEditandoCadastro(null);
       }
-      alert("Cadastro atualizado!");
+      alert("Cadastro atualizado com sucesso!");
     } catch (err) {
-      alert("Erro ao atualizar.");
+      alert("Erro ao atualizar cadastro.");
     }
   };
 
@@ -233,14 +234,14 @@ export default function Clientes() {
             <div className="modal-body">
               {editandoCadastro ? (
                 <div className="dados-cadastro-box" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '2px solid var(--primary)', display: 'grid', gap: '12px' }}>
-                  <div className="form-group-edit"><label>Nome:</label><input type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
+                  <div className="form-group-edit"><label>Nome Completo:</label><input type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
                   <div className="form-group-edit"><label>CPF:</label><input type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
                   <div className="form-group-edit"><label>WhatsApp:</label><input type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
                   <div className="form-group-edit"><label>Endereço:</label><input type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-                  <div className="form-group-edit"><label>Notas:</label><textarea value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" /></div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="btn-baixa" onClick={salvarEdicao}>Salvar</button>
-                    <button className="btn-sair" style={{background: '#eee'}} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
+                  <div className="form-group-edit"><label>Observações:</label><textarea value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} rows="3" /></div>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <button className="btn-baixa" onClick={salvarEdicao}>Salvar Alterações</button>
+                    <button className="btn-sair" style={{ margin: 0, background: '#eee', color: '#666' }} onClick={() => setEditandoCadastro(null)}>Cancelar</button>
                   </div>
                 </div>
               ) : (
@@ -255,14 +256,17 @@ export default function Clientes() {
                     {dadosRecibo ? (
                       <div className="dados-cadastro-box" style={{ display: 'grid', gap: '10px', background: '#f9f9f9', border: '1px solid #ddd' }}>
                         <h4>Configurar Recibo</h4>
-                        <input type="number" value={dadosRecibo.valor} onChange={(e) => setDadosRecibo({...dadosRecibo, valor: e.target.value})} placeholder="Valor Bruto" />
-                        <input type="number" value={dadosRecibo.desconto} onChange={(e) => setDadosRecibo({...dadosRecibo, desconto: e.target.value})} placeholder="Desconto" />
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <input type="number" value={dadosRecibo.valor} onChange={(e) => setDadosRecibo({...dadosRecibo, valor: e.target.value})} placeholder="Valor Bruto" style={{flex: 1}}/>
+                          <input type="number" value={dadosRecibo.desconto} onChange={(e) => setDadosRecibo({...dadosRecibo, desconto: e.target.value})} placeholder="Desconto" style={{flex: 1}}/>
+                        </div>
                         <select value={dadosRecibo.metodoPagamento} onChange={(e) => setDadosRecibo({...dadosRecibo, metodoPagamento: e.target.value})}>
                           <option value="Dinheiro">Dinheiro</option>
                           <option value="Pix">Pix</option>
                           <option value="Cartão de Crédito">Cartão de Crédito</option>
+                          <option value="Cartão de Débito">Cartão de Débito</option>
                         </select>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                           <button className="btn-baixa" onClick={async () => {
                             const vB = Number(dadosRecibo.valor);
                             const vD = Number(dadosRecibo.desconto);
@@ -277,43 +281,53 @@ export default function Clientes() {
                               metodoPagamento: dadosRecibo.metodoPagamento 
                             }, 'recibo');
                             setDadosRecibo(null);
-                          }}>Gerar PDF</button>
-                          <button className="btn-sair" onClick={() => setDadosRecibo(null)}>Cancelar</button>
+                          }}>✅ Gerar PDF</button>
+                          <button className="btn-sair" style={{margin: 0}} onClick={() => setDadosRecibo(null)}>Cancelar</button>
                         </div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                         <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="btn-editar-perfil">✏️ Editar Ficha</button>
-                        <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="btn-editar-perfil" style={{ background: '#4a5d4e', color: 'white' }}>📄 Recibo</button>
+                        <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="btn-editar-perfil" style={{ background: '#4a5d4e', color: 'white' }}>📄 Gerar Recibo</button>
                       </div>
                     )}
                   </div>
 
-                  <h3 style={{borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Histórico de Compras</h3>
+                  <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Histórico de Compras</h3>
                   {clienteNoModal.historicoVendas.length > 0 ? (
                     clienteNoModal.historicoVendas.map((venda) => (
                       <div key={venda._id || venda.id} className="card-venda-historico">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                           <strong>📦 {venda.produto || 'Óculos'}</strong>
-                          <button onClick={() => gerarPDFDocumento({
-                            numero: venda.numeroPedido || "017-2026",
-                            data: venda.dataVenda.split('-').reverse().join('/'),
-                            cliente: clienteNoModal.nome,
-                            produto: venda.produto || "Produtos Ópticos",
-                            valorProduto: venda.valorTotal + (venda.desconto || 0),
-                            desconto: venda.desconto || 0,
-                            valorTotal: venda.valorTotal,
-                            metodoPagamento: venda.metodoPagamento 
-                          }, 'pedido')} className="btn-pdf-mini">📄 Pedido</button>
+                          <div style={{display: 'flex', gap: '8px'}}>
+                            <small style={{cursor: 'pointer', textDecoration: 'underline'}} onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>{venda.dataVenda.split('-').reverse().join('/')} ✏️</small>
+                            <button onClick={() => gerarPDFDocumento({
+                              numero: venda.numeroPedido || "017-2026",
+                              data: venda.dataVenda.split('-').reverse().join('/'),
+                              cliente: clienteNoModal.nome,
+                              produto: venda.produto || "Produtos Ópticos",
+                              valorProduto: venda.valorTotal + (venda.desconto || 0),
+                              desconto: venda.desconto || 0,
+                              valorTotal: venda.valorTotal,
+                              metodoPagamento: venda.metodoPagamento 
+                            }, 'pedido')} className="btn-pdf-mini">📄 Pedido</button>
+                          </div>
                         </div>
                         <div className="venda-parcelas">
                           {venda.listaParcelas.map(p => (
                             <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                           ))}
                         </div>
+                        <button 
+                          className="btn-excluir-venda" 
+                          onClick={() => excluirVenda(venda._id || venda.id)}
+                          style={{ marginTop: '15px', width: '100%', fontSize: '11px', background: '#fff5f5', color: '#c62828', border: '1px solid #ffebee' }}
+                        >
+                          🗑️ Excluir Registro de Venda
+                        </button>
                       </div>
                     ))
-                  ) : <p>Nenhuma compra registrada.</p>}
+                  ) : <p style={{color: '#999', fontStyle: 'italic'}}>Nenhuma compra registrada.</p>}
                 </>
               )}
             </div>

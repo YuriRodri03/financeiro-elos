@@ -53,16 +53,33 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao salvar cliente."); }
   };
 
+  // --- CORREÇÃO CRÍTICA AQUI: EDITAR CLIENTE ---
   const editarCliente = async (cpfAntigo, dadosNovos) => {
     try {
-      await fetch(`${API_URL}/clientes/${cpfAntigo}`, {
+      const res = await fetch(`${API_URL}/clientes/${cpfAntigo}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dadosNovos)
       });
-      setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? { ...c, ...dadosNovos } : c));
-      setVendas(prev => prev.map(v => v.cpf === cpfAntigo ? { ...v, cliente: dadosNovos.nome, cpf: dadosNovos.cpf } : v));
-    } catch (err) { alert("Erro ao editar cliente."); }
+
+      if (!res.ok) throw new Error("Erro ao salvar alterações no servidor");
+
+      const clienteAtualizado = await res.json();
+
+      // 1. Atualiza a lista de clientes com o objeto REAL vindo do banco
+      setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? clienteAtualizado : c));
+      
+      // 2. Atualiza as vendas vinculadas para refletir o novo Nome/CPF e evitar conflito de cache
+      setVendas(prev => prev.map(v => 
+        v.cpf === cpfAntigo ? { ...v, cliente: clienteAtualizado.nome, cpf: clienteAtualizado.cpf } : v
+      ));
+
+      return clienteAtualizado;
+    } catch (err) { 
+      console.error(err);
+      alert("Erro ao editar cliente. Tente novamente."); 
+      throw err;
+    }
   };
 
   const excluirCliente = async (cpf) => {
@@ -130,7 +147,7 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao atualizar data."); }
   };
 
-  // --- BAIXA DE PARCELA (COM LÓGICA DE PAGAMENTO PARCIAL) ---
+  // --- BAIXA DE PARCELA ---
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento, valorPago) => {
     const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
     const valorPagoNum = Number(valorPago);
@@ -149,10 +166,7 @@ export function FinanceiroProvider({ children }) {
       if (!res.ok) throw new Error("Erro na comunicação com o servidor");
 
       const vendaAtualizada = await res.json();
-      
-      // Atualiza o estado com o objeto completo retornado pelo server (que contém a nova parcela dividida)
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
-      
       alert("Recebimento registrado com sucesso!");
     } catch (err) { 
       alert("Erro ao dar baixa. Verifique o valor informado."); 
@@ -170,8 +184,6 @@ export function FinanceiroProvider({ children }) {
       
       if (!res.ok) throw new Error("Erro no estorno");
       const vendaAtualizada = await res.json();
-      
-      // Aqui o estado recebe a venda onde a sobra foi excluída e o valor somado de volta no server
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
       alert("Estorno realizado com sucesso!");
     } catch (err) { alert("Erro ao estornar."); }

@@ -30,7 +30,6 @@ const Despesa = mongoose.model('Despesa', {
 
 // --- ROTAS API ---
 
-// CLIENTES
 app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
@@ -46,7 +45,6 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
   res.json({ message: "Removido" });
 });
 
-// VENDAS
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
 app.post('/api/vendas', async (req, res) => res.json(await new Venda(req.body).save()));
 
@@ -54,17 +52,21 @@ app.patch('/api/vendas/:id', async (req, res) => {
   try {
     const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(venda);
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar venda" }); }
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao atualizar venda" });
+  }
 });
 
 app.delete('/api/vendas/:id', async (req, res) => {
   try {
     await Venda.findByIdAndDelete(req.params.id);
     res.json({ message: "Venda excluída" });
-  } catch (err) { res.status(500).json({ error: "Erro ao excluir venda" }); }
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao excluir venda" });
+  }
 });
 
-// --- BAIXA DE PARCELA COM LÓGICA DE CASCATA ---
+// --- BAIXA E ESTORNO DE PARCELA COM LÓGICA DE CASCATA E SEGURANÇA ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -81,12 +83,16 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
 
     // --- CASO 1: ESTORNO (paga === false) ---
     if (paga === false) {
-      const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === (numAtual + 0.5));
-      if (parcelaFilhaIndex !== -1) {
+      const proximoNumero = numAtual + 0.5;
+      const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === proximoNumero);
+      
+      // SEGURANÇA: Só reintegra se a próxima for um resíduo (ex: 1.5) e não um inteiro (ex: 2.0)
+      if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
         novasParcelas.splice(parcelaFilhaIndex, 1);
       }
+      
       novasParcelas[index].paga = false;
       novasParcelas[index].dataPagamento = null;
     } 
@@ -99,19 +105,15 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         if (saldoRestante <= 0) break;
 
         let parcela = novasParcelas[i];
-        
-        // Pula parcelas que já estão pagas (exceto a que iniciou a ação se for parcial)
         if (parcela.paga && i !== index) continue;
 
         const valorDevidoNaParcela = Number(parcela.valor);
 
         if (saldoRestante >= valorDevidoNaParcela) {
-          // Saldo quita a parcela inteira
           parcela.paga = true;
           parcela.dataPagamento = dataPagamento;
           saldoRestante = parseFloat((saldoRestante - valorDevidoNaParcela).toFixed(2));
         } else {
-          // Saldo paga apenas parte da parcela: cria a divisão (sobra)
           const valorPagoNesta = saldoRestante;
           const valorSobra = parseFloat((valorDevidoNaParcela - valorPagoNesta).toFixed(2));
 
@@ -119,7 +121,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
           parcela.paga = true;
           parcela.dataPagamento = dataPagamento;
 
-          // Cria a residual (.5)
           const novaParcelaSobra = {
             ...parcela,
             numero: parcela.numero + 0.5,
@@ -135,7 +136,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       }
     }
 
-    // Reordena e salva
     novasParcelas.sort((a, b) => a.numero - b.numero);
     venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
@@ -144,7 +144,7 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     res.json(venda);
   } catch (err) {
     console.error("Erro na parcela:", err);
-    res.status(500).json({ error: "Erro ao processar pagamento em cascata" });
+    res.status(500).json({ error: "Erro ao processar pagamento" });
   }
 });
 
