@@ -66,7 +66,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA COM LÓGICA DE CASCATA E SEGURANÇA ---
+// --- BAIXA E ESTORNO DE PARCELA (LÓGICA DE AMORTIZAÇÃO CORRIGIDA) ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -81,12 +81,11 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     const index = novasParcelas.findIndex(p => p.numero === numAtual);
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
-    // --- CASO 1: ESTORNO (paga === false) ---
+    // --- CASO 1: ESTORNO ---
     if (paga === false) {
       const proximoNumero = numAtual + 0.5;
       const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === proximoNumero);
       
-      // SEGURANÇA: Só reintegra se a próxima for um resíduo (ex: 1.5) e não um inteiro (ex: 2.0)
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
@@ -97,42 +96,60 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       novasParcelas[index].dataPagamento = null;
     } 
     
-    // --- CASO 2: PAGAMENTO (COM LÓGICA DE CASCATA) ---
+    // --- CASO 2: PAGAMENTO ---
     else {
-      let saldoRestante = Number(valorPago || novasParcelas[index].valor);
+      let valorInformado = Number(valorPago || novasParcelas[index].valor);
+      let valorOriginalDaParcela = Number(novasParcelas[index].valor);
 
-      for (let i = index; i < novasParcelas.length; i++) {
-        if (saldoRestante <= 0) break;
+      // A) Se o cliente pagou MAIS que o valor atual da parcela
+      if (valorInformado > valorOriginalDaParcela) {
+        let excesso = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
+        
+        // Tenta amortizar esse excesso nas próximas parcelas não pagas
+        for (let i = index + 1; i < novasParcelas.length; i++) {
+          if (excesso <= 0) break;
+          if (novasParcelas[i].paga) continue;
 
-        let parcela = novasParcelas[i];
-        if (parcela.paga && i !== index) continue;
+          let valorDaProxima = Number(novasParcelas[i].valor);
 
-        const valorDevidoNaParcela = Number(parcela.valor);
-
-        if (saldoRestante >= valorDevidoNaParcela) {
-          parcela.paga = true;
-          parcela.dataPagamento = dataPagamento;
-          saldoRestante = parseFloat((saldoRestante - valorDevidoNaParcela).toFixed(2));
-        } else {
-          const valorPagoNesta = saldoRestante;
-          const valorSobra = parseFloat((valorDevidoNaParcela - valorPagoNesta).toFixed(2));
-
-          parcela.valor = valorPagoNesta;
-          parcela.paga = true;
-          parcela.dataPagamento = dataPagamento;
-
-          const novaParcelaSobra = {
-            ...parcela,
-            numero: parcela.numero + 0.5,
-            valor: valorSobra,
-            paga: false,
-            dataPagamento: null,
-            observacao: `Restante da parc. ${parcela.numero}`
-          };
-
-          novasParcelas.push(novaParcelaSobra);
-          saldoRestante = 0; 
+          if (excesso >= valorDaProxima) {
+            // "Engole" a próxima parcela inteira
+            novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + valorDaProxima).toFixed(2));
+            excesso = parseFloat((excesso - valorDaProxima).toFixed(2));
+            novasParcelas.splice(i, 1); 
+            i--; // Ajusta o ponteiro pois o array encolheu
+          } else {
+            // Subtrai apenas uma parte da próxima parcela
+            novasParcelas[i].valor = parseFloat((valorDaProxima - excesso).toFixed(2));
+            novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + excesso).toFixed(2));
+            excesso = 0;
+          }
         }
+        
+        novasParcelas[index].paga = true;
+        novasParcelas[index].dataPagamento = dataPagamento;
+      } 
+      // B) Se o cliente pagou MENOS que o valor atual (Cria sobra .5)
+      else if (valorInformado < valorOriginalDaParcela) {
+        const valorSobra = parseFloat((valorOriginalDaParcela - valorInformado).toFixed(2));
+        
+        novasParcelas[index].valor = valorInformado;
+        novasParcelas[index].paga = true;
+        novasParcelas[index].dataPagamento = dataPagamento;
+
+        novasParcelas.push({
+          ...novasParcelas[index],
+          numero: numAtual + 0.5,
+          valor: valorSobra,
+          paga: false,
+          dataPagamento: null,
+          observacao: `Restante da parc. ${numAtual}`
+        });
+      } 
+      // C) Pagamento exato
+      else {
+        novasParcelas[index].paga = true;
+        novasParcelas[index].dataPagamento = dataPagamento;
       }
     }
 
@@ -144,7 +161,7 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     res.json(venda);
   } catch (err) {
     console.error("Erro na parcela:", err);
-    res.status(500).json({ error: "Erro ao processar pagamento" });
+    res.status(500).json({ error: "Erro ao processar alteração" });
   }
 });
 

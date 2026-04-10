@@ -6,7 +6,10 @@ import './style.css';
 // --- COMPONENTE DE LINHA DE PARCELA ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
-  const [valorRecebido, setValorRecebido] = useState(p.valor);
+  const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
+
+  // Se p não existir, não renderiza nada para evitar erro
+  if (!p) return null;
 
   const handleBaixa = () => {
     const valor = parseFloat(valorRecebido);
@@ -20,7 +23,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   return (
     <div className="linha-parcela" style={{ borderBottom: '1px solid #eee', padding: '12px 0' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span>{p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} - <strong>R$ {p.valor.toFixed(2)}</strong></span>
+        <span>{p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} - <strong>R$ {(p.valor || 0).toFixed(2)}</strong></span>
         {p.paga && (
           <small style={{ color: '#4a5d4e', fontWeight: 'bold' }}>
             🗓️ Recebido em: {p.dataPagamento?.split('-').reverse().join('/')}
@@ -96,14 +99,18 @@ export default function Clientes() {
   };
 
   const salvarEdicao = async () => {
-    if (!editandoCadastro.nome || !editandoCadastro.cpf) {
+    if (!editandoCadastro?.nome || !editandoCadastro?.cpf) {
       alert("Nome e CPF são obrigatórios!");
       return;
     }
     try {
-      await editarCliente(clienteSelecionadoCPF, editandoCadastro);
-      // Se o CPF mudou, precisamos atualizar a seleção para o novo CPF para o modal não fechar ou bugar
-      setClienteSelecionadoCPF(editandoCadastro.cpf);
+      const cpfOriginal = clienteSelecionadoCPF;
+      const novoCPF = editandoCadastro.cpf;
+      
+      await editarCliente(cpfOriginal, editandoCadastro);
+      
+      // Atualiza o estado de seleção para o novo CPF para manter o modal aberto corretamente
+      setClienteSelecionadoCPF(novoCPF);
       setEditandoCadastro(null);
       alert("Cadastro atualizado com sucesso!");
     } catch (err) {
@@ -113,18 +120,18 @@ export default function Clientes() {
 
   const listaFinalClientes = useMemo(() => {
     const todosCPFs = Array.from(new Set([
-      ...vendas.map(v => v.cpf),
-      ...clientes.map(c => c.cpf)
+      ...(vendas || []).map(v => v.cpf),
+      ...(clientes || []).map(c => c.cpf)
     ]));
 
     return todosCPFs.map(cpf => {
-      const dadosCad = clientes.find(c => c.cpf === cpf);
-      const vendasCli = vendas.filter(v => v.cpf === cpf);
+      const dadosCad = (clientes || []).find(c => c.cpf === cpf);
+      const vendasCli = (vendas || []).filter(v => v.cpf === cpf);
       
       const totalDevido = vendasCli.reduce((acc, v) => {
         return acc + (v.listaParcelas || [])
           .filter(p => !p.paga)
-          .reduce((soma, p) => soma + p.valor, 0);
+          .reduce((soma, p) => soma + (p.valor || 0), 0);
       }, 0);
 
       return {
@@ -201,7 +208,7 @@ export default function Clientes() {
                 </td>
                 <td data-label="Contato">{cliente.telefone}</td>
                 <td data-label="Saldo" style={{ color: cliente.totalGeralDevido > 0 ? '#c62828' : '#4a5d4e', fontWeight: 'bold' }}>
-                  R$ {cliente.totalGeralDevido.toFixed(2)}
+                  R$ {(cliente.totalGeralDevido || 0).toFixed(2)}
                 </td>
                 <td data-label="Status">
                   <span className={`status-badge ${cliente.totalGeralDevido > 0 ? 'pendente' : 'pago'}`}>
@@ -220,7 +227,6 @@ export default function Clientes() {
         </table>
       </div>
 
-      {/* SEGURANÇA: Verificamos o CPF primeiro */}
       {clienteSelecionadoCPF && (
         <div className="modal-overlay" onClick={fecharModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -272,7 +278,7 @@ export default function Clientes() {
                             const vD = Number(dadosRecibo.desconto);
                             await gerarPDFDocumento({
                               numero: "REC-" + Date.now().toString().slice(-4), 
-                              data: dadosRecibo.data.split('-').reverse().join('/'), 
+                              data: (dadosRecibo.data || '').split('-').reverse().join('/'), 
                               cliente: clienteNoModal.nome, 
                               produto: dadosRecibo.produto, 
                               valorProduto: vB, 
@@ -294,7 +300,7 @@ export default function Clientes() {
                   </div>
 
                   <h3 style={{fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Histórico de Compras</h3>
-                  {clienteNoModal.historicoVendas?.length > 0 ? (
+                  {(clienteNoModal.historicoVendas || []).length > 0 ? (
                     clienteNoModal.historicoVendas.map((venda) => (
                       <div key={venda._id || venda.id} className="card-venda-historico">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -303,7 +309,7 @@ export default function Clientes() {
                             <small style={{cursor: 'pointer', textDecoration: 'underline'}} onClick={() => handleEditarDataVenda(venda._id || venda.id, venda.dataVenda)}>{venda.dataVenda?.split('-').reverse().join('/')} ✏️</small>
                             <button onClick={() => gerarPDFDocumento({
                               numero: venda.numeroPedido || "017-2026",
-                              data: venda.dataVenda?.split('-').reverse().join('/'),
+                              data: (venda.dataVenda || '').split('-').reverse().join('/'),
                               cliente: clienteNoModal.nome,
                               produto: venda.produto || "Produtos Ópticos",
                               valorProduto: venda.valorTotal + (venda.desconto || 0),
@@ -314,8 +320,8 @@ export default function Clientes() {
                           </div>
                         </div>
                         <div className="venda-parcelas">
-                          {venda.listaParcelas?.map(p => (
-                            <LinhaParcela key={p.numero} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                          {(venda.listaParcelas || []).map((p, idx) => (
+                            <LinhaParcela key={p.numero || idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                           ))}
                         </div>
                         <button 
