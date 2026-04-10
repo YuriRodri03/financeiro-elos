@@ -53,10 +53,9 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao salvar cliente."); }
   };
 
-  // --- CORREÇÃO DEFINITIVA: EDITAR CLIENTE VIA ID ---
+  // --- CORREÇÃO DEFINITIVA: EDITAR CLIENTE COM ATUALIZAÇÃO EM CASCATA NO ESTADO ---
   const editarCliente = async (clienteId, dadosNovos) => {
     try {
-      // Enviamos para a rota /clientes/:id para evitar erros de caractere no CPF
       const res = await fetch(`${API_URL}/clientes/${clienteId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -70,13 +69,15 @@ export function FinanceiroProvider({ children }) {
 
       const clienteAtualizado = await res.json();
 
-      // 1. Atualiza a lista de clientes usando o ID único do MongoDB
+      // 1. Atualiza a lista de clientes usando o ID único
       setClientes(prev => prev.map(c => (c._id === clienteId || c.id === clienteId) ? clienteAtualizado : c));
       
-      // 2. Sincroniza as vendas vinculadas para refletir o novo Nome/CPF e evitar conflito de cache visual
-      setVendas(prev => prev.map(v => 
-        v.cpf === dadosNovos.cpf || v.cliente === clienteAtualizado.nome 
-          ? { ...v, cliente: clienteAtualizado.nome, cpf: clienteAtualizado.cpf } 
+      // 2. SINCRONIZAÇÃO COM DASHBOARD/VENDAS:
+      // Atualiza o nome do cliente em todas as vendas do estado local que possuem o mesmo CPF.
+      // Isso faz com que o Dashboard mude de "Vitora" para "Vitoria" na hora.
+      setVendas(prevVendas => prevVendas.map(v => 
+        v.cpf === clienteAtualizado.cpf 
+          ? { ...v, cliente: clienteAtualizado.nome } 
           : v
       ));
 
@@ -172,7 +173,6 @@ export function FinanceiroProvider({ children }) {
 
       const vendaAtualizada = await res.json();
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
-      alert("Recebimento registrado com sucesso!");
     } catch (err) { 
       alert("Erro ao dar baixa. Verifique o valor informado."); 
     }

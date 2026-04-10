@@ -34,19 +34,34 @@ app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
 
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
-// Edição por ID (Evita erro 404 causado por pontos/traços no CPF na URL)
+// Edição por ID com Atualização em Cascata para Vendas
 app.put('/api/clientes/:id', async (req, res) => {
   try {
-    const atualizado = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!atualizado) return res.status(404).json({ error: "Cliente não encontrado" });
-    res.json(atualizado);
+    // 1. Atualiza o cadastro do cliente
+    const clienteAtualizado = await Cliente.findByIdAndUpdate(
+      req.params.id, 
+      req.body, 
+      { new: true }
+    );
+
+    if (!clienteAtualizado) {
+      return res.status(404).json({ error: "Cliente não encontrado" });
+    }
+
+    // 2. ATUALIZAÇÃO EM CASCATA:
+    // Procura todas as vendas vinculadas ao CPF e atualiza o nome nelas
+    await Venda.updateMany(
+      { cpf: clienteAtualizado.cpf }, 
+      { $set: { cliente: clienteAtualizado.nome } }
+    );
+
+    res.json(clienteAtualizado);
   } catch (err) { 
-    console.error("Erro na edição:", err);
-    res.status(500).json({ error: "Erro ao editar cliente" }); 
+    console.error("Erro na edição com cascata:", err);
+    res.status(500).json({ error: "Erro ao editar cliente e atualizar registros de vendas" }); 
   }
 });
 
-// Exclusão por CPF (Mantida conforme original)
 app.delete('/api/clientes/:cpf', async (req, res) => {
   await Cliente.deleteOne({ cpf: req.params.cpf });
   res.json({ message: "Removido" });
@@ -96,7 +111,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       const proximoNumero = numAtual + 0.5;
       const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === proximoNumero);
       
-      // Só reintegra se a próxima for uma "sobra" (.5) e não uma parcela inteira original
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
@@ -112,7 +126,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       let valorInformado = Number(valorPago || novasParcelas[index].valor);
       let valorOriginalDaParcela = Number(novasParcelas[index].valor);
 
-      // A) Se pagou MAIS (Amortização)
       if (valorInformado > valorOriginalDaParcela) {
         let excesso = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
         
@@ -136,7 +149,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
       } 
-      // B) Se pagou MENOS (Cria resíduo .5)
       else if (valorInformado < valorOriginalDaParcela) {
         const valorSobra = parseFloat((valorOriginalDaParcela - valorInformado).toFixed(2));
         novasParcelas[index].valor = valorInformado;
@@ -152,7 +164,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
           observacao: `Restante da parc. ${numAtual}`
         });
       } 
-      // C) Pagamento exato
       else {
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
