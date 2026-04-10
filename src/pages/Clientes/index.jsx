@@ -8,7 +8,6 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
 
-  // Se p não existir, não renderiza nada para evitar erro
   if (!p) return null;
 
   const handleBaixa = () => {
@@ -98,28 +97,36 @@ export default function Clientes() {
     }
   };
 
+  // --- FUNÇÃO DE SALVAR REESCRITA ---
   const salvarEdicao = async () => {
-    // Pegamos o objeto original do useMemo antes de salvar
-    const original = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
+    // 1. Buscamos o cliente na lista final que contém o _id vindo do MongoDB
+    const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
     
     if (!editandoCadastro?.nome || !editandoCadastro?.cpf) {
       alert("Nome e CPF são obrigatórios!");
       return;
     }
 
-    // Se por algum motivo o ID não estiver acessível, usamos o CPF (Fallback)
-    const identificador = original?._id || clienteSelecionadoCPF;
+    // 2. Verificação de ID CRÍTICA
+    const idMongo = clienteParaEditar?._id;
+    
+    if (!idMongo) {
+      console.error("DEBUG - Cliente sem ID:", clienteParaEditar);
+      alert("Erro: ID interno do cliente não encontrado. Tente recarregar a página.");
+      return;
+    }
+
+    console.log("Enviando atualização para o ID:", idMongo);
 
     try {
-      await editarCliente(identificador, editandoCadastro);
+      // 3. Chamamos o contexto passando obrigatoriamente o ID
+      await editarCliente(idMongo, editandoCadastro);
       
-      // Sincroniza a seleção para o novo CPF (caso tenha mudado)
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       alert("Cadastro atualizado com sucesso!");
     } catch (err) {
-      console.error(err);
-      // O erro é tratado no FinanceiroContext
+      console.error("Erro ao salvar cadastro:", err);
     }
   };
 
@@ -140,7 +147,7 @@ export default function Clientes() {
       }, 0);
 
       return {
-        _id: dadosCad?._id, // Mantemos o ID do MongoDB aqui
+        _id: dadosCad?._id || dadosCad?.id, // Captura o ID de qualquer forma que venha do banco
         nome: dadosCad?.nome || vendasCli[0]?.cliente || "Sem Nome",
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
@@ -158,7 +165,7 @@ export default function Clientes() {
   }, [clienteSelecionadoCPF, listaFinalClientes]);
 
   const clientesExibidos = listaFinalClientes.filter(c => {
-    const passaFiltroStatus = filtro === 'pendentes' ? c.totalGeralDevido > 0.01 : true;
+    const passaFiltroStatus = filtro === 'pendentes' ? (c.totalGeralDevido || 0) > 0.01 : true;
     const termo = busca.toLowerCase();
     const passaBuscaNome = (c.nome || '').toLowerCase().includes(termo);
     const passaBuscaCPF = (c.cpf || '').includes(termo);
