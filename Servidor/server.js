@@ -28,7 +28,7 @@ const Venda = mongoose.model('Venda', {
   cpf: String, 
   produto: String, 
   valorTotal: Number,
-  listaParcelas: Array, // Array de objetos { numero, valor, paga, dataPagamento, vencimentoOriginal, observacao }
+  listaParcelas: Array, 
   dataVenda: String, 
   metodoPagamento: String
 });
@@ -81,7 +81,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   }
 });
 
-// --- BAIXA DE PARCELA COM LÓGICA DE PAGAMENTO PARCIAL ---
+// --- BAIXA E ESTORNO DE PARCELA (COM LOGICA DE RECOMPOSIÇÃO) ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -90,52 +90,63 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     const venda = await Venda.findById(id);
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
-    // Encontra o índice da parcela usando parseFloat para suportar números decimais (ex: 1.5)
-    const index = venda.listaParcelas.findIndex(p => p.numero === parseFloat(numero));
+    const numAtual = parseFloat(numero);
+    const index = venda.listaParcelas.findIndex(p => p.numero === numAtual);
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
-    const parcelaOriginal = venda.listaParcelas[index];
+    // --- CASO 1: ESTORNO (paga === false) ---
+    // Se estornar, vamos ver se existe uma parcela "sobra" (ex: 1.5) e somar de volta
+    if (paga === false) {
+      const parcelaFilhaIndex = venda.listaParcelas.findIndex(p => p.numero === (numAtual + 0.5));
+      
+      if (parcelaFilhaIndex !== -1) {
+        // Recupera o valor da sobra e soma na parcela original
+        venda.listaParcelas[index].valor += venda.listaParcelas[parcelaFilhaIndex].valor;
+        // Remove a parcela sobra do array
+        venda.listaParcelas.splice(parcelaFilhaIndex, 1);
+      }
+      
+      venda.listaParcelas[index].paga = false;
+      venda.listaParcelas[index].dataPagamento = null;
+    } 
+    
+    // --- CASO 2: PAGAMENTO PARCIAL (paga === true e valor menor) ---
+    else if (valorPago && Number(valorPago) < Number(venda.listaParcelas[index].valor)) {
+      const valorOriginalDestaParcela = Number(venda.listaParcelas[index].valor);
+      const valorRecebido = Number(valorPago);
+      const diferenca = valorOriginalDestaParcela - valorRecebido;
 
-    // Lógica de Pagamento Parcial
-    // Verifica se o valor pago é menor que o valor atual da parcela e se estamos tentando pagar (paga === true)
-    if (valorPago && Number(valorPago) < Number(parcelaOriginal.valor) && paga === true) {
-      const sobra = Number(parcelaOriginal.valor) - Number(valorPago);
-
-      // 1. Atualiza a parcela atual com o valor que entrou
-      venda.listaParcelas[index].valor = Number(valorPago);
+      // Atualiza a parcela atual para o que foi pago
+      venda.listaParcelas[index].valor = valorRecebido;
       venda.listaParcelas[index].paga = true;
       venda.listaParcelas[index].dataPagamento = dataPagamento;
 
-      // 2. Cria a parcela residual com a diferença
-      const novaParcela = {
-        ...parcelaOriginal,
-        numero: parseFloat(numero) + 0.5, // Gera um número intermediário
-        valor: sobra,
+      // Cria a nova parcela com o resto
+      venda.listaParcelas.push({
+        ...venda.listaParcelas[index],
+        numero: numAtual + 0.5,
+        valor: diferenca,
         paga: false,
         dataPagamento: null,
-        observacao: `Restante da parcela ${numero}`
-      };
+        observacao: `Restante da parcela ${numAtual}`
+      });
 
-      venda.listaParcelas.push(novaParcela);
-      
-      // Reordena para manter a sequência visual
+      // Reordena para ficar 1 -> 1.5 -> 2
       venda.listaParcelas.sort((a, b) => a.numero - b.numero);
-    } else {
-      // Baixa normal (valor total pago ou estorno)
+    } 
+    
+    // --- CASO 3: BAIXA NORMAL (valor total ou maior) ---
+    else {
       venda.listaParcelas[index].paga = paga;
       venda.listaParcelas[index].dataPagamento = paga ? dataPagamento : null;
-      
-      // Se for um estorno e o valor tiver sido alterado anteriormente, você pode querer restaurar o original aqui
-      // mas como o sistema cria novas parcelas, o estorno apenas limpa o pagamento desta parcela específica.
     }
     
-    // Indica ao Mongoose que o array interno mudou (Essencial para persistência no MongoDB)
     venda.markModified('listaParcelas');
     await venda.save();
     res.json(venda);
   } catch (err) {
-    console.error("Erro no processamento da parcela:", err);
-    res.status(500).json({ error: "Erro ao processar pagamento" });
+    console.error("Erro na parcela:", err);
+    res.status(500).json({ error: "Erro ao processar alteração na parcela" });
   }
 });
 

@@ -61,7 +61,6 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify(dadosNovos)
       });
       setClientes(prev => prev.map(c => c.cpf === cpfAntigo ? { ...c, ...dadosNovos } : c));
-      // Atualiza também as vendas vinculadas a este cliente caso o nome ou CPF mude
       setVendas(prev => prev.map(v => v.cpf === cpfAntigo ? { ...v, cliente: dadosNovos.nome, cpf: dadosNovos.cpf } : v));
     } catch (err) { alert("Erro ao editar cliente."); }
   };
@@ -81,7 +80,7 @@ export function FinanceiroProvider({ children }) {
     const valorEntrada = Number(novaVenda.valorEntrada || 0);
     const valorRestante = valorTotal - valorEntrada;
     const numParcelas = Number(novaVenda.parcelas);
-    const valorDaParcela = valorRestante / numParcelas;
+    const valorDaParcela = numParcelas > 0 ? valorRestante / numParcelas : 0;
 
     let parcelasGeradas = [];
     if (valorEntrada > 0) {
@@ -113,7 +112,7 @@ export function FinanceiroProvider({ children }) {
       });
       const vendaSalva = await res.json();
       setVendas(prev => [...prev, vendaSalva]);
-      return vendaSalva; // Retorna para que o componente possa usar o ID real no PDF
+      return vendaSalva;
     } catch (err) { 
       alert("Erro ao registrar venda."); 
       throw err;
@@ -143,7 +142,7 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify({ 
           paga: true, 
           dataPagamento: dataFinal,
-          valorPago: valorPagoNum // Enviado para o server tratar a divisão se necessário
+          valorPago: valorPagoNum 
         })
       });
 
@@ -151,7 +150,7 @@ export function FinanceiroProvider({ children }) {
 
       const vendaAtualizada = await res.json();
       
-      // Atualiza o estado local substituindo a venda antiga pela atualizada retornada pelo server
+      // Atualiza o estado com o objeto completo retornado pelo server (que contém a nova parcela dividida)
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
       
       alert("Recebimento registrado com sucesso!");
@@ -161,7 +160,7 @@ export function FinanceiroProvider({ children }) {
   };
 
   const estornarBaixaParcela = async (vendaId, numeroParcela) => {
-    if (!window.confirm("Deseja estornar o pagamento desta parcela?")) return;
+    if (!window.confirm("Deseja estornar o pagamento? A parcela voltará ao valor original e sobras serão removidas.")) return;
     try {
       const res = await fetch(`${API_URL}/vendas/${vendaId}/parcela/${numeroParcela}`, {
         method: 'PATCH',
@@ -169,11 +168,12 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify({ paga: false, dataPagamento: null })
       });
       
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error("Erro no estorno");
       const vendaAtualizada = await res.json();
       
+      // Aqui o estado recebe a venda onde a sobra foi excluída e o valor somado de volta no server
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
-      alert("Estorno realizado.");
+      alert("Estorno realizado com sucesso!");
     } catch (err) { alert("Erro ao estornar."); }
   };
 
