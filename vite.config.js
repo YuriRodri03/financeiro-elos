@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import tailwindcss from 'tailwindcss'
+// Importando o novo plugin específico para o Tailwind v4
+import tailwindcss from '@tailwindcss/postcss' 
 import autoprefixer from 'autoprefixer'
 
 export default defineConfig({
@@ -13,8 +14,8 @@ export default defineConfig({
         name: 'Ótica Elos - Gestão',
         short_name: 'ÓticaElos',
         description: 'Sistema de gestão financeira e clientes - Ótica Elos',
-        theme_color: '#4a5d4e',
-        background_color: '#fdfaf5',
+        theme_color: '#4a5d4e', // Seu verde musgo
+        background_color: '#fdfaf5', // Fundo creme
         display: 'standalone',
         icons: [
           {
@@ -36,7 +37,7 @@ export default defineConfig({
   css: {
     postcss: {
       plugins: [
-        tailwindcss(),
+        tailwindcss(), // Aciona o motor do Tailwind v4
         autoprefixer(),
       ],
     },
