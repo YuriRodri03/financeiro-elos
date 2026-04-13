@@ -57,7 +57,7 @@ export default function Dashboard() {
     gerarPDFSaudeFinanceira(dadosRelatorio, periodoFmt);
   };
 
-  // --- CÁLCULOS (MANTIDOS) ---
+  // --- CÁLCULOS MENSAIS ---
   const detalhesAReceber = useMemo(() => {
     let lista = [];
     vendas.forEach(venda => {
@@ -112,10 +112,12 @@ export default function Dashboard() {
   });
   const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal), 0);
   const margemCaixa = volumeVendasMes > 0 ? (totalNoCaixaMes / volumeVendasMes) * 100 : 0;
+  const ticketMedio = vendasNovasNoMes.length > 0 ? (volumeVendasMes / vendasNovasNoMes.length) : 0;
   const faltamParaCusto = totalDespesasMes - totalNoCaixaMes;
   const totalEsperadoMes = totalNoCaixaMes + totalAReceberMes;
   const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberMes / totalEsperadoMes) * 100 : 0;
 
+  // --- CÁLCULOS ANUAIS ---
   const totalNoCaixaAno = vendas.reduce((acc, venda) => {
     const parcelasPagasNoAno = (venda.listaParcelas || []).filter(p => {
       if (!p.paga || !p.dataPagamento) return false;
@@ -181,7 +183,7 @@ export default function Dashboard() {
       </section>
 
       {/* CARDS PRINCIPAIS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
           <p className="text-3xl font-black text-green-700 mt-2 whitespace-nowrap">R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
@@ -203,36 +205,78 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ANÁLISE DE DESEMPENHO */}
-      <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Análise de Desempenho</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-elos-bege/10 p-6 rounded-3xl border border-elos-bege/20">
-          <h4 className="text-xs font-black uppercase text-elos-bege mb-4 tracking-tighter">Eficiência de Caixa</h4>
-          <div className="w-full h-2 bg-white rounded-full mb-3"><div className="h-full bg-elos-verde rounded-full" style={{ width: `${Math.min(margemCaixa, 100)}%` }}></div></div>
-          <p className="text-sm font-bold text-elos-verde">{margemCaixa.toFixed(1)}% das vendas já entraram.</p>
+      {/* NOVO: INDICADORES DE INTELIGÊNCIA COMERCIAL */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+        <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
+          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Ticket Médio</h4>
+          <p className="text-xl font-bold text-elos-verde">R$ {ticketMedio.toFixed(2).replace('.', ',')}</p>
+          <span className="text-[9px] text-gray-300 uppercase font-bold tracking-tighter">Média por venda</span>
         </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <h4 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-tighter">Ponto de Equilíbrio</h4>
-          <strong className={`text-xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `Faltam R$ ${faltamParaCusto.toFixed(2)}`}
+        <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
+          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Volume de Vendas</h4>
+          <p className="text-xl font-bold text-elos-verde">{vendasNovasNoMes.length}</p>
+          <span className="text-[9px] text-gray-300 uppercase font-bold tracking-tighter">Novos contratos</span>
+        </div>
+        <div className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center">
+          <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Projeção a Receber</h4>
+          <p className="text-xl font-bold text-elos-bege">R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
+          <span className="text-[9px] text-elos-bege/60 uppercase font-bold tracking-tighter italic">Previsto para o mês</span>
+        </div>
+        <div className="bg-elos-verde/5 p-5 rounded-3xl border border-elos-verde/20 shadow-sm flex flex-col justify-center">
+          <h4 className="text-[10px] font-black text-elos-verde uppercase tracking-tighter mb-1 italic">Eficiência Real</h4>
+          <p className="text-xl font-bold text-elos-verde">{margemCaixa.toFixed(1)}%</p>
+          <span className="text-[9px] text-elos-verde/60 uppercase font-bold tracking-tighter italic">Vendas liquidadas</span>
+        </div>
+      </div>
+
+      {/* ANÁLISE DE DESEMPENHO */}
+      <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Ponto de Equilíbrio e Risco</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <h4 className="text-xs font-black uppercase text-gray-400 mb-1 tracking-tighter">Ponto de Equilíbrio</h4>
+            <p className="text-[10px] text-gray-400 uppercase font-bold italic tracking-widest">Status das despesas fixas</p>
+          </div>
+          <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `Faltam R$ ${faltamParaCusto.toFixed(2).replace('.', ',')}`}
           </strong>
         </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <h4 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-tighter">Risco de Crédito</h4>
-          <strong className={`text-xl ${indiceInadimplencia > 30 ? 'text-red-600' : 'text-elos-bege'}`}>{indiceInadimplencia.toFixed(1)}%</strong>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Inadimplência Projetada</p>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <h4 className="text-xs font-black uppercase text-gray-400 mb-1 tracking-tighter">Inadimplência</h4>
+            <p className="text-[10px] text-gray-400 uppercase font-bold italic tracking-widest">Risco sobre o esperado</p>
+          </div>
+          <strong className={`text-2xl ${indiceInadimplencia > 30 ? 'text-red-600' : 'text-elos-bege'}`}>{indiceInadimplencia.toFixed(1)}%</strong>
         </div>
       </div>
 
       {/* GESTÃO DE CRÉDITO */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div onClick={() => setModalTipo('receber')} className="bg-white p-8 rounded-3xl shadow-soft border-l-8 border-elos-bege cursor-pointer hover:bg-elos-fundo transition-all">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Mês)</h3>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Detalhamento)</h3>
           <p className="text-3xl font-black text-elos-bege mt-2">R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
+          <span className="text-[10px] text-gray-300 font-bold italic">Toque para ver a lista de devedores</span>
         </div>
-        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white">
-          <h3 className="text-xs font-bold text-elos-verde/40 uppercase tracking-widest">Faturamento Bruto</h3>
-          <p className="text-3xl font-black mt-2">R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
+        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
+          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Faturamento Bruto (Novas Vendas)</h3>
+          <p className="text-4xl font-black mt-2 text-white italic">R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
+        </div>
+      </div>
+
+      {/* RESUMO ANUAL */}
+      <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Resumo Anual ({anoFiltro})</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-green-700">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recebido (Ano)</h3>
+          <p className="text-2xl font-black text-green-700 mt-1">R$ {totalNoCaixaAno.toFixed(2).replace('.', ',')}</p>
+        </div>
+        <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-red-700">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Despesas (Ano)</h3>
+          <p className="text-2xl font-black text-red-700 mt-1">R$ {totalDespesasAno.toFixed(2).replace('.', ',')}</p>
+        </div>
+        <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-elos-verde">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vendas Brutas (Ano)</h3>
+          <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">R$ {volumeVendasAno.toFixed(2).replace('.', ',')}</p>
         </div>
       </div>
 
