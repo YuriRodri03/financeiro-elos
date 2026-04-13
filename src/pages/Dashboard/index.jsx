@@ -36,7 +36,7 @@ export default function Dashboard() {
     });
 
     const saidasPeriodo = despesas.filter(d => 
-      d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim
+      d.paga && d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim
     ).map(d => ({ 
       nome: d.descricao, 
       valor: d.valor, 
@@ -46,18 +46,15 @@ export default function Dashboard() {
     const totalEntradas = entradasPeriodo.reduce((acc, i) => acc + i.valor, 0);
     const totalSaidas = saidasPeriodo.reduce((acc, i) => acc + i.valor, 0);
 
-    if (entradasPeriodo.length === 0 && saidasPeriodo.length === 0) {
-      alert("Nenhuma movimentação encontrada neste período.");
-      return;
-    }
-
     const dadosRelatorio = { entradas: entradasPeriodo, saidas: saidasPeriodo, totalEntradas, totalSaidas };
     const periodoFmt = { inicio: relatorioInicio.split('-').reverse().join('/'), fim: relatorioFim.split('-').reverse().join('/') };
 
     gerarPDFSaudeFinanceira(dadosRelatorio, periodoFmt);
   };
 
-  // --- CÁLCULOS MENSAIS ---
+  // --- CÁLCULOS ---
+
+  // 1. A RECEBER (Tudo que está pendente até a data atual filtrada)
   const detalhesAReceber = useMemo(() => {
     let lista = [];
     vendas.forEach(venda => {
@@ -70,15 +67,18 @@ export default function Dashboard() {
                 d.setMonth(d.getMonth() + (p.numero - 1));
                 return d;
               })();
-          if ((dataVenc.getMonth() + 1) === Number(mesFiltro) && dataVenc.getFullYear() === Number(anoFiltro)) {
-            lista.push({ nome: venda.cliente, valor: p.valor, info: p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela` });
+          
+          const dataLimite = new Date(anoFiltro, mesFiltro, 0, 23, 59, 59);
+          if (dataVenc <= dataLimite) {
+            lista.push({ nome: venda.cliente, valor: p.valor, info: p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`, vencimento: dataVenc });
           }
         }
       });
     });
-    return lista;
+    return lista.sort((a,b) => a.vencimento - b.vencimento);
   }, [vendas, mesFiltro, anoFiltro]);
 
+  // 2. RECEBIDO NO CAIXA (Mês)
   const detalhesEntradas = useMemo(() => {
     let lista = [];
     vendas.forEach(venda => {
@@ -94,28 +94,32 @@ export default function Dashboard() {
     return lista;
   }, [vendas, mesFiltro, anoFiltro]);
 
+  // 3. DESPESAS (Mês)
   const detalhesDespesas = useMemo(() => {
     return despesas.filter(d => {
       const dataVenc = new Date(d.vencimento + 'T00:00:00');
       return (dataVenc.getMonth() + 1) === Number(mesFiltro) && dataVenc.getFullYear() === Number(anoFiltro);
-    }).map(d => ({ nome: d.descricao, valor: d.valor, info: d.paga ? "✅ Paga" : "❌ Pendente" }));
+    }).map(d => ({ nome: d.descricao, valor: d.valor, info: d.paga ? "✅ Paga" : "❌ Pendente", paga: d.paga }));
   }, [despesas, mesFiltro, anoFiltro]);
 
-  const totalAReceberMes = detalhesAReceber.reduce((acc, item) => acc + item.valor, 0);
+  const totalAReceberGeral = detalhesAReceber.reduce((acc, item) => acc + item.valor, 0);
   const totalNoCaixaMes = detalhesEntradas.reduce((acc, item) => acc + item.valor, 0);
-  const totalDespesasMes = detalhesDespesas.reduce((acc, item) => acc + item.valor, 0);
-  const saldoLiquidoMes = totalNoCaixaMes - totalDespesasMes;
+  const totalDespesasPagasMes = detalhesDespesas.filter(d => d.paga).reduce((acc, item) => acc + item.valor, 0);
+  const totalDespesasGeraisMes = detalhesDespesas.reduce((acc, item) => acc + item.valor, 0);
+  const saldoLiquidoReal = totalNoCaixaMes - totalDespesasPagasMes;
 
   const vendasNovasNoMes = vendas.filter(v => {
     const dataV = new Date(v.dataVenda + 'T00:00:00');
     return (dataV.getMonth() + 1) === Number(mesFiltro) && dataV.getFullYear() === Number(anoFiltro);
   });
   const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal), 0);
-  const margemCaixa = volumeVendasMes > 0 ? (totalNoCaixaMes / volumeVendasMes) * 100 : 0;
   const ticketMedio = vendasNovasNoMes.length > 0 ? (volumeVendasMes / vendasNovasNoMes.length) : 0;
-  const faltamParaCusto = totalDespesasMes - totalNoCaixaMes;
-  const totalEsperadoMes = totalNoCaixaMes + totalAReceberMes;
-  const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberMes / totalEsperadoMes) * 100 : 0;
+  const margemCaixa = volumeVendasMes > 0 ? (totalNoCaixaMes / volumeVendasMes) * 100 : 0;
+  const faltamParaCusto = totalDespesasGeraisMes - totalNoCaixaMes;
+  
+  // Cálculo de Inadimplência Projetada para o Mês
+  const totalEsperadoMes = totalNoCaixaMes + totalAReceberGeral;
+  const indiceInadimplencia = totalEsperadoMes > 0 ? (totalAReceberGeral / totalEsperadoMes) * 100 : 0;
 
   // --- CÁLCULOS ANUAIS ---
   const totalNoCaixaAno = vendas.reduce((acc, venda) => {
@@ -127,7 +131,7 @@ export default function Dashboard() {
     return acc + parcelasPagasNoAno.reduce((soma, p) => soma + p.valor, 0);
   }, 0);
 
-  const totalDespesasAno = despesas.reduce((acc, d) => {
+  const totalDespesasAno = despesas.filter(d => d.paga).reduce((acc, d) => {
     const dataVenc = new Date(d.vencimento + 'T00:00:00');
     return dataVenc.getFullYear() === Number(anoFiltro) ? acc + d.valor : acc;
   }, 0);
@@ -186,79 +190,70 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
-          <p className="text-3xl font-black text-green-700 mt-2 whitespace-nowrap">R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
-          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold tracking-tighter italic">Clique para ver detalhes</p>
+          <p className="text-3xl font-black text-green-700 mt-2">R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Líquido entrado no mês</p>
         </div>
         <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.02] transition-transform">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contas (Saídas)</h3>
-          <p className="text-3xl font-black text-red-700 mt-2 whitespace-nowrap">- R$ {totalDespesasMes.toFixed(2).replace('.', ',')}</p>
-          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold tracking-tighter italic">Clique para ver detalhes</p>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pagos (Saídas)</h3>
+          <p className="text-3xl font-black text-red-700 mt-2">- R$ {totalDespesasPagasMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Saídas efetivadas</p>
         </div>
-        <div className={`p-8 rounded-3xl shadow-soft border-t-8 bg-white transition-transform ${saldoLiquidoMes >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido</h3>
-          <p className={`text-3xl font-black mt-2 whitespace-nowrap ${saldoLiquidoMes >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
-            R$ {saldoLiquidoMes.toFixed(2).replace('.', ',')}
+        <div className={`p-8 rounded-3xl shadow-soft border-t-8 bg-white transition-transform ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido Real</h3>
+          <p className={`text-3xl font-black mt-2 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
+            R$ {saldoLiquidoReal.toFixed(2).replace('.', ',')}
           </p>
           <div className="h-1 w-full bg-gray-100 rounded-full mt-4 overflow-hidden">
-            <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasMes || 1)) * 100, 100)}%`}}></div>
+            <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}></div>
           </div>
         </div>
       </div>
 
-      {/* NOVO: INDICADORES DE INTELIGÊNCIA COMERCIAL */}
+      {/* KPI'S DE PERFORMANCE */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Ticket Médio</h4>
           <p className="text-xl font-bold text-elos-verde">R$ {ticketMedio.toFixed(2).replace('.', ',')}</p>
-          <span className="text-[9px] text-gray-300 uppercase font-bold tracking-tighter">Média por venda</span>
         </div>
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
-          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Volume de Vendas</h4>
+          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Vendas Novos Contratos</h4>
           <p className="text-xl font-bold text-elos-verde">{vendasNovasNoMes.length}</p>
-          <span className="text-[9px] text-gray-300 uppercase font-bold tracking-tighter">Novos contratos</span>
         </div>
-        <div className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center">
-          <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Projeção a Receber</h4>
-          <p className="text-xl font-bold text-elos-bege">R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
-          <span className="text-[9px] text-elos-bege/60 uppercase font-bold tracking-tighter italic">Previsto para o mês</span>
+        <div onClick={() => setModalTipo('receber')} className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-elos-bege/10 transition-colors">
+          <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Dívida Acumulada</h4>
+          <p className="text-xl font-bold text-elos-bege font-black">R$ {totalAReceberGeral.toFixed(2).replace('.', ',')}</p>
+          <span className="text-[8px] text-elos-bege uppercase font-bold">Total a receber geral</span>
         </div>
         <div className="bg-elos-verde/5 p-5 rounded-3xl border border-elos-verde/20 shadow-sm flex flex-col justify-center">
-          <h4 className="text-[10px] font-black text-elos-verde uppercase tracking-tighter mb-1 italic">Eficiência Real</h4>
+          <h4 className="text-[10px] font-black text-elos-verde uppercase tracking-tighter mb-1 italic">Eficiência de Caixa</h4>
           <p className="text-xl font-bold text-elos-verde">{margemCaixa.toFixed(1)}%</p>
-          <span className="text-[9px] text-elos-verde/60 uppercase font-bold tracking-tighter italic">Vendas liquidadas</span>
         </div>
       </div>
 
-      {/* ANÁLISE DE DESEMPENHO */}
-      <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Ponto de Equilíbrio e Risco</h2>
+      {/* ANÁLISE DE RISCO E PONTO DE EQUILÍBRIO */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <h4 className="text-xs font-black uppercase text-gray-400 mb-1 tracking-tighter">Ponto de Equilíbrio</h4>
-            <p className="text-[10px] text-gray-400 uppercase font-bold italic tracking-widest">Status das despesas fixas</p>
+            <h4 className="text-xs font-black text-gray-400 uppercase tracking-tighter">Ponto de Equilíbrio</h4>
+            <p className="text-[10px] text-gray-400 italic font-bold">Faltam p/ cobrir custos totais</p>
           </div>
           <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `Faltam R$ ${faltamParaCusto.toFixed(2).replace('.', ',')}`}
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `R$ ${faltamParaCusto.toFixed(2).replace('.', ',')}`}
           </strong>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <h4 className="text-xs font-black uppercase text-gray-400 mb-1 tracking-tighter">Inadimplência</h4>
-            <p className="text-[10px] text-gray-400 uppercase font-bold italic tracking-widest">Risco sobre o esperado</p>
+            <h4 className="text-xs font-black text-gray-400 uppercase tracking-tighter">Inadimplência Projetada</h4>
+            <p className="text-[10px] text-gray-400 italic font-bold">Risco sobre o faturamento</p>
           </div>
           <strong className={`text-2xl ${indiceInadimplencia > 30 ? 'text-red-600' : 'text-elos-bege'}`}>{indiceInadimplencia.toFixed(1)}%</strong>
         </div>
       </div>
 
-      {/* GESTÃO DE CRÉDITO */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div onClick={() => setModalTipo('receber')} className="bg-white p-8 rounded-3xl shadow-soft border-l-8 border-elos-bege cursor-pointer hover:bg-elos-fundo transition-all">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Detalhamento)</h3>
-          <p className="text-3xl font-black text-elos-bege mt-2">R$ {totalAReceberMes.toFixed(2).replace('.', ',')}</p>
-          <span className="text-[10px] text-gray-300 font-bold italic">Toque para ver a lista de devedores</span>
-        </div>
+      {/* FATURAMENTO BRUTO */}
+      <div className="grid grid-cols-1 gap-6 mb-10">
         <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
-          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Faturamento Bruto (Novas Vendas)</h3>
+          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Faturamento Bruto (Novas Vendas do Mês)</h3>
           <p className="text-4xl font-black mt-2 text-white italic">R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
         </div>
       </div>
@@ -271,7 +266,7 @@ export default function Dashboard() {
           <p className="text-2xl font-black text-green-700 mt-1">R$ {totalNoCaixaAno.toFixed(2).replace('.', ',')}</p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-red-700">
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Despesas (Ano)</h3>
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custos Pagos (Ano)</h3>
           <p className="text-2xl font-black text-red-700 mt-1">R$ {totalDespesasAno.toFixed(2).replace('.', ',')}</p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-elos-verde">
@@ -280,9 +275,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* VENDAS RECENTES */}
+      {/* VENDAS RECENTES (RESTAURADO) */}
       <div className="bg-white rounded-3xl shadow-soft p-8">
-        <h3 className="font-tradicional text-xl italic text-elos-verde mb-6">Contratos de {mesFiltro}/{anoFiltro}</h3>
+        <h3 className="font-tradicional text-xl italic text-elos-verde mb-6 border-b pb-4">Contratos de {mesFiltro}/{anoFiltro}</h3>
         {vendasNovasNoMes.length > 0 ? (
           <div className="space-y-4">
             {vendasNovasNoMes.map(v => (
@@ -295,16 +290,18 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        ) : <p className="text-center text-gray-300 italic py-10">Nenhuma venda nova neste mês.</p>}
+        ) : <p className="text-center text-gray-300 italic py-10">Nenhuma venda nova registrada neste mês.</p>}
       </div>
 
-      {/* MODAL */}
+      {/* MODAL DETALHAMENTO */}
       {modalTipo && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <header className="p-6 bg-elos-fundo flex justify-between items-center border-b">
-              <h2 className="font-tradicional text-xl text-elos-verde">Detalhamento Financeiro</h2>
-              <button onClick={() => setModalTipo(null)} className="text-2xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
+              <h2 className="font-tradicional text-xl text-elos-verde italic">
+                {modalTipo === 'receber' ? 'Dívidas Acumuladas (Geral)' : 'Detalhamento do Mês'}
+              </h2>
+              <button onClick={() => setModalTipo(null)} className="text-2xl text-gray-400 hover:text-red-500">&times;</button>
             </header>
             <div className="p-6 overflow-y-auto flex-1">
               {(() => {
@@ -312,13 +309,19 @@ export default function Dashboard() {
                 return dados.length > 0 ? (
                   <table className="w-full text-left">
                     <thead className="text-xs uppercase text-gray-400 border-b">
-                      <tr><th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th><th className="pb-3 text-center">{modalTipo === 'despesas' ? 'Status' : 'Info'}</th><th className="pb-3 text-right">Valor</th></tr>
+                      <tr>
+                        <th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th>
+                        <th className="pb-3 text-center">{modalTipo === 'receber' ? 'Vencimento' : 'Info'}</th>
+                        <th className="pb-3 text-right">Valor</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {dados.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-elos-fundo/30">
+                        <tr key={idx}>
                           <td className="py-4 font-bold text-elos-verde">{item.nome}</td>
-                          <td className="py-4 text-center text-xs text-gray-500 font-bold">{item.info}</td>
+                          <td className="py-4 text-center text-xs text-gray-500 font-bold">
+                            {modalTipo === 'receber' ? item.vencimento.toLocaleDateString() : item.info}
+                          </td>
                           <td className="py-4 text-right font-black">R$ {item.valor.toFixed(2).replace('.', ',')}</td>
                         </tr>
                       ))}
