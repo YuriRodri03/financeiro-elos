@@ -81,31 +81,34 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
+  const [editandoVenda, setEditandoVenda] = useState(null); // Estado para o novo modal de venda
   const [dadosRecibo, setDadosRecibo] = useState(null);
 
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
+    setEditandoVenda(null);
     setDadosRecibo(null);
   };
 
-  const handleEditarDataVenda = (vendaId, dataAntiga) => {
-    const novaData = prompt("Altere a data da venda (AAAA-MM-DD):", dataAntiga);
-    if (novaData && novaData !== dataAntiga) {
-      editarDataVenda(vendaId, novaData);
-    }
-  };
-
-  const salvarEdicao = async () => {
+  const salvarEdicaoCadastro = async () => {
     const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
     const idMongo = clienteParaEditar?._id;
     if (!idMongo) return alert("Erro: ID não encontrado.");
-
     try {
       await editarCliente(idMongo, editandoCadastro);
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       alert("Cadastro atualizado!");
+    } catch (err) { console.error(err); }
+  };
+
+  const salvarEdicaoVenda = async () => {
+    if (!editandoVenda.vendaId || !editandoVenda.dataVenda) return;
+    try {
+      await editarDataVenda(editandoVenda.vendaId, editandoVenda.dataVenda);
+      setEditandoVenda(null);
+      alert("Data da venda atualizada!");
     } catch (err) { console.error(err); }
   };
 
@@ -115,7 +118,7 @@ export default function Clientes() {
       ...(clientes || []).map(c => c.cpf)
     ]));
 
-    return todosCPFs.map(cpf => {
+    const lista = todosCPFs.map(cpf => {
       const dadosCad = (clientes || []).find(c => c.cpf === cpf);
       const vendasCli = (vendas || []).filter(v => v.cpf === cpf).sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda));
       const totalDevido = vendasCli.reduce((acc, v) => acc + (v.listaParcelas || []).filter(p => !p.paga).reduce((soma, p) => soma + (p.valor || 0), 0), 0);
@@ -131,6 +134,9 @@ export default function Clientes() {
         totalGeralDevido: totalDevido
       };
     });
+
+    // --- ORDEM ALFABÉTICA ---
+    return lista.sort((a, b) => a.nome.localeCompare(b.nome));
   }, [vendas, clientes]);
 
   const clienteNoModal = useMemo(() => {
@@ -151,7 +157,7 @@ export default function Clientes() {
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Carteira de Clientes</h1>
-          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold italic">Base de dados unificada</p>
+          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold italic">Base de dados unificada (A-Z)</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
@@ -163,7 +169,7 @@ export default function Clientes() {
             onChange={(e) => setBusca(e.target.value)}
           />
           <div className="flex bg-white p-1 rounded-2xl shadow-soft border border-elos-bege/10">
-            <button onClick={() => setFiltro('todos')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filtro === 'todos' ? 'bg-elos-verde text-white' : 'text-gray-400'}`}>TODOS ({listaFinalClientes.length})</button>
+            <button onClick={() => setFiltro('todos')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filtro === 'todos' ? 'bg-elos-verde text-white' : 'text-gray-400'}`}>TODOS</button>
             <button onClick={() => setFiltro('pendentes')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filtro === 'pendentes' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>⚠️ PENDENTES</button>
           </div>
         </div>
@@ -173,7 +179,7 @@ export default function Clientes() {
         <table className="w-full text-left">
           <thead className="bg-elos-fundo/50 border-b border-gray-100">
             <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <th className="px-8 py-5">Cliente / CPF</th>
+              <th className="px-8 py-5">Cliente (Ordem A-Z)</th>
               <th className="px-8 py-5 text-center">Saldo Devedor</th>
               <th className="px-8 py-5 text-right">Ações</th>
             </tr>
@@ -203,33 +209,20 @@ export default function Clientes() {
       {clienteNoModal && clienteSelecionadoCPF && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={fecharModal}>
           <div className="bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
-            
             <button onClick={fecharModal} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-elos-fundo rounded-full text-2xl text-gray-400 hover:text-red-500 z-10">&times;</button>
             
             <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20 text-center md:text-left">
-              <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">
-                {clienteNoModal.nome}
-              </h2>
+              <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">{clienteNoModal.nome}</h2>
               <div className="flex gap-2 justify-center md:justify-start mt-2">
                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest border px-2 py-0.5 rounded-md">CPF: {clienteNoModal.cpf}</span>
               </div>
             </header>
             
             <div className="p-10 overflow-y-auto flex-1 bg-white space-y-10">
-              {/* BLOCO DE DADOS CADASTRAIS COMPLETOS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner">
-                <div>
-                  <h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4>
-                  <p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p>
-                </div>
-                <div>
-                  <h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4>
-                  <p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p>
-                </div>
-                <div className="md:col-span-2 border-t border-elos-bege/10 pt-4">
-                  <h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações / Receitas</h4>
-                  <p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p>
-                </div>
+                <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
+                <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
+                <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações / Receitas</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
               </div>
 
               <div className="flex flex-wrap gap-4">
@@ -237,57 +230,42 @@ export default function Clientes() {
                 <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-elos-verde/20">📄 Gerar Recibo</button>
               </div>
 
-              {/* HISTÓRICO DE COMPRAS COM VALOR DO PEDIDO */}
               <div className="space-y-6 pt-4">
                 <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
-                  const numeroPedidoAmigavel = venda.numeroPedido || (2000 + (vendas.length - vendas.indexOf(venda)));
-
+                  const numPed = venda.numeroPedido || (2000 + (vendas.length - vendas.indexOf(venda)));
                   return (
-                    <div key={venda._id || index} className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 relative group shadow-sm">
+                    <div key={venda._id || index} className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 relative group shadow-sm mb-6">
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numeroPedidoAmigavel}</span>
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => handleEditarDataVenda(venda._id, venda.dataVenda)}>
-                              {venda.dataVenda?.split('-').reverse().join('/')} ✏️
+                            <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
+                            {/* BOTÃO EDITAR DATA (Substituído prompt por Modal) */}
+                            <small 
+                              className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege flex items-center gap-1" 
+                              onClick={() => setEditandoVenda({ vendaId: venda._id, dataVenda: venda.dataVenda })}
+                            >
+                              {venda.dataVenda?.split('-').reverse().join('/')} <span className="text-[12px]">✏️</span>
                             </small>
                           </div>
                           <strong className="text-xl text-elos-texto block italic font-tradicional">📦 {venda.produto || 'Produtos Ópticos'}</strong>
-                          {/* VALOR TOTAL DO PEDIDO EM DESTAQUE */}
-                          <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">
-                            Valor Total: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}
-                          </div>
+                          <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">Valor: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}</div>
                         </div>
-
-                        <button 
-                          onClick={() => gerarPDFDocumento({...venda, numeroPedido: numeroPedidoAmigavel, cliente: clienteNoModal.nome}, 'pedido')} 
-                          className="w-full md:w-auto bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                        >
-                          📄 Reemitir Pedido
-                        </button>
+                        <button onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome}, 'pedido')} className="w-full md:w-auto bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">📄 Reemitir Pedido</button>
                       </div>
-                      
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
                         {(venda.listaParcelas || []).map((p, idx) => (
                           <LinhaParcela key={idx} p={p} vendaId={venda._id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                         ))}
                       </div>
-
-                      <button 
-                        className="mt-6 text-[9px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest transition-colors"
-                        onClick={() => { if(confirm("Excluir esta venda permanentemente?")) excluirVenda(venda._id) }}
-                      >
-                        🗑️ Excluir Registro de Venda
-                      </button>
+                      <button className="mt-6 text-[9px] font-black text-red-200 hover:text-red-600 uppercase tracking-widest transition-colors" onClick={() => { if(confirm("Excluir esta venda permanentemente?")) excluirVenda(venda._id) }}>🗑️ Excluir Venda</button>
                     </div>
                   )
                 })}
               </div>
             </div>
-            
             <footer className="p-6 bg-elos-fundo border-t flex justify-center">
-              <button onClick={fecharModal} className="bg-elos-texto text-white px-12 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] hover:bg-elos-verde transition-all shadow-xl">Voltar para a Lista</button>
+              <button onClick={fecharModal} className="bg-elos-texto text-white px-12 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-elos-verde transition-all shadow-xl">Voltar para a Lista</button>
             </footer>
           </div>
         </div>
@@ -299,14 +277,38 @@ export default function Clientes() {
           <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl">
             <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Perfil</h2>
             <div className="space-y-4">
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none focus:ring-1 focus:ring-elos-bege" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none focus:ring-1 focus:ring-elos-bege" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none focus:ring-1 focus:ring-elos-bege" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações / Receitas</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none focus:ring-1 focus:ring-elos-bege resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações / Receitas</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
             </div>
             <div className="flex gap-4 pt-4">
-              <button onClick={salvarEdicao} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold hover:bg-[#3a4a3e] transition-colors">Confirmar</button>
+              <button onClick={salvarEdicaoCadastro} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold hover:bg-[#3a4a3e]">Salvar</button>
               <button onClick={() => setEditandoCadastro(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOVO MODAL DE EDIÇÃO DE DATA DA VENDA (Substituindo o prompt) */}
+      {editandoVenda && (
+        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 space-y-6 shadow-2xl">
+            <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Data da Venda</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400">Nova Data</label>
+                <input 
+                  className="w-full p-4 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-center" 
+                  type="date" 
+                  value={editandoVenda.dataVenda} 
+                  onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} 
+                />
+              </div>
+            </div>
+            <div className="flex gap-4 pt-4">
+              <button onClick={salvarEdicaoVenda} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold hover:bg-[#3a4a3e]">Atualizar</button>
+              <button onClick={() => setEditandoVenda(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
             </div>
           </div>
         </div>
