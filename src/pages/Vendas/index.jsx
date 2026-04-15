@@ -95,9 +95,14 @@ export default function Vendas() {
     if (itensCarrinho.length === 0) return alert("Adicione pelo menos um item ao carrinho.");
     if (!venda.cliente || !venda.cpf) return alert("Preencha os dados do cliente.");
 
+    // BUSCA OS DADOS COMPLETOS DO CLIENTE PARA O PDF
+    const clienteCompleto = clientes.find(c => c.cpf === venda.cpf);
+
     const dadosParaSalvar = {
       ...venda,
-      produto: itensCarrinho.map(i => i.nome).join(' + '), // Junta os nomes para o banco
+      // Guardamos o texto para histórico rápido, mas enviamos o array para detalhes
+      produto: itensCarrinho.map(i => i.nome).join(' + '), 
+      itensCarrinho: itensCarrinho, // ENVIANDO COMO ARRAY DE OBJETOS
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
       desconto: limparMoeda(venda.desconto)
@@ -111,8 +116,13 @@ export default function Vendas() {
         gerarPDFDocumento({
           ...dadosParaSalvar,
           numeroPedido: resultado?.numeroPedido || "PED-NOVO",
-          valorProduto: subtotalItens, // Preço antes do desconto
+          valorProduto: subtotalItens, 
           data: venda.dataVenda.split('-').reverse().join('/'),
+          // Enviando os dados que o seu PDF exige agora:
+          telefone: clienteCompleto?.telefone || "Não informado",
+          endereco: clienteCompleto?.endereco || "Não informado",
+          email: clienteCompleto?.email || "Não informado",
+          itensCarrinho: itensCarrinho // Garante que o loop de itens funcione no PDF
         }, 'pedido');
       }
 

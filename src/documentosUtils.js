@@ -47,7 +47,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setDrawColor(200, 200, 200);
   doc.line(margemEsq, y, 190, y); 
 
-  // --- TÍTULO ---
+  // --- TÍTULO DO DOCUMENTO ---
   y += 10;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 10, "F");
@@ -56,94 +56,110 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFont("helvetica", "bold");
   const txtT = tipo === "recibo" ? "Recibo" : "Pedido";
   
-  // NUMERAÇÃO: Captura numeroPedido (2000+) ou numero original
   const numeroExibicao = dados.numeroPedido || dados.numero || "S/N";
-  doc.text(txtT + " #" + numeroExibicao, margemEsq + 5, y + 7);
+  doc.text(`${txtT} #${numeroExibicao}`, margemEsq + 5, y + 7);
   
   doc.setFontSize(10);
   doc.text(dados.data || new Date().toLocaleDateString('pt-BR'), 185, y + 7, { align: "right" });
 
-  // --- CORPO DO TEXTO ---
+  // --- DADOS DO CLIENTE (Novo Bloco) ---
   y += 18;
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(11);
   const nCli = (dados.cliente || "CLIENTE").toUpperCase();
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("IDENTIFICAÇÃO DO CLIENTE", margemEsq, y);
   
-  // CORREÇÃO DE VALOR: Usa valores fixos para não zerar no PDF após baixa
-  const vTotalNum = Number(dados.valorTotal || 0);
-  const vTotalFmt = vTotalNum.toFixed(2).replace(".", ",");
+  y += 7;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Nome: ${nCli}`, margemEsq, y);
+  doc.text(`CPF: ${dados.cpf || "Não informado"}`, 120, y);
+  
+  y += 5;
+  doc.text(`Telefone: ${dados.telefone || "Não informado"}`, margemEsq, y);
+  doc.text(`E-mail: ${dados.email || "Não informado"}`, 120, y);
+  
+  y += 5;
+  const enderecoTxt = doc.splitTextToSize(`Endereço: ${dados.endereco || "Não informado"}`, 160);
+  doc.text(enderecoTxt, margemEsq, y);
+  y += (enderecoTxt.length * 5) + 5;
 
-  if (tipo === "recibo") {
-    const frase = `Declaro que recebi de ${nCli} o valor de R$ ${vTotalFmt} em ${dados.data || new Date().toLocaleDateString('pt-BR')}, referente aos seguintes produtos:`;
-    doc.text(doc.splitTextToSize(frase, 170), margemEsq, y);
-    y += 12;
-  } else {
-    doc.text("Cliente: " + nCli, margemEsq, y);
-    y += 10;
-  }
-
-  // --- TABELA DE PRODUTOS ---
+  // --- TABELA DE PRODUTOS / CARRINHO ---
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
-  doc.text("Produtos", margemEsq + 2, y + 5);
+  doc.setFont("helvetica", "bold");
+  doc.text("Produtos / Serviços", margemEsq + 2, y + 5);
+  doc.text("Valor", 185, y + 5, { align: "right" });
 
   y += 8;
-  doc.setFillColor(245, 245, 245);
-  doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(0, 0, 0);
-  doc.text("Descrição", margemEsq + 2, y + 5);
-  doc.text("Qtd.", 140, y + 5);
-  doc.text("Preço", 185, y + 5, { align: "right" });
-  
-  y += 12;
   doc.setFont("helvetica", "normal");
-  doc.text(dados.produto || "PRODUTO ÓPTICO", margemEsq + 2, y);
-  doc.text("1", 142, y);
-  
-  // Valor bruto (sem desconto)
-  const pUniNum = Number(dados.valorProduto || vTotalNum);
-  const pUniFmt = pUniNum.toFixed(2).replace(".", ",");
-  doc.text("R$ " + pUniFmt, 185, y, { align: "right" });
 
-  // --- FECHAMENTO DE VALORES ---
-  y += 15;
-  doc.text("Subtotal", 130, y);
-  doc.text("R$ " + pUniFmt, 185, y, { align: "right" });
+  // Se não houver itensCarrinho, cria um item padrão com os dados básicos
+  const itens = dados.itensCarrinho || [
+    { nome: dados.produto || "PRODUTO ÓPTICO", preco: Number(dados.valorProduto || dados.valorTotal || 0) }
+  ];
+  
+  itens.forEach((item, index) => {
+    const nomeItem = item.nome.toUpperCase();
+    const precoItem = "R$ " + Number(item.preco).toFixed(2).replace(".", ",");
+    const nomeQuebrado = doc.splitTextToSize(nomeItem, 135);
+    
+    // Fundo zebrado
+    if (index % 2 !== 0) {
+      doc.setFillColor(250, 250, 250);
+      const alturaRetangulo = (nomeQuebrado.length * 5) + 3;
+      doc.rect(margemEsq, y, 170, alturaRetangulo, "F");
+    }
+
+    doc.text(nomeQuebrado, margemEsq + 2, y + 5);
+    doc.text(precoItem, 185, y + 5, { align: "right" });
+    
+    y += (nomeQuebrado.length * 5) + 3;
+  });
+
+  // --- FECHAMENTO FINANCEIRO ---
+  y += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(110, y, 190, y);
+  
+  y += 8;
+  const subtotal = itens.reduce((acc, i) => acc + Number(i.preco), 0);
+  doc.setFont("helvetica", "normal");
+  doc.text("Subtotal:", 130, y);
+  doc.text("R$ " + subtotal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
   y += 7;
-  doc.setTextColor(198, 40, 40);
+  doc.setTextColor(198, 40, 40); // Vermelho para desconto
   const vDescNum = Number(dados.desconto || 0);
-  const vDescFmt = vDescNum.toFixed(2).replace(".", ",");
-  doc.text("Desconto concedido", 130, y);
-  doc.text("- R$ " + vDescFmt, 185, y, { align: "right" });
+  doc.text("Desconto:", 130, y);
+  doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
-  y += 7;
+  y += 8;
   doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.setFont("helvetica", "bold");
-  doc.text("Total Final", 130, y);
-  doc.text("R$ " + vTotalFmt, 185, y, { align: "right" });
+  doc.setFontSize(12);
+  doc.text("TOTAL FINAL:", 130, y);
+  const totalFinal = subtotal - vDescNum;
+  doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
   // --- PAGAMENTO ---
   y += 15;
-  doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
-  doc.rect(margemEsq, y, 170, 8, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.text("Pagamento", margemEsq + 2, y + 5);
-  
-  y += 12;
   doc.setTextColor(0, 0, 0);
-  doc.text("Meios de pagamento:", margemEsq, y);
-  y += 5;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("FORMA DE PAGAMENTO", margemEsq, y);
+  y += 6;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  const pgto = dados.metodoPagamento || "Dinheiro";
-  doc.text(pgto, margemEsq, y);
+  const pgtoInfo = `${dados.metodoPagamento || "Dinheiro"} ${dados.parcelas > 1 ? `(${dados.parcelas}x)` : ""}`;
+  doc.text(pgtoInfo, margemEsq, y);
 
-  // FUNÇÃO AUXILIAR PARA ASSINATURAS
   const desenharAssinaturas = (posY) => {
-    if (posY > 260) { doc.addPage(); posY = 30; }
+    if (posY > 255) { doc.addPage(); posY = 30; }
     doc.setDrawColor(0, 0, 0);
     doc.line(margemEsq, posY, 90, posY);
     doc.line(110, posY, 190, posY);
@@ -162,7 +178,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     desenharAssinaturas(245);
   }
 
-  // --- SEGUNDA PÁGINA: GARANTIA (TEXTO EXATO) ---
+  // --- SEGUNDA PÁGINA: GARANTIA (Texto Completo) ---
   if (tipo === "pedido") {
     doc.addPage();
     doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
@@ -177,6 +193,9 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.setFont("helvetica", "normal");
     
     const clausulas = [
+      { t: "Período de garantia", b: true },
+      { t: "180 dias", b: false },
+      { t: "", b: false },
       { t: "Cobertura de Garantia", b: true },
       { t: "1.1 A garantia cobre exclusivamente os serviços de manutenção e ajuste de óculos fornecidos pela ótica.", b: false },
       { t: "1.2 A garantia inclui a substituição de parafusos, plaquetas e ajustes de armação sem custo adicional.", b: false },
@@ -216,7 +235,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.save(`${txtT}_${nCli.replace(/\s+/g, "_")}.pdf`);
 };
 
-// --- RELATÓRIO DE SAÚDE FINANCEIRA ---
+// --- RELATÓRIO DE SAÚDE FINANCEIRA COMPLETO ---
 export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   const doc = new jsPDF();
   const verdeElos = [74, 93, 78];
@@ -260,7 +279,7 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.text("SAÍDAS (Despesas e Contas)", margemEsq + 2, y + 5);
+  doc.text("SAÍDAS (Despesas Pagas)", margemEsq + 2, y + 5);
 
   y += 13;
   doc.setTextColor(0, 0, 0);
@@ -291,7 +310,7 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   const saldo = dadosRelatorio.totalEntradas - dadosRelatorio.totalSaidas;
   doc.setTextColor(saldo >= 0 ? verdeElos[0] : 198, 40, 40);
   doc.setFont("helvetica", "bold");
-  doc.text("LUCRO / SALDO LÍQUIDO:", margemEsq + 5, y + 21);
+  doc.text("LUCRO / SALDO LÍQUIDO REAL:", margemEsq + 5, y + 21);
   doc.text("R$ " + saldo.toFixed(2).replace('.', ','), 185, y + 21, { align: "right" });
 
   doc.save("Saude_Financeira_" + periodo.inicio.replace(/\//g, '-') + ".pdf");

@@ -58,7 +58,7 @@ export default function CadastroClientes() {
   };
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
       <div className="max-w-4xl mx-auto">
         
         {/* Cabeçalho */}
@@ -73,7 +73,7 @@ export default function CadastroClientes() {
         <form onSubmit={salvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Nome Completo - Ocupa 2 colunas no MD */}
+            {/* Nome Completo */}
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Nome Completo</label>
               <input 
@@ -100,6 +100,16 @@ export default function CadastroClientes() {
                 type="text" name="telefone" value={novo.telefone} onChange={handleChange} 
                 placeholder="(88) 99999-9999"
                 className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"
+              />
+            </div>
+
+            {/* E-mail (Campo Novo) */}
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">E-mail</label>
+              <input 
+                type="email" name="email" value={novo.email} onChange={handleChange} 
+                placeholder="cliente@email.com"
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300"
               />
             </div>
 

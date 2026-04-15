@@ -2,6 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
+// --- FUNÇÃO AUXILIAR PARA MOEDA ---
+const aplicarMascaraMoeda = (valor) => {
+  let v = valor.replace(/\D/g, '');
+  v = (Number(v) / 100).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+  return v;
+};
+
 // --- COMPONENTE DE LINHA DE PARCELA ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
@@ -81,14 +91,14 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
-  const [editandoVenda, setEditandoVenda] = useState(null); // Estado para o novo modal de venda
-  const [dadosRecibo, setDadosRecibo] = useState(null);
+  const [editandoVenda, setEditandoVenda] = useState(null);
+  const [modalRecibo, setModalRecibo] = useState(null); // Estado unificado para o modal de recibo
 
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
     setEditandoVenda(null);
-    setDadosRecibo(null);
+    setModalRecibo(null);
   };
 
   const salvarEdicaoCadastro = async () => {
@@ -135,7 +145,6 @@ export default function Clientes() {
       };
     });
 
-    // --- ORDEM ALFABÉTICA ---
     return lista.sort((a, b) => a.nome.localeCompare(b.nome));
   }, [vendas, clientes]);
 
@@ -175,6 +184,7 @@ export default function Clientes() {
         </div>
       </header>
 
+      {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
         <table className="w-full text-left">
           <thead className="bg-elos-fundo/50 border-b border-gray-100">
@@ -206,14 +216,15 @@ export default function Clientes() {
         </table>
       </div>
 
+      {/* MODAL DA FICHA DO CLIENTE */}
       {clienteNoModal && clienteSelecionadoCPF && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={fecharModal}>
           <div className="bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
             <button onClick={fecharModal} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-elos-fundo rounded-full text-2xl text-gray-400 hover:text-red-500 z-10">&times;</button>
             
-            <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20 text-center md:text-left">
+            <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20">
               <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">{clienteNoModal.nome}</h2>
-              <div className="flex gap-2 justify-center md:justify-start mt-2">
+              <div className="flex gap-2 mt-2">
                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest border px-2 py-0.5 rounded-md">CPF: {clienteNoModal.cpf}</span>
               </div>
             </header>
@@ -222,12 +233,22 @@ export default function Clientes() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner">
                 <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
                 <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
-                <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações / Receitas</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
+                <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
               </div>
 
               <div className="flex flex-wrap gap-4">
                 <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="flex-1 py-4 bg-white border-2 border-elos-bege/30 text-elos-verde font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Cadastro</button>
-                <button onClick={() => setDadosRecibo({ valor: clienteNoModal.totalGeralDevido, desconto: 0, data: new Date().toISOString().split('T')[0], produto: "Produtos Ópticos", metodoPagamento: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-elos-verde/20">📄 Gerar Recibo</button>
+                <button 
+                  onClick={() => setModalRecibo({ 
+                    valorFmt: aplicarMascaraMoeda(String(clienteNoModal.totalGeralDevido * 100)), 
+                    produto: "Pagamento de parcelas / Produtos Ópticos", 
+                    data: new Date().toISOString().split('T')[0], 
+                    metodo: "Dinheiro" 
+                  })} 
+                  className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-elos-verde/20"
+                >
+                  📄 Gerar Recibo
+                </button>
               </div>
 
               <div className="space-y-6 pt-4">
@@ -240,33 +261,25 @@ export default function Clientes() {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
-                            {/* BOTÃO EDITAR DATA (Substituído prompt por Modal) */}
-                            <small 
-                              className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege flex items-center gap-1" 
-                              onClick={() => setEditandoVenda({ vendaId: venda._id, dataVenda: venda.dataVenda })}
-                            >
-                              {venda.dataVenda?.split('-').reverse().join('/')} <span className="text-[12px]">✏️</span>
+                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({ vendaId: venda._id, dataVenda: venda.dataVenda })}>
+                              {venda.dataVenda?.split('-').reverse().join('/')} ✏️
                             </small>
                           </div>
                           <strong className="text-xl text-elos-texto block italic font-tradicional">📦 {venda.produto || 'Produtos Ópticos'}</strong>
                           <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">Valor: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}</div>
                         </div>
-                        <button onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome}, 'pedido')} className="w-full md:w-auto bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">📄 Reemitir Pedido</button>
+                        <button onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome}, 'pedido')} className="w-full md:w-auto bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all">📄 Reemitir Pedido</button>
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
                         {(venda.listaParcelas || []).map((p, idx) => (
                           <LinhaParcela key={idx} p={p} vendaId={venda._id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                         ))}
                       </div>
-                      <button className="mt-6 text-[9px] font-black text-red-200 hover:text-red-600 uppercase tracking-widest transition-colors" onClick={() => { if(confirm("Excluir esta venda permanentemente?")) excluirVenda(venda._id) }}>🗑️ Excluir Venda</button>
                     </div>
                   )
                 })}
               </div>
             </div>
-            <footer className="p-6 bg-elos-fundo border-t flex justify-center">
-              <button onClick={fecharModal} className="bg-elos-texto text-white px-12 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-elos-verde transition-all shadow-xl">Voltar para a Lista</button>
-            </footer>
           </div>
         </div>
       )}
@@ -280,7 +293,7 @@ export default function Clientes() {
               <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações / Receitas</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
             </div>
             <div className="flex gap-4 pt-4">
               <button onClick={salvarEdicaoCadastro} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold hover:bg-[#3a4a3e]">Salvar</button>
@@ -290,7 +303,7 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* NOVO MODAL DE EDIÇÃO DE DATA DA VENDA (Substituindo o prompt) */}
+      {/* MODAL DE EDIÇÃO DE DATA DA VENDA */}
       {editandoVenda && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white w-full max-w-sm rounded-[32px] p-8 space-y-6 shadow-2xl">
@@ -298,17 +311,96 @@ export default function Clientes() {
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400">Nova Data</label>
-                <input 
-                  className="w-full p-4 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-center" 
-                  type="date" 
-                  value={editandoVenda.dataVenda} 
-                  onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} 
-                />
+                <input className="w-full p-4 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-center" type="date" value={editandoVenda.dataVenda} onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} />
               </div>
             </div>
             <div className="flex gap-4 pt-4">
-              <button onClick={salvarEdicaoVenda} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold hover:bg-[#3a4a3e]">Atualizar</button>
+              <button onClick={salvarEdicaoVenda} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold">Atualizar</button>
               <button onClick={() => setEditandoVenda(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE GERAR RECIBO (O SEU MODAL ORIGINAL) */}
+      {modalRecibo && (
+        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-8 space-y-6 shadow-2xl border border-elos-bege/20">
+            <div className="text-center">
+              <h2 className="font-tradicional text-2xl text-elos-verde italic">Emitir Recibo</h2>
+              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-1">Confirme os valores abaixo</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Valor do Recebimento</label>
+                <input 
+                  className="w-full p-4 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-elos-verde text-lg" 
+                  type="text" 
+                  value={modalRecibo.valorFmt} 
+                  onChange={(e) => setModalRecibo({...modalRecibo, valorFmt: aplicarMascaraMoeda(e.target.value)})} 
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Referente a:</label>
+                <input 
+                  className="w-full p-4 bg-elos-fundo rounded-xl outline-none text-sm" 
+                  type="text" 
+                  placeholder="Ex: Pagamento de parcelas, Entrada..."
+                  value={modalRecibo.produto} 
+                  onChange={(e) => setModalRecibo({...modalRecibo, produto: e.target.value})} 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Data</label>
+                  <input 
+                    className="w-full p-3 bg-elos-fundo rounded-xl text-xs outline-none" 
+                    type="date" 
+                    value={modalRecibo.data} 
+                    onChange={(e) => setModalRecibo({...modalRecibo, data: e.target.value})} 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Método</label>
+                  <select 
+                    className="w-full p-3 bg-elos-fundo rounded-xl text-xs outline-none"
+                    value={modalRecibo.metodo}
+                    onChange={(e) => setModalRecibo({...modalRecibo, metodo: e.target.value})}
+                  >
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartão">Cartão</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button 
+                onClick={() => {
+                  const valorLimpo = Number(modalRecibo.valorFmt.replace(/\D/g, '')) / 100;
+                  gerarPDFDocumento({
+                    cliente: clienteNoModal.nome,
+                    cpf: clienteNoModal.cpf,
+                    telefone: clienteNoModal.telefone,
+                    endereco: clienteNoModal.endereco,
+                    valorTotal: valorLimpo,
+                    produto: modalRecibo.produto,
+                    data: modalRecibo.data.split('-').reverse().join('/'),
+                    metodoPagamento: modalRecibo.metodo,
+                    desconto: 0,
+                    itensCarrinho: [{ nome: modalRecibo.produto.toUpperCase(), preco: valorLimpo }]
+                  }, 'recibo');
+                  setModalRecibo(null);
+                }} 
+                className="flex-1 bg-elos-verde text-white py-4 rounded-2xl font-bold hover:bg-[#3a4a3e] shadow-lg shadow-elos-verde/20 transition-all active:scale-95"
+              >
+                Gerar PDF
+              </button>
+              <button onClick={() => setModalRecibo(null)} className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold">Cancelar</button>
             </div>
           </div>
         </div>
