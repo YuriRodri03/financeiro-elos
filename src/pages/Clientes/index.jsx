@@ -161,7 +161,7 @@ export default function Clientes() {
   if (carregando) return null;
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Carteira de Clientes</h1>
@@ -206,7 +206,16 @@ export default function Clientes() {
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-all shadow-sm">Ver Ficha</button>
-                    <button onClick={() => { if(confirm("Excluir cadastro deste cliente?")) excluirCliente(cliente.cpf) }} className="p-2 text-red-200 hover:text-red-600 transition-colors">🗑️</button>
+                    {/* BOTÃO EXCLUIR CLIENTE CORRIGIDO */}
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation();
+                        if(confirm(`Deseja excluir permanentemente o cadastro de ${cliente.nome}?`)) excluirCliente(cliente.cpf) 
+                      }} 
+                      className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-sm"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -229,7 +238,6 @@ export default function Clientes() {
             </header>
             
             <div className="p-10 overflow-y-auto flex-1 bg-white space-y-10">
-              {/* BLOCO DE DADOS ATUALIZADO COM EMAIL */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner">
                 <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
                 <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">E-mail</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.email || "Não cadastrado"}</p></div>
@@ -269,7 +277,22 @@ export default function Clientes() {
                           <strong className="text-xl text-elos-texto block italic font-tradicional">📦 {venda.produto || 'Produtos Ópticos'}</strong>
                           <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">Valor: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}</div>
                         </div>
-                        <button onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome, email: clienteNoModal.email, endereco: clienteNoModal.endereco, telefone: clienteNoModal.telefone}, 'pedido')} className="w-full md:w-auto bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all">📄 Reemitir Pedido</button>
+                        
+                        <div className="flex items-center gap-3 w-full md:w-auto">
+                          <button 
+                            onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome, email: clienteNoModal.email, endereco: clienteNoModal.endereco, telefone: clienteNoModal.telefone}, 'pedido')} 
+                            className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+                          >
+                            📄 Reemitir
+                          </button>
+                          {/* BOTÃO EXCLUIR VENDA RECUPERADO */}
+                          <button 
+                            onClick={() => { if(confirm("Deseja excluir permanentemente este pedido?")) excluirVenda(venda._id) }} 
+                            className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-sm"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
                         {(venda.listaParcelas || []).map((p, idx) => (
@@ -285,7 +308,7 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO DE CADASTRO ATUALIZADO */}
+      {/* MODAL DE EDIÇÃO DE CADASTRO */}
       {editandoCadastro && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl">
