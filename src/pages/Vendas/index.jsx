@@ -55,14 +55,14 @@ export default function Vendas() {
       preco: limparMoeda(novoItem.preco)
     };
     setItensCarrinho([...itensCarrinho, itemFormatado]);
-    setNovoItem({ nome: '', preco: '' }); // Limpa campos do item
+    setNovoItem({ nome: '', preco: '' });
   };
 
   const removerDoCarrinho = (id) => {
     setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
   };
 
-  // Cálculo Automático do Total
+  // Cálculos
   const subtotalItens = useMemo(() => {
     return itensCarrinho.reduce((acc, item) => acc + item.preco, 0);
   }, [itensCarrinho]);
@@ -95,14 +95,13 @@ export default function Vendas() {
     if (itensCarrinho.length === 0) return alert("Adicione pelo menos um item ao carrinho.");
     if (!venda.cliente || !venda.cpf) return alert("Preencha os dados do cliente.");
 
-    // BUSCA OS DADOS COMPLETOS DO CLIENTE PARA O PDF
-    const clienteCompleto = clientes.find(c => c.cpf === venda.cpf);
+    // Busca dados completos do cliente para o PDF
+    const clienteBase = clientes.find(c => c.cpf === venda.cpf);
 
     const dadosParaSalvar = {
       ...venda,
-      // Guardamos o texto para histórico rápido, mas enviamos o array para detalhes
       produto: itensCarrinho.map(i => i.nome).join(' + '), 
-      itensCarrinho: itensCarrinho, // ENVIANDO COMO ARRAY DE OBJETOS
+      itensCarrinho: itensCarrinho, // Salva os itens individuais no banco
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
       desconto: limparMoeda(venda.desconto)
@@ -115,18 +114,17 @@ export default function Vendas() {
       if (imprimir) {
         gerarPDFDocumento({
           ...dadosParaSalvar,
-          numeroPedido: resultado?.numeroPedido || "PED-NOVO",
+          numeroPedido: resultado?.numeroPedido || "S/N", // Usa o número vindo do banco
           valorProduto: subtotalItens, 
           data: venda.dataVenda.split('-').reverse().join('/'),
-          // Enviando os dados que o seu PDF exige agora:
-          telefone: clienteCompleto?.telefone || "Não informado",
-          endereco: clienteCompleto?.endereco || "Não informado",
-          email: clienteCompleto?.email || "Não informado",
-          itensCarrinho: itensCarrinho // Garante que o loop de itens funcione no PDF
+          // Passa os dados cadastrais para o PDF
+          telefone: clienteBase?.telefone || "Não informado",
+          endereco: clienteBase?.endereco || "Não informado",
+          email: clienteBase?.email || "Não informado",
+          itensCarrinho: itensCarrinho 
         }, 'pedido');
       }
 
-      // Reset
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
         metodoPagamento: 'Dinheiro',
@@ -142,7 +140,6 @@ export default function Vendas() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
       <div className="max-w-4xl mx-auto">
-        
         <header className="mb-10 text-center md:text-left">
           <h1 className="font-tradicional text-4xl text-elos-verde italic border-b-2 border-elos-bege/30 pb-4 inline-block">
             Nova Venda - Ótica Elos
@@ -150,8 +147,6 @@ export default function Vendas() {
         </header>
 
         <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
-          
-          {/* DADOS DO CLIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
@@ -163,35 +158,21 @@ export default function Vendas() {
             </div>
           </div>
 
-          {/* MINI CARRINHO DE COMPRAS */}
           <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
             <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
-            
             <div className="flex flex-col md:flex-row gap-3 mb-6">
               <input 
-                type="text" 
-                placeholder="Ex: Armação Ray-Ban, Lente Crizal..." 
+                type="text" placeholder="Ex: Armação Ray-Ban, Lente Crizal..." 
                 className="flex-1 px-4 py-3 rounded-xl border-none shadow-sm text-sm"
-                value={novoItem.nome}
-                onChange={(e) => setNovoItem({...novoItem, nome: e.target.value})}
+                value={novoItem.nome} onChange={(e) => setNovoItem({...novoItem, nome: e.target.value})}
               />
               <input 
-                type="text" 
-                placeholder="R$ 0,00" 
+                type="text" placeholder="R$ 0,00" 
                 className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold"
-                value={novoItem.preco}
-                onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})}
+                value={novoItem.preco} onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})}
               />
-              <button 
-                type="button" 
-                onClick={adicionarAoCarrinho}
-                className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all"
-              >
-                Adicionar
-              </button>
+              <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
             </div>
-
-            {/* Lista de Itens Adicionados */}
             <div className="space-y-2">
               {itensCarrinho.map(item => (
                 <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10 animate-in fade-in">
@@ -202,11 +183,9 @@ export default function Vendas() {
                   </div>
                 </div>
               ))}
-              {itensCarrinho.length === 0 && <p className="text-center text-gray-400 text-xs italic py-4">Nenhum item adicionado ainda.</p>}
             </div>
           </div>
 
-          {/* FINANCEIRO */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>

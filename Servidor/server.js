@@ -10,67 +10,75 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGODB_URI; 
 
 mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ Banco MongoDB da Ótica Elos Conectado!"))
+  .then(() => {
+    console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
+    atualizarVendasAntigas(); // Roda a atualização de números assim que conecta
+  })
   .catch(err => console.error("❌ Erro na conexão:", err));
 
-// --- MODELOS (SCHEMAS) ATUALIZADOS ---
+// --- MODELOS (SCHEMAS) ---
 
 const Cliente = mongoose.model('Cliente', {
   nome: String, 
   cpf: String, 
   telefone: String, 
-  email: String, // ADICIONADO para o novo PDF
+  email: String, 
   endereco: String, 
   observacoes: String
 });
 
 const Venda = mongoose.model('Venda', {
+  numeroPedido: Number, // Alterado para Number para facilitar sequência
   cliente: String, 
   cpf: String, 
-  produto: String, // String resumida (Item A + Item B)
-  itensCarrinho: Array, // ADICIONADO: Para salvar preços individuais dos itens
+  produto: String, 
+  itensCarrinho: Array, 
   valorTotal: Number,
-  valorEntrada: Number, // ADICIONADO
-  desconto: Number, // ADICIONADO
-  parcelas: Number, // ADICIONADO
+  valorEntrada: Number, 
+  desconto: Number, 
+  parcelas: Number, 
   listaParcelas: Array, 
   dataVenda: String, 
   metodoPagamento: String,
-  dataPrevisaoPagamento: String // ADICIONADO: Para a função "Dar Prazo"
+  dataPrevisaoPagamento: String 
 });
 
 const Despesa = mongoose.model('Despesa', {
   descricao: String, 
   valor: Number, 
-  categoria: String, // Aceita qualquer texto agora
+  categoria: String, 
   vencimento: String, 
   paga: Boolean
 });
 
+// --- SCRIPT DE ATUALIZAÇÃO PARA VENDAS ANTIGAS ---
+const atualizarVendasAntigas = async () => {
+  try {
+    const vendasSemNumero = await Venda.find({ numeroPedido: { $exists: false } }).sort({ dataVenda: 1 });
+    if (vendasSemNumero.length > 0) {
+      console.log(`🔢 Numerando ${vendasSemNumero.length} vendas antigas...`);
+      for (let i = 0; i < vendasSemNumero.length; i++) {
+        vendasSemNumero[i].numeroPedido = 2000 + i;
+        await vendasSemNumero[i].save();
+      }
+      console.log("✅ Vendas antigas atualizadas com sucesso!");
+    }
+  } catch (err) {
+    console.error("Erro ao atualizar vendas antigas:", err);
+  }
+};
+
 // --- ROTAS API: CLIENTES ---
-
 app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
-
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
 
 app.put('/api/clientes/:id', async (req, res) => {
   try {
-    const clienteAtualizado = await Cliente.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
-      { new: true }
-    );
+    const clienteAtualizado = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!clienteAtualizado) return res.status(404).json({ error: "Cliente não encontrado" });
-
-    // Atualização em cascata (CPF é a chave de ligação)
-    await Venda.updateMany(
-      { cpf: clienteAtualizado.cpf }, 
-      { $set: { cliente: clienteAtualizado.nome } }
-    );
+    await Venda.updateMany({ cpf: clienteAtualizado.cpf }, { $set: { cliente: clienteAtualizado.nome } });
     res.json(clienteAtualizado);
-  } catch (err) { 
-    res.status(500).json({ error: "Erro ao editar cliente" }); 
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao editar cliente" }); }
 });
 
 app.delete('/api/clientes/:cpf', async (req, res) => {
@@ -79,40 +87,41 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
 });
 
 // --- ROTAS API: VENDAS ---
-
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
 
-// Rota POST atualizada para calcular as parcelas automaticamente se necessário
 app.post('/api/vendas', async (req, res) => {
   try {
-    const novaVenda = new Venda(req.body);
-    // Se o front não enviar a lista pronta, o banco salva o que vier
-    res.json(await novaVenda.save());
+    // Lógica para pegar o último número de pedido e somar +1
+    const ultimaVenda = await Venda.findOne().sort({ numeroPedido: -1 });
+    const proximoNumero = ultimaVenda && ultimaVenda.numeroPedido ? ultimaVenda.numeroPedido + 1 : 2000;
+
+    const novaVenda = new Venda({ 
+      ...req.body, 
+      numeroPedido: proximoNumero 
+    });
+    
+    const vendaSalva = await novaVenda.save();
+    res.json(vendaSalva);
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar venda" });
   }
 });
 
-// PATCH para atualização geral (usado para salvar a Previsão de Pagamento)
 app.patch('/api/vendas/:id', async (req, res) => {
   try {
     const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(venda);
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao atualizar venda" });
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao atualizar venda" }); }
 });
 
 app.delete('/api/vendas/:id', async (req, res) => {
   try {
     await Venda.findByIdAndDelete(req.params.id);
     res.json({ message: "Venda excluída" });
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao excluir venda" });
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao excluir venda" }); }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA (MANTIDA LÓGICA DE AMORTIZAÇÃO) ---
+// --- BAIXA E ESTORNO DE PARCELA ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -123,7 +132,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
 
     const numAtual = parseFloat(numero);
     let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas));
-    
     const index = novasParcelas.findIndex(p => p.numero === numAtual);
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
@@ -184,13 +192,10 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     venda.markModified('listaParcelas');
     await venda.save();
     res.json(venda);
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao processar parcela" });
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao processar parcela" }); }
 });
 
 // --- ROTAS API: DESPESAS ---
-
 app.get('/api/despesas', async (req, res) => res.json(await Despesa.find()));
 app.post('/api/despesas', async (req, res) => res.json(await new Despesa(req.body).save()));
 app.patch('/api/despesas/:id', async (req, res) => {
