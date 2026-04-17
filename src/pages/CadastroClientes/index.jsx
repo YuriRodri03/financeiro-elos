@@ -9,8 +9,21 @@ export default function CadastroClientes() {
     telefone: '', 
     email: '', 
     endereco: '', 
-    observacoes: ''
+    observacoes: '',
+    foto: '' // NOVO: Campo para armazenar a imagem
   });
+
+  // --- LÓGICA DE FOTO PARA O CADASTRO ---
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNovo({ ...novo, foto: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // --- MÁSCARAS DE FORMATAÇÃO ---
   const mascaraTelefone = (v) => {
@@ -51,7 +64,8 @@ export default function CadastroClientes() {
     try {
       await adicionarCliente(novo);
       alert("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨");
-      setNovo({ nome: '', cpf: '', telefone: '', email: '', endereco: '', observacoes: '' });
+      // Reset incluindo a foto
+      setNovo({ nome: '', cpf: '', telefone: '', email: '', endereco: '', observacoes: '', foto: '' });
     } catch (error) {
       alert("Erro ao conectar com o banco de dados. Verifique o servidor.");
     }
@@ -103,7 +117,7 @@ export default function CadastroClientes() {
               />
             </div>
 
-            {/* E-mail (Campo Novo) */}
+            {/* E-mail */}
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">E-mail</label>
               <input 
@@ -123,20 +137,50 @@ export default function CadastroClientes() {
               />
             </div>
 
-            {/* Observações */}
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Observações Clínicas (Grau, Armação, Lentes)</label>
-              <textarea 
-                name="observacoes" value={novo.observacoes} onChange={handleChange} rows="4" 
-                placeholder="Anote aqui detalhes da receita ou preferências do cliente..."
-                className="w-full px-5 py-4 bg-elos-fundo/50 border-2 border-elos-bege/20 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all resize-none italic text-elos-texto"
-              ></textarea>
+            {/* Observações e Foto */}
+            <div className="md:col-span-2 space-y-4">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1 italic">Anexos e Observações Clínicas</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <textarea 
+                  name="observacoes" value={novo.observacoes} onChange={handleChange} rows="5" 
+                  placeholder="Detalhes técnicos permanentes do cliente..."
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border-2 border-elos-bege/20 rounded-3xl focus:ring-2 focus:ring-elos-bege outline-none transition-all resize-none italic text-elos-texto"
+                ></textarea>
+
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-3xl p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all min-h-[160px]">
+                  {novo.foto ? (
+                    <div className="flex flex-col items-center gap-3 w-full">
+                      <img src={novo.foto} alt="Preview do Cliente" className="max-h-32 rounded-xl shadow-lg border-2 border-white object-cover" />
+                      <button 
+                        type="button" 
+                        onClick={() => setNovo({...novo, foto: ''})} 
+                        className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline"
+                      >
+                        Remover Anexo
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-4xl mb-2 opacity-50">📸</div>
+                      <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment" 
+                        onChange={handleFileChange} 
+                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                      />
+                      <div className="mt-2 text-elos-bege/40 text-[9px] font-bold uppercase tracking-widest">Clique para abrir câmera</div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
           <button 
             type="submit" 
-            className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-5 rounded-2xl shadow-xl shadow-elos-verde/20 transform transition-all active:scale-[0.98] text-lg uppercase tracking-[0.2em] mt-6"
+            className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl shadow-elos-verde/20 transform transition-all active:scale-[0.98] text-lg uppercase tracking-[0.2em] mt-6"
           >
             Finalizar Cadastro
           </button>

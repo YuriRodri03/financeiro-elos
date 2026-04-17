@@ -15,6 +15,13 @@ export default function Dashboard() {
 
   if (carregando) return null;
 
+  const formatarMoeda = (valor) => {
+  return Number(valor).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+};
+
   // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA ---
   const handleGerarRelatorioSaude = () => {
     if (!relatorioInicio || !relatorioFim) {
@@ -190,18 +197,18 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
-          <p className="text-3xl font-black text-green-700 mt-2">R$ {totalNoCaixaMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-3xl font-black text-green-700 mt-2">{formatarMoeda(totalNoCaixaMes)}</p>
           <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Líquido entrado no mês</p>
         </div>
         <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.02] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pagos (Saídas)</h3>
-          <p className="text-3xl font-black text-red-700 mt-2">- R$ {totalDespesasPagasMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-3xl font-black text-red-700 mt-2">- {formatarMoeda(totalDespesasPagasMes)}</p>
           <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Saídas efetivadas</p>
         </div>
         <div className={`p-8 rounded-3xl shadow-soft border-t-8 bg-white transition-transform ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido Real</h3>
           <p className={`text-3xl font-black mt-2 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
-            R$ {saldoLiquidoReal.toFixed(2).replace('.', ',')}
+            {formatarMoeda(saldoLiquidoReal)}
           </p>
           <div className="h-1 w-full bg-gray-100 rounded-full mt-4 overflow-hidden">
             <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}></div>
@@ -213,7 +220,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Ticket Médio</h4>
-          <p className="text-xl font-bold text-elos-verde">R$ {ticketMedio.toFixed(2).replace('.', ',')}</p>
+          <p className="text-xl font-bold text-elos-verde">{formatarMoeda(ticketMedio)}</p>
         </div>
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Vendas Novos Contratos</h4>
@@ -221,7 +228,7 @@ export default function Dashboard() {
         </div>
         <div onClick={() => setModalTipo('receber')} className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-elos-bege/10 transition-colors">
           <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Dívida Acumulada</h4>
-          <p className="text-xl font-bold text-elos-bege font-black">R$ {totalAReceberGeral.toFixed(2).replace('.', ',')}</p>
+          <p className="text-xl font-bold text-elos-bege font-black">{formatarMoeda(totalAReceberGeral)}</p>
           <span className="text-[8px] text-elos-bege uppercase font-bold">Total a receber geral</span>
         </div>
         <div className="bg-elos-verde/5 p-5 rounded-3xl border border-elos-verde/20 shadow-sm flex flex-col justify-center">
@@ -238,7 +245,7 @@ export default function Dashboard() {
             <p className="text-[10px] text-gray-400 italic font-bold">Faltam p/ cobrir custos totais</p>
           </div>
           <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : `R$ ${faltamParaCusto.toFixed(2).replace('.', ',')}`}
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : formatarMoeda(faltamParaCusto)}
           </strong>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
@@ -254,7 +261,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 mb-10">
         <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
           <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Faturamento Bruto (Novas Vendas do Mês)</h3>
-          <p className="text-4xl font-black mt-2 text-white italic">R$ {volumeVendasMes.toFixed(2).replace('.', ',')}</p>
+          <p className="text-4xl font-black mt-2 text-white italic">{formatarMoeda(volumeVendasMes)}</p>
         </div>
       </div>
 
@@ -263,19 +270,19 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-green-700">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recebido (Ano)</h3>
-          <p className="text-2xl font-black text-green-700 mt-1">R$ {totalNoCaixaAno.toFixed(2).replace('.', ',')}</p>
+          <p className="text-2xl font-black text-green-700 mt-1">{formatarMoeda(totalNoCaixaAno)}</p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-red-700">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custos Pagos (Ano)</h3>
-          <p className="text-2xl font-black text-red-700 mt-1">R$ {totalDespesasAno.toFixed(2).replace('.', ',')}</p>
+          <p className="text-2xl font-black text-red-700 mt-1">{formatarMoeda(totalDespesasAno)}</p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-elos-verde">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vendas Brutas (Ano)</h3>
-          <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">R$ {volumeVendasAno.toFixed(2).replace('.', ',')}</p>
+          <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">{formatarMoeda(volumeVendasAno)}</p>
         </div>
       </div>
 
-      {/* VENDAS RECENTES (RESTAURADO) */}
+      {/* VENDAS RECENTES */}
       <div className="bg-white rounded-3xl shadow-soft p-8">
         <h3 className="font-tradicional text-xl italic text-elos-verde mb-6 border-b pb-4">Contratos de {mesFiltro}/{anoFiltro}</h3>
         {vendasNovasNoMes.length > 0 ? (
@@ -286,7 +293,7 @@ export default function Dashboard() {
                   <span className="font-bold text-elos-verde">{v.cliente}</span>
                   <small className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Realizada em {v.dataVenda.split('-').reverse().join('/')}</small>
                 </div>
-                <strong className="text-lg font-black text-elos-texto italic">R$ {Number(v.valorTotal).toFixed(2).replace('.', ',')}</strong>
+                <strong className="text-lg font-black text-elos-texto italic">{formatarMoeda(v.valorTotal)}</strong>
               </div>
             ))}
           </div>
@@ -322,7 +329,7 @@ export default function Dashboard() {
                           <td className="py-4 text-center text-xs text-gray-500 font-bold">
                             {modalTipo === 'receber' ? item.vencimento.toLocaleDateString() : item.info}
                           </td>
-                          <td className="py-4 text-right font-black">R$ {item.valor.toFixed(2).replace('.', ',')}</td>
+                          <td className="py-4 text-right font-black">{formatarMoeda(item.valor)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -13,6 +13,8 @@ export default function Vendas() {
     desconto: '', 
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
+    observacoes: '', // NOVO
+    foto: '',        // NOVO (Base64)
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
@@ -21,22 +23,27 @@ export default function Vendas() {
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
 
-  // Máscaras
+  // --- LÓGICA DE FOTO PARA O BANCO ---
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setVenda({ ...venda, foto: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Máscaras (IGUAIS ÀS ANTERIORES)
   const aplicarMascaraCPF = (valor) => {
-    return valor
-      .replace(/\D/g, '')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    return valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
   const aplicarMascaraMoeda = (valor) => {
     let v = valor.replace(/\D/g, '');
     if (!v) return '';
-    v = (Number(v) / 100).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
+    v = (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     return v;
   };
 
@@ -62,7 +69,7 @@ export default function Vendas() {
     setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
   };
 
-  // Cálculos
+  // Cálculos Automáticos
   const subtotalItens = useMemo(() => {
     return itensCarrinho.reduce((acc, item) => acc + item.preco, 0);
   }, [itensCarrinho]);
@@ -91,17 +98,15 @@ export default function Vendas() {
 
   const handleSalvar = async (e) => {
     e.preventDefault();
-
     if (itensCarrinho.length === 0) return alert("Adicione pelo menos um item ao carrinho.");
     if (!venda.cliente || !venda.cpf) return alert("Preencha os dados do cliente.");
 
-    // Busca dados completos do cliente para o PDF
     const clienteBase = clientes.find(c => c.cpf === venda.cpf);
 
     const dadosParaSalvar = {
       ...venda,
       produto: itensCarrinho.map(i => i.nome).join(' + '), 
-      itensCarrinho: itensCarrinho, // Salva os itens individuais no banco
+      itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
       desconto: limparMoeda(venda.desconto)
@@ -114,10 +119,9 @@ export default function Vendas() {
       if (imprimir) {
         gerarPDFDocumento({
           ...dadosParaSalvar,
-          numeroPedido: resultado?.numeroPedido || "S/N", // Usa o número vindo do banco
+          numeroPedido: resultado?.numeroPedido || "S/N",
           valorProduto: subtotalItens, 
           data: venda.dataVenda.split('-').reverse().join('/'),
-          // Passa os dados cadastrais para o PDF
           telefone: clienteBase?.telefone || "Não informado",
           endereco: clienteBase?.endereco || "Não informado",
           email: clienteBase?.email || "Não informado",
@@ -125,9 +129,10 @@ export default function Vendas() {
         }, 'pedido');
       }
 
+      // Reset total dos campos
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-        metodoPagamento: 'Dinheiro',
+        metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
         dataVenda: new Date().toISOString().split('T')[0],
         dataPrimeiraParcela: new Date().toISOString().split('T')[0]
       });
@@ -140,6 +145,7 @@ export default function Vendas() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
       <div className="max-w-4xl mx-auto">
+        
         <header className="mb-10 text-center md:text-left">
           <h1 className="font-tradicional text-4xl text-elos-verde italic border-b-2 border-elos-bege/30 pb-4 inline-block">
             Nova Venda - Ótica Elos
@@ -147,6 +153,8 @@ export default function Vendas() {
         </header>
 
         <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
+          
+          {/* DADOS DO CLIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
@@ -158,24 +166,18 @@ export default function Vendas() {
             </div>
           </div>
 
+          {/* CARRINHO DE COMPRAS */}
           <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
             <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
             <div className="flex flex-col md:flex-row gap-3 mb-6">
-              <input 
-                type="text" placeholder="Ex: Armação Ray-Ban, Lente Crizal..." 
-                className="flex-1 px-4 py-3 rounded-xl border-none shadow-sm text-sm"
-                value={novoItem.nome} onChange={(e) => setNovoItem({...novoItem, nome: e.target.value})}
-              />
-              <input 
-                type="text" placeholder="R$ 0,00" 
-                className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold"
-                value={novoItem.preco} onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})}
-              />
+              <input type="text" placeholder="Ex: Armação, Lente..." className="flex-1 px-4 py-3 rounded-xl border-none shadow-sm text-sm" value={novoItem.nome} onChange={(e) => setNovoItem({...novoItem, nome: e.target.value})} />
+              <input type="text" placeholder="R$ 0,00" className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold" value={novoItem.preco} onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} />
               <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
             </div>
+
             <div className="space-y-2">
               {itensCarrinho.map(item => (
-                <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10 animate-in fade-in">
+                <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
                   <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
@@ -183,20 +185,51 @@ export default function Vendas() {
                   </div>
                 </div>
               ))}
+              {itensCarrinho.length === 0 && <p className="text-center text-gray-400 text-xs italic py-4">Carrinho vazio.</p>}
             </div>
           </div>
 
+          {/* NOVO: OBSERVAÇÕES E FOTOS DA RECEITA */}
+          <div className="space-y-4">
+            <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <textarea 
+                name="observacoes"
+                value={venda.observacoes}
+                onChange={handleChange}
+                placeholder="Anote aqui: Graus (OD/OE), Eixo, DNP, tipo de tratamento das lentes ou cor da armação..."
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-[2rem] outline-none h-40 resize-none text-sm italic"
+              />
+              
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
+                {venda.foto ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <img src={venda.foto} alt="Receita" className="max-h-32 rounded-xl shadow-lg border-2 border-white" />
+                    <button type="button" onClick={() => setVenda({...venda, foto: ''})} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Foto</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-4xl mb-2">📸</div>
+                    <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
+                    <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* FINANCEIRO */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
               <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Desconto</label>
+              <label className="text-xs font-black text-red-400 uppercase tracking-tighter ml-1">Desconto</label>
               <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-red-50 border border-red-100 text-red-900 font-bold rounded-2xl outline-none" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 text-green-700">Total a Pagar</label>
+              <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar</label>
               <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
                 R$ {totalFinalVenda.toFixed(2).replace('.',',')}
               </div>
@@ -211,15 +244,12 @@ export default function Vendas() {
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Pagamento</label>
               <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none">
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Pix">Pix</option>
-                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                <option value="Boleto / Crediário">Boleto / Crediário</option>
+                <option value="Dinheiro">Dinheiro</option><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Boleto / Crediário">Boleto / Crediário</option>
               </select>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nº Parcelas</label>
-              <input type="number" name="parcelas" min="1" max="12" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              <input type="number" name="parcelas" min="1" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
             </div>
           </div>
 
@@ -231,7 +261,7 @@ export default function Vendas() {
           )}
 
           <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
-            Finalizar Venda (Total: R$ {totalFinalVenda.toFixed(2).replace('.',',')})
+            Finalizar Venda
           </button>
         </form>
       </div>
