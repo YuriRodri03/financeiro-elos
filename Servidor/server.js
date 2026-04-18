@@ -5,18 +5,22 @@ require('dotenv').config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// --- AJUSTE DE LIMITE PARA FOTOS ---
+// Aumentamos para 50mb para que o Base64 das fotos passe sem erros
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const MONGO_URI = process.env.MONGODB_URI; 
 
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
-    atualizarVendasAntigas(); // Roda a atualização de números assim que conecta
+    atualizarVendasAntigas(); 
   })
   .catch(err => console.error("❌ Erro na conexão:", err));
 
-// --- MODELOS (SCHEMAS) ---
+// --- MODELOS (SCHEMAS) ATUALIZADOS ---
 
 const Cliente = mongoose.model('Cliente', {
   nome: String, 
@@ -24,11 +28,12 @@ const Cliente = mongoose.model('Cliente', {
   telefone: String, 
   email: String, 
   endereco: String, 
-  observacoes: String
+  observacoes: String,
+  foto: String // ADICIONADO: Foto do perfil/cadastro
 });
 
 const Venda = mongoose.model('Venda', {
-  numeroPedido: Number, // Alterado para Number para facilitar sequência
+  numeroPedido: Number, 
   cliente: String, 
   cpf: String, 
   produto: String, 
@@ -40,7 +45,9 @@ const Venda = mongoose.model('Venda', {
   listaParcelas: Array, 
   dataVenda: String, 
   metodoPagamento: String,
-  dataPrevisaoPagamento: String 
+  dataPrevisaoPagamento: String,
+  observacoes: String, // ADICIONADO: Detalhes técnicos da venda
+  foto: String        // ADICIONADO: Foto da receita/venda
 });
 
 const Despesa = mongoose.model('Despesa', {
@@ -91,20 +98,11 @@ app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
 
 app.post('/api/vendas', async (req, res) => {
   try {
-    // Lógica para pegar o último número de pedido e somar +1
     const ultimaVenda = await Venda.findOne().sort({ numeroPedido: -1 });
     const proximoNumero = ultimaVenda && ultimaVenda.numeroPedido ? ultimaVenda.numeroPedido + 1 : 2000;
-
-    const novaVenda = new Venda({ 
-      ...req.body, 
-      numeroPedido: proximoNumero 
-    });
-    
-    const vendaSalva = await novaVenda.save();
-    res.json(vendaSalva);
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao salvar venda" });
-  }
+    const novaVenda = new Venda({ ...req.body, numeroPedido: proximoNumero });
+    res.json(await novaVenda.save());
+  } catch (err) { res.status(500).json({ error: "Erro ao salvar venda" }); }
 });
 
 app.patch('/api/vendas/:id', async (req, res) => {
@@ -126,7 +124,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
     const { paga, dataPagamento, valorPago } = req.body;
-    
     const venda = await Venda.findById(id);
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
@@ -148,7 +145,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     } else {
       let valorInformado = Number(valorPago || novasParcelas[index].valor);
       let valorOriginalDaParcela = Number(novasParcelas[index].valor);
-
       if (valorInformado > valorOriginalDaParcela) {
         let excesso = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
         for (let i = index + 1; i < novasParcelas.length; i++) {
@@ -158,8 +154,7 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
           if (excesso >= valorDaProxima) {
             novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + valorDaProxima).toFixed(2));
             excesso = parseFloat((excesso - valorDaProxima).toFixed(2));
-            novasParcelas.splice(i, 1); 
-            i--; 
+            novasParcelas.splice(i, 1); i--; 
           } else {
             novasParcelas[i].valor = parseFloat((valorDaProxima - excesso).toFixed(2));
             novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + excesso).toFixed(2));
@@ -173,20 +168,12 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         novasParcelas[index].valor = valorInformado;
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
-        novasParcelas.push({
-          ...novasParcelas[index],
-          numero: numAtual + 0.5,
-          valor: valorSobra,
-          paga: false,
-          dataPagamento: null,
-          observacao: `Restante da parc. ${numAtual}`
-        });
+        novasParcelas.push({ ...novasParcelas[index], numero: numAtual + 0.5, valor: valorSobra, paga: false, dataPagamento: null, observacao: `Restante da parc. ${numAtual}` });
       } else {
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
       }
     }
-
     novasParcelas.sort((a, b) => a.numero - b.numero);
     venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');

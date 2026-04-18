@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
-// --- FUNÇÃO AUXILIAR PARA MOEDA ---
+// --- FUNÇÃO AUXILIAR PARA MOEDA (Mantida) ---
 const aplicarMascaraMoeda = (valor) => {
   let v = String(valor).replace(/\D/g, '');
   v = (Number(v) / 100).toLocaleString('pt-BR', {
@@ -12,7 +12,7 @@ const aplicarMascaraMoeda = (valor) => {
   return v;
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA ---
+// --- COMPONENTE DE LINHA DE PARCELA (Mantido) ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -85,7 +85,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
 }
 
 export default function Clientes() {
-  const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, editarDataVenda, carregando } = useFinanceiro();
+  const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, editarDataVenda, carregando, editarVenda } = useFinanceiro();
   
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
@@ -94,27 +94,82 @@ export default function Clientes() {
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
 
+  // --- NOVO: ESTADOS PARA EDIÇÃO DE FOTOS ---
+  const [novaFotoCliente, setNovaFotoCliente] = useState('');
+  const [novaFotoVenda, setNovaFotoVenda] = useState('');
+
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
     setEditandoVenda(null);
     setModalRecibo(null);
+    setNovaFotoCliente(''); // Resetar foto temporária
+    setNovaFotoVenda('');   // Resetar foto temporária
+  };
+
+  // --- NOVO: FUNÇÃO PARA CONVERTER IMAGEM EM BASE64 ---
+  const converterParaBase64 = (file, callback) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      callback(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleMudarFotoCliente = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      converterParaBase64(file, setNovaFotoCliente);
+    }
+  };
+
+  const handleMudarFotoVenda = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      converterParaBase64(file, setNovaFotoVenda);
+    }
   };
 
   const salvarEdicaoCadastro = async () => {
     const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
     const idMongo = clienteParaEditar?._id;
     if (!idMongo) return alert("Erro: ID não encontrado.");
+
+    // Incluir a nova foto se ela tiver sido alterada
+    const dadosAtualizados = {
+      ...editandoCadastro,
+      foto: novaFotoCliente || editandoCadastro.foto
+    };
+
     try {
-      await editarCliente(idMongo, editandoCadastro);
+      await editarCliente(idMongo, dadosAtualizados);
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
+      setNovaFotoCliente('');
       alert("Cadastro atualizado!");
     } catch (err) { console.error(err); }
   };
 
-  const handleExcluirFoto = async () => {
-    if (!confirm("Deseja remover a foto/receita deste cliente?")) return;
+  const salvarEdicaoVenda = async () => {
+    if (!editandoVenda.vendaId || !editandoVenda.dataVenda) return;
+
+    // Incluir a nova foto da venda se ela tiver sido alterada
+    const dadosAtualizados = {
+      ...editandoVenda,
+      foto: novaFotoVenda || editandoVenda.foto
+    };
+
+    try {
+      // Usamos a função editarVenda genérica que já deve existir no FinanceiroContext
+      await editarVenda(editandoVenda.vendaId, dadosAtualizados);
+      setEditandoVenda(null);
+      setNovaFotoVenda('');
+      alert("Pedido atualizado!");
+    } catch (err) { console.error(err); }
+  };
+
+  const handleExcluirFotoCliente = async () => {
+    if (!confirm("Deseja remover a foto deste cliente?")) return;
     const idMongo = clienteNoModal?._id;
     try {
       await editarCliente(idMongo, { ...clienteNoModal, foto: '' });
@@ -122,13 +177,12 @@ export default function Clientes() {
     } catch (err) { alert("Erro ao remover foto."); }
   };
 
-  const salvarEdicaoVenda = async () => {
-    if (!editandoVenda.vendaId || !editandoVenda.dataVenda) return;
+  const handleExcluirFotoVenda = async (vendaId, vendaAtual) => {
+    if (!confirm("Deseja remover a receita deste pedido?")) return;
     try {
-      await editarDataVenda(editandoVenda.vendaId, editandoVenda.dataVenda);
-      setEditandoVenda(null);
-      alert("Data da venda atualizada!");
-    } catch (err) { console.error(err); }
+      await editarVenda(vendaId, { ...vendaAtual, foto: '' });
+      alert("Receita removida!");
+    } catch (err) { alert("Erro ao remover receita."); }
   };
 
   const listaFinalClientes = useMemo(() => {
@@ -172,6 +226,7 @@ export default function Clientes() {
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+      {/* HEADER (Mantido) */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Carteira de Clientes</h1>
@@ -193,6 +248,7 @@ export default function Clientes() {
         </div>
       </header>
 
+      {/* TABELA DE CLIENTES (Mantida) */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
         <table className="w-full text-left">
           <thead className="bg-elos-fundo/50 border-b border-gray-100">
@@ -232,6 +288,7 @@ export default function Clientes() {
         </table>
       </div>
 
+      {/* MODAL DA FICHA DO CLIENTE (Atualizado com Visualização de Foto e Exclusão) */}
       {clienteNoModal && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={fecharModal}>
           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -245,6 +302,7 @@ export default function Clientes() {
             </header>
             
             <div className="p-10 overflow-y-auto flex-1 bg-white space-y-10">
+              {/* BLOCO DE DADOS E FOTO */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner h-fit">
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
@@ -253,6 +311,7 @@ export default function Clientes() {
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
                 </div>
 
+                {/* EXIBIÇÃO DA FOTO NA FICHA COM OPÇÃO DE EXCLUIR */}
                 <div className="bg-elos-fundo/30 p-4 rounded-3xl border border-elos-bege/20 flex flex-col items-center justify-center min-h-[200px] relative group">
                   {clienteNoModal.foto ? (
                     <>
@@ -262,7 +321,7 @@ export default function Clientes() {
                         className="w-full h-auto rounded-2xl shadow-lg cursor-zoom-in transition-transform hover:scale-[1.02]"
                         onClick={() => window.open(clienteNoModal.foto, '_blank')}
                       />
-                      <button onClick={handleExcluirFoto} className="mt-3 text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">🗑️ Excluir Foto</button>
+                      <button onClick={handleExcluirFotoCliente} className="mt-3 text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">🗑️ Excluir Foto</button>
                     </>
                   ) : (
                     <div className="text-center text-gray-300 italic py-10">
@@ -288,6 +347,7 @@ export default function Clientes() {
                 </button>
               </div>
 
+              {/* HISTÓRICO DE PEDIDOS (Atualizado com Visualização de Foto e Exclusão) */}
               <div className="space-y-6 pt-4">
                 <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
@@ -298,16 +358,16 @@ export default function Clientes() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({ vendaId: venda._id, dataVenda: venda.dataVenda })}>
+                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({...venda, vendaId: venda._id})}>
                               {venda.dataVenda?.split('-').reverse().join('/')} ✏️
                             </small>
                           </div>
                           <strong className="text-xl text-elos-texto block italic font-tradicional">📦 {venda.produto || 'Produtos Ópticos'}</strong>
                           <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">Valor: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}</div>
                           
-                          {/* FOTO DA VENDA/RECEITA */}
+                          {/* FOTO DA VENDA/RECEITA COM OPÇÃO DE EXCLUIR */}
                           {venda.foto && (
-                            <div className="mt-4 p-2 bg-elos-fundo rounded-2xl border border-elos-bege/10 w-fit">
+                            <div className="mt-4 p-2 bg-elos-fundo rounded-2xl border border-elos-bege/10 w-fit relative group">
                               <p className="text-[8px] font-black uppercase text-elos-bege mb-1 ml-1">Receita Anexada:</p>
                               <img 
                                 src={venda.foto} 
@@ -315,6 +375,12 @@ export default function Clientes() {
                                 className="h-20 w-auto rounded-lg shadow-sm cursor-pointer hover:opacity-80 transition-opacity"
                                 onClick={() => window.open(venda.foto, '_blank')}
                               />
+                              <button 
+                                onClick={() => handleExcluirFotoVenda(venda._id, venda)}
+                                className="absolute -top-2 -right-2 bg-white text-red-500 rounded-full w-5 h-5 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                              >
+                                ✕
+                              </button>
                             </div>
                           )}
 
@@ -354,10 +420,34 @@ export default function Clientes() {
         </div>
       )}
 
+      {/* MODAL DE EDIÇÃO DE CADASTRO (Atualizado com Edição de Foto) */}
       {editandoCadastro && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl">
+          <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Perfil</h2>
+            
+            {/* PRÉ-VISUALIZAÇÃO E UPLOAD DA NOVA FOTO DO CLIENTE */}
+            <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
+              <img 
+                src={novaFotoCliente || editandoCadastro.foto || 'https://via.placeholder.com/150'} 
+                alt="Preview" 
+                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md"
+              />
+              <div className="relative">
+                <button type="button" className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold hover:bg-elos-verde transition-all">
+                  Alterar Foto 📸
+                </button>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment" 
+                  onChange={handleMudarFotoCliente} 
+                  className="absolute inset-0 opacity-0 cursor-pointer" 
+                />
+              </div>
+              {novaFotoCliente && <p className="text-[9px] text-green-600 font-bold uppercase tracking-widest">Nova foto selecionada!</p>}
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
               <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">CPF</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
@@ -374,14 +464,50 @@ export default function Clientes() {
         </div>
       )}
 
+      {/* MODAL DE EDIÇÃO DE VENDA (Atualizado para Edição Completa e Foto) */}
       {editandoVenda && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 space-y-6 shadow-2xl">
-            <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Data da Venda</h2>
+          <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Pedido</h2>
+            
+            {/* PRÉ-VISUALIZAÇÃO E UPLOAD DA NOVA FOTO DA VENDA (RECEITA) */}
+            <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
+              {novaFotoVenda || editandoVenda.foto ? (
+                <img 
+                  src={novaFotoVenda || editandoVenda.foto} 
+                  alt="Preview Receita" 
+                  className="max-h-32 rounded-xl shadow-md border-2 border-white"
+                />
+              ) : (
+                <div className="w-full h-20 bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 italic text-xs">Sem receita anexada</div>
+              )}
+              <div className="relative">
+                <button type="button" className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold hover:bg-elos-verde transition-all">
+                  Alterar Receita 📸
+                </button>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment" 
+                  onChange={handleMudarFotoVenda} 
+                  className="absolute inset-0 opacity-0 cursor-pointer" 
+                />
+              </div>
+              {novaFotoVenda && <p className="text-[9px] text-green-600 font-bold uppercase tracking-widest">Nova receita selecionada!</p>}
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400">Nova Data</label>
-                <input className="w-full p-4 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-center" type="date" value={editandoVenda.dataVenda} onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} />
+                <label className="text-[10px] font-black uppercase text-gray-400">Data da Venda</label>
+                <input className="w-full p-3 bg-elos-fundo rounded-xl outline-none focus:ring-2 focus:ring-elos-bege font-bold text-center" type="date" value={editandoVenda.dataVenda} onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400">Produto/Serviço</label>
+                <input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoVenda.produto} onChange={(e) => setEditandoVenda({...editandoVenda, produto: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400">Observações Técnicas</label>
+                <textarea rows="4" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none italic" value={editandoVenda.observacoes} onChange={(e) => setEditandoVenda({...editandoVenda, observacoes: e.target.value})} />
               </div>
             </div>
             <div className="flex gap-4 pt-4">
@@ -392,6 +518,7 @@ export default function Clientes() {
         </div>
       )}
 
+      {/* MODAL DE GERAR RECIBO (Mantido) */}
       {modalRecibo && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-8 space-y-6 shadow-2xl border border-elos-bege/20">
@@ -406,7 +533,7 @@ export default function Clientes() {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Referente a:</label>
-                <input className="w-full p-4 bg-elos-fundo rounded-xl outline-none text-sm" type="text" placeholder="Ex: Pagamento de parcelas..." value={modalRecibo.produto} onChange={(e) => setModalRecibo({...modalRecibo, produto: e.target.value})} />
+                <input className="w-full p-4 bg-elos-fundo rounded-xl outline-none text-sm" type="text" placeholder="Ex: Pagamento de parcelas, Entrada..." value={modalRecibo.produto} onChange={(e) => setModalRecibo({...modalRecibo, produto: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Data</label><input className="w-full p-3 bg-elos-fundo rounded-xl text-xs outline-none" type="date" value={modalRecibo.data} onChange={(e) => setModalRecibo({...modalRecibo, data: e.target.value})} /></div>
@@ -426,7 +553,7 @@ export default function Clientes() {
                     itensCarrinho: [{ nome: modalRecibo.produto.toUpperCase(), preco: valorLimpo }]
                   }, 'recibo');
                   setModalRecibo(null);
-                }} className="flex-1 bg-elos-verde text-white py-4 rounded-2xl font-bold hover:bg-[#3a4a3e] shadow-lg shadow-elos-verde/20">Gerar PDF</button>
+                }} className="flex-1 bg-elos-verde text-white py-4 rounded-2xl font-bold hover:bg-[#3a4a3e] shadow-lg shadow-elos-verde/20 transition-all active:scale-95">Gerar PDF</button>
               <button onClick={() => setModalRecibo(null)} className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold">Cancelar</button>
             </div>
           </div>
