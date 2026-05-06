@@ -1,9 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
 export default function Vendas() {
   const { adicionarVenda, clientes } = useFinanceiro();
+
+  // Controle do dropdown de busca
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const wrapperRef = useRef(null);
 
   // Estados do Formulário
   const [venda, setVenda] = useState({
@@ -22,6 +26,28 @@ export default function Vendas() {
   // Estados do Carrinho
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
+
+  // --- BUSCA POR NOME (Sugestões) ---
+  const sugestoes = useMemo(() => {
+    if (!venda.cliente || !mostrarSugestoes) return [];
+    return clientes.filter(c => 
+      c.nome.toLowerCase().includes(venda.cliente.toLowerCase())
+    ).slice(0, 5); // Limita a 5 sugestões para não poluir a tela
+  }, [venda.cliente, clientes, mostrarSugestoes]);
+
+  const selecionarCliente = (c) => {
+    setVenda({ ...venda, cliente: c.nome, cpf: c.cpf });
+    setMostrarSugestoes(false);
+  };
+
+  // Fechar sugestões ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setMostrarSugestoes(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // --- LÓGICA DE FOTO PARA O BANCO ---
   const handleFileChange = (e) => {
@@ -154,17 +180,44 @@ export default function Vendas() {
 
         <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
           
-          {/* DADOS DO CLIENTE */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
-              <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
-              <input type="text" name="cliente" value={venda.cliente} onChange={handleChange} required placeholder="Nome Completo" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
+         {/* DADOS DO CLIENTE */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-2">
+          <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
+          <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
           </div>
+
+          {/* O campo de Nome agora precisa de 'relative' e do 'ref' */}
+          <div className="space-y-2 relative" ref={wrapperRef}>
+            <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
+              <input 
+              type="text" 
+              name="cliente" 
+              value={venda.cliente} 
+              onChange={handleChange} 
+              onFocus={() => setMostrarSugestoes(true)}
+              required 
+              placeholder="Nome Completo" 
+              className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+            />
+    
+          {/* Caixa de Sugestões */}
+            {sugestoes.length > 0 && (
+            <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
+             {sugestoes.map((c) => (
+            <div 
+              key={c.cpf} 
+              onClick={() => selecionarCliente(c)} 
+              className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
+            >
+              <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
+              <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
+            </div>
+          ))}
+          </div>
+          )}
+          </div>
+        </div>
 
           {/* CARRINHO DE COMPRAS */}
           <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
