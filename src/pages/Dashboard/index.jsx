@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [relatorioFim, setRelatorioFim] = useState('');
 
   // --- NOVO: ESTADO DE PRIVACIDADE ---
-  const [ocultarValores, setOcultarValores] = useState(false);
+  const [ocultarValores, setOcultarValores] = useState(true);
 
   if (carregando) return null;
 
@@ -26,6 +26,8 @@ export default function Dashboard() {
       style: 'currency',
       currency: 'BRL',
     });
+    // Substitui espaços normais por espaços que não quebram linha
+    return formatado.replace(/\s/g, '\u00A0');
   };
 
   // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA ---
@@ -209,58 +211,70 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* CARDS PRINCIPAIS (POSIÇÕES ALTERADAS) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* VENDAS BRUTAS (AGORA EM PRIMEIRO) */}
-        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
-          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Vendas Brutas (Mês)</h3>
-          <p className="text-3xl font-black mt-2 text-white italic">
-            {ocultarValores ? "****" : formatarMoeda(volumeVendasMes)}
-          </p>
-          <p className="text-[10px] text-white/40 mt-2 uppercase font-bold italic">Novos contratos fechados</p>
+      {/* 1. FATURAMENTO BRUTO - DESTAQUE TOTAL NO TOPO */}
+      <div className="grid grid-cols-1 gap-6 mb-8">
+        <div className="bg-elos-verde p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] border-[#3a4a3e] relative overflow-hidden">
+          <div className="relative z-10">
+            <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]">Faturamento Bruto (Novas Vendas do Mês)</h3>
+            <p className="text-4xl md:text-5xl font-black mt-2 text-white italic whitespace-nowrap">
+              {formatarMoeda(volumeVendasMes)}
+            </p>
+            <p className="text-[10px] text-white/40 mt-2 uppercase font-bold italic tracking-widest">
+              Total em contratos fechados no período selecionado
+            </p>
+          </div>
+          {/* Detalhe estético de fundo para preencher o espaço lateral */}
+          <div className="absolute right-[-20px] bottom-[-20px] text-white/[0.05] text-9xl font-black italic select-none">
+            ELOS
+          </div>
         </div>
+      </div>
 
+      {/* 2. CARDS SECUNDÁRIOS (CAIXA E SAÍDAS) - LADO A LADO */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* PAGOS (SAÍDAS) */}
-        <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.02] transition-transform">
+        <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-[2rem] shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.01] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pagos (Saídas)</h3>
           <p className="text-3xl font-black text-red-700 mt-2 whitespace-nowrap">
             {ocultarValores ? "****" : `- ${formatarMoeda(totalDespesasPagasMes)}`}
           </p>
-          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Saídas efetivadas</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Saídas efetivadas no caixa</p>
         </div>
 
         {/* RECEBIDO (CAIXA) */}
-        <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
+        <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-[2rem] shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.01] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
-          <p className="text-3xl font-black text-green-700 mt-2">
-            {ocultarValores ? "****" : formatarMoeda(totalNoCaixaMes)}
+          <p className="text-3xl font-black text-green-700 mt-2 whitespace-nowrap">
+            {formatarMoeda(totalNoCaixaMes)}
           </p>
-          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Líquido entrado no mês</p>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Dinheiro real que entrou no mês</p>
         </div>
       </div>
 
-      {/* SALDO LÍQUIDO REAL (MAIS DISCRETO ABAIXO) */}
-      <div className={`p-6 mb-10 rounded-3xl shadow-soft border-l-8 bg-white transition-transform ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
-          <div className="flex justify-between items-center">
+      {/* 3. SALDO LÍQUIDO REAL (BARRA DISCRETA) */}
+      <div className={`p-6 mb-10 rounded-[2rem] shadow-soft border-l-8 bg-white transition-all ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido Real</h3>
-              <p className={`text-2xl font-black mt-1 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
-                {ocultarValores ? "****" : formatarMoeda(saldoLiquidoReal)}
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saldo Líquido Real (Caixa - Saídas)</h3>
+              <p className={`text-2xl font-black mt-1 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'} whitespace-nowrap`}>
+                {formatarMoeda(saldoLiquidoReal)}
               </p>
             </div>
-            <div className="w-1/2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}></div>
+            {/* Barra de progresso visual */}
+            <div className="flex-1 w-full max-w-md h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+              <div 
+                className="h-full bg-elos-bege transition-all duration-1000" 
+                style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}
+              ></div>
             </div>
           </div>
       </div>
 
-      {/* KPI'S DE PERFORMANCE */}
+      {/* 4. KPI'S DE PERFORMANCE (LINHA ÚNICA) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Ticket Médio</h4>
-          <p className="text-xl font-bold text-elos-verde">
-            {ocultarValores ? "****" : formatarMoeda(ticketMedio)}
-          </p>
+          <p className="text-xl font-bold text-elos-verde">{formatarMoeda(ticketMedio)}</p>
         </div>
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Novos Contratos</h4>
@@ -268,10 +282,7 @@ export default function Dashboard() {
         </div>
         <div onClick={() => setModalTipo('receber')} className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-elos-bege/10 transition-colors">
           <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Dívida Acumulada</h4>
-          <p className="text-xl font-bold text-elos-bege font-black">
-            {ocultarValores ? "****" : formatarMoeda(totalAReceberGeral)}
-          </p>
-          <span className="text-[8px] text-elos-bege uppercase font-bold">Total a receber geral</span>
+          <p className="text-xl font-bold text-elos-bege font-black">{formatarMoeda(totalAReceberGeral)}</p>
         </div>
         <div className="bg-elos-verde/5 p-5 rounded-3xl border border-elos-verde/20 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-elos-verde uppercase tracking-tighter mb-1 italic">Eficiência de Caixa</h4>
@@ -279,15 +290,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ANÁLISE DE RISCO E PONTO DE EQUILÍBRIO */}
+      {/* 5. ANÁLISE DE RISCO E PONTO DE EQUILÍBRIO */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <h4 className="text-xs font-black text-gray-400 uppercase tracking-tighter">Ponto de Equilíbrio</h4>
             <p className="text-[10px] text-gray-400 italic font-bold">Faltam p/ cobrir custos totais</p>
           </div>
-          <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : (ocultarValores ? "****" : formatarMoeda(faltamParaCusto))}
+          <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'} whitespace-nowrap`}>
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : formatarMoeda(faltamParaCusto)}
           </strong>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
