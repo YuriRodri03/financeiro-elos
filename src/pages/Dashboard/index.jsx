@@ -13,14 +13,20 @@ export default function Dashboard() {
   const [relatorioInicio, setRelatorioInicio] = useState('');
   const [relatorioFim, setRelatorioFim] = useState('');
 
+  // --- NOVO: ESTADO DE PRIVACIDADE ---
+  const [ocultarValores, setOcultarValores] = useState(false);
+
   if (carregando) return null;
 
   const formatarMoeda = (valor) => {
-  return Number(valor).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-};
+    // Se o modo privacidade estiver ativado, retorna asteriscos
+    if (ocultarValores) return "****";
+    
+    return Number(valor).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  };
 
   // --- LÓGICA DO RELATÓRIO DE SAÚDE FINANCEIRA ---
   const handleGerarRelatorioSaude = () => {
@@ -153,9 +159,19 @@ export default function Dashboard() {
       
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-elos-bege/30 pb-6 gap-6">
-        <div className="text-center md:text-left">
-          <h1 className="font-tradicional text-4xl text-elos-verde italic">Painel Financeiro</h1>
-          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold">Ótica Elos — Gestão de Resultados</p>
+        <div className="text-center md:text-left flex items-center gap-4">
+          <div>
+            <h1 className="font-tradicional text-4xl text-elos-verde italic">Painel Financeiro</h1>
+            <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold">Ótica Elos — Gestão de Resultados</p>
+          </div>
+          {/* BOTÃO OLHINHO (MODO PRIVACIDADE) */}
+          <button 
+            onClick={() => setOcultarValores(!ocultarValores)}
+            className="p-3 bg-white rounded-full shadow-soft border border-elos-bege/20 hover:bg-elos-fundo transition-all text-xl"
+            title={ocultarValores ? "Mostrar valores" : "Ocultar valores"}
+          >
+            {ocultarValores ? "👁️‍🗨️" : "👁️"}
+          </button>
         </div>
         
         <div className="flex gap-4 bg-white p-4 rounded-2xl shadow-soft border border-elos-bege/10">
@@ -193,42 +209,68 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* CARDS PRINCIPAIS */}
+      {/* CARDS PRINCIPAIS (POSIÇÕES ALTERADAS) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
-          <p className="text-3xl font-black text-green-700 mt-2">{formatarMoeda(totalNoCaixaMes)}</p>
-          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Líquido entrado no mês</p>
+        {/* VENDAS BRUTAS (AGORA EM PRIMEIRO) */}
+        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
+          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Vendas Brutas (Mês)</h3>
+          <p className="text-3xl font-black mt-2 text-white italic">
+            {ocultarValores ? "****" : formatarMoeda(volumeVendasMes)}
+          </p>
+          <p className="text-[10px] text-white/40 mt-2 uppercase font-bold italic">Novos contratos fechados</p>
         </div>
+
+        {/* PAGOS (SAÍDAS) */}
         <div onClick={() => setModalTipo('despesas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-red-600 cursor-pointer hover:scale-[1.02] transition-transform">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pagos (Saídas)</h3>
-          <p className="text-3xl font-black text-red-700 mt-2">- {formatarMoeda(totalDespesasPagasMes)}</p>
+          <p className="text-3xl font-black text-red-700 mt-2 whitespace-nowrap">
+            {ocultarValores ? "****" : `- ${formatarMoeda(totalDespesasPagasMes)}`}
+          </p>
           <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Saídas efetivadas</p>
         </div>
-        <div className={`p-8 rounded-3xl shadow-soft border-t-8 bg-white transition-transform ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido Real</h3>
-          <p className={`text-3xl font-black mt-2 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
-            {formatarMoeda(saldoLiquidoReal)}
+
+        {/* RECEBIDO (CAIXA) */}
+        <div onClick={() => setModalTipo('entradas')} className="bg-white p-8 rounded-3xl shadow-soft border-t-8 border-green-600 cursor-pointer hover:scale-[1.02] transition-transform">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recebido (Caixa)</h3>
+          <p className="text-3xl font-black text-green-700 mt-2">
+            {ocultarValores ? "****" : formatarMoeda(totalNoCaixaMes)}
           </p>
-          <div className="h-1 w-full bg-gray-100 rounded-full mt-4 overflow-hidden">
-            <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}></div>
-          </div>
+          <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold italic">Líquido entrado no mês</p>
         </div>
+      </div>
+
+      {/* SALDO LÍQUIDO REAL (MAIS DISCRETO ABAIXO) */}
+      <div className={`p-6 mb-10 rounded-3xl shadow-soft border-l-8 bg-white transition-transform ${saldoLiquidoReal >= 0 ? 'border-elos-verde' : 'border-red-900'}`}>
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido Real</h3>
+              <p className={`text-2xl font-black mt-1 ${saldoLiquidoReal >= 0 ? 'text-elos-verde' : 'text-red-900'}`}>
+                {ocultarValores ? "****" : formatarMoeda(saldoLiquidoReal)}
+              </p>
+            </div>
+            <div className="w-1/2 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-elos-bege" style={{width: `${Math.min((totalNoCaixaMes / (totalDespesasGeraisMes || 1)) * 100, 100)}%`}}></div>
+            </div>
+          </div>
       </div>
 
       {/* KPI'S DE PERFORMANCE */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Ticket Médio</h4>
-          <p className="text-xl font-bold text-elos-verde">{formatarMoeda(ticketMedio)}</p>
+          <p className="text-xl font-bold text-elos-verde">
+            {ocultarValores ? "****" : formatarMoeda(ticketMedio)}
+          </p>
         </div>
         <div className="bg-white p-5 rounded-3xl border border-elos-bege/10 shadow-sm flex flex-col justify-center">
-          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Vendas Novos Contratos</h4>
+          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1 italic">Novos Contratos</h4>
           <p className="text-xl font-bold text-elos-verde">{vendasNovasNoMes.length}</p>
         </div>
         <div onClick={() => setModalTipo('receber')} className="bg-elos-bege/5 p-5 rounded-3xl border border-elos-bege/20 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-elos-bege/10 transition-colors">
           <h4 className="text-[10px] font-black text-elos-bege uppercase tracking-tighter mb-1 italic">Dívida Acumulada</h4>
-          <p className="text-xl font-bold text-elos-bege font-black">{formatarMoeda(totalAReceberGeral)}</p>
+          <p className="text-xl font-bold text-elos-bege font-black">
+            {ocultarValores ? "****" : formatarMoeda(totalAReceberGeral)}
+          </p>
           <span className="text-[8px] text-elos-bege uppercase font-bold">Total a receber geral</span>
         </div>
         <div className="bg-elos-verde/5 p-5 rounded-3xl border border-elos-verde/20 shadow-sm flex flex-col justify-center">
@@ -245,7 +287,7 @@ export default function Dashboard() {
             <p className="text-[10px] text-gray-400 italic font-bold">Faltam p/ cobrir custos totais</p>
           </div>
           <strong className={`text-2xl ${faltamParaCusto <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : formatarMoeda(faltamParaCusto)}
+            {faltamParaCusto <= 0 ? "Custos Cobertos ✅" : (ocultarValores ? "****" : formatarMoeda(faltamParaCusto))}
           </strong>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
@@ -257,28 +299,26 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* FATURAMENTO BRUTO */}
-      <div className="grid grid-cols-1 gap-6 mb-10">
-        <div className="bg-elos-verde p-8 rounded-3xl shadow-soft text-white border-l-8 border-[#3a4a3e]">
-          <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Faturamento Bruto (Novas Vendas do Mês)</h3>
-          <p className="text-4xl font-black mt-2 text-white italic">{formatarMoeda(volumeVendasMes)}</p>
-        </div>
-      </div>
-
       {/* RESUMO ANUAL */}
       <h2 className="font-tradicional text-xl italic text-elos-verde mb-6 ml-2">Resumo Anual ({anoFiltro})</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-green-700">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recebido (Ano)</h3>
-          <p className="text-2xl font-black text-green-700 mt-1">{formatarMoeda(totalNoCaixaAno)}</p>
+          <p className="text-2xl font-black text-green-700 mt-1">
+            {ocultarValores ? "****" : formatarMoeda(totalNoCaixaAno)}
+          </p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-red-700">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custos Pagos (Ano)</h3>
-          <p className="text-2xl font-black text-red-700 mt-1">{formatarMoeda(totalDespesasAno)}</p>
+          <p className="text-2xl font-black text-red-700 mt-1">
+            {ocultarValores ? "****" : formatarMoeda(totalDespesasAno)}
+          </p>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-soft border-t-8 border-elos-verde">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vendas Brutas (Ano)</h3>
-          <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">{formatarMoeda(volumeVendasAno)}</p>
+          <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">
+            {ocultarValores ? "****" : formatarMoeda(volumeVendasAno)}
+          </p>
         </div>
       </div>
 
@@ -293,14 +333,16 @@ export default function Dashboard() {
                   <span className="font-bold text-elos-verde">{v.cliente}</span>
                   <small className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Realizada em {v.dataVenda.split('-').reverse().join('/')}</small>
                 </div>
-                <strong className="text-lg font-black text-elos-texto italic">{formatarMoeda(v.valorTotal)}</strong>
+                <strong className="text-lg font-black text-elos-texto italic">
+                  {ocultarValores ? "****" : formatarMoeda(v.valorTotal)}
+                </strong>
               </div>
             ))}
           </div>
         ) : <p className="text-center text-gray-300 italic py-10">Nenhuma venda nova registrada neste mês.</p>}
       </div>
 
-      {/* MODAL DETALHAMENTO */}
+      {/* MODAL DETALHAMENTO (REMAINDERS IGUAIS) */}
       {modalTipo && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -329,7 +371,9 @@ export default function Dashboard() {
                           <td className="py-4 text-center text-xs text-gray-500 font-bold">
                             {modalTipo === 'receber' ? item.vencimento.toLocaleDateString() : item.info}
                           </td>
-                          <td className="py-4 text-right font-black">{formatarMoeda(item.valor)}</td>
+                          <td className="py-4 text-right font-black">
+                            {ocultarValores ? "****" : formatarMoeda(item.valor)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
