@@ -142,7 +142,7 @@ export function FinanceiroProvider({ children }) {
     }
   };
 
-  // --- NOVO: FUNÇÃO DE EDIÇÃO COMPLETA DE VENDA (FOTOS/RECEITAS/OBS) ---
+  // --- FUNÇÃO DE EDIÇÃO COMPLETA DE VENDA (FOTOS/RECEITAS/OBS) ---
   const editarVenda = async (vendaId, dadosNovos) => {
     try {
       const res = await fetch(`${API_URL}/vendas/${vendaId}`, {
@@ -251,7 +251,7 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao excluir despesa."); }
   };
 
-  // --- NOVO: FUNÇÕES DE PRODUTO (CATÁLOGO) ---
+  // --- FUNÇÕES DE PRODUTO (CATÁLOGO) ---
   const adicionarProduto = async (novoProduto) => {
     try {
       const res = await fetch(`${API_URL}/produtos`, {
@@ -265,6 +265,28 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao cadastrar produto."); }
   };
 
+  // --- NOVO: FUNÇÃO PARA EDITAR O PRODUTO NO MONGO E ESTADO ---
+  const editarProduto = async (produtoId, dadosNovos) => {
+    try {
+      const res = await fetch(`${API_URL}/produtos/${produtoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosNovos)
+      });
+
+      if (!res.ok) throw new Error("Erro ao salvar alterações do produto no servidor.");
+
+      const produtoAtualizado = await res.json();
+      // Atualiza o estado mapeando o ID modificado
+      setProdutos(prev => prev.map(p => (p._id === produtoId || p.id === produtoId) ? produtoAtualizado : p));
+      return produtoAtualizado;
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao editar o produto.");
+      throw err;
+    }
+  };
+
   const excluirProduto = async (produtoId) => {
     if (!window.confirm("Deseja remover este produto do catálogo?")) return;
     try {
@@ -276,11 +298,11 @@ export function FinanceiroProvider({ children }) {
 
   return (
     <FinanceiroContext.Provider value={{ 
-      vendas, clientes, despesas, produtos, // Incluído 'produtos'
-      adicionarVenda, editarVenda, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarDataVenda, // Incluído 'editarVenda'
+      vendas, clientes, despesas, produtos, 
+      adicionarVenda, editarVenda, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarDataVenda, 
       adicionarCliente, editarCliente, excluirCliente, 
       adicionarDespesa, darBaixaDespesa, excluirDespesa,
-      adicionarProduto, excluirProduto, // Novas funções do catálogo
+      adicionarProduto, editarProduto, excluirProduto, // Incluído 'editarProduto' no Provider
       carregando 
     }}>
       {children}

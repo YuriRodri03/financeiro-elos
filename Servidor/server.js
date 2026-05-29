@@ -19,7 +19,7 @@ mongoose.connect(MONGO_URI)
   })
   .catch(err => console.error("❌ Erro na conexão:", err));
 
-// --- MODELOS (SCHEMAS) ATUALIZADOS ---
+// --- MODELOS (SCHEMAS) ---
 
 const Cliente = mongoose.model('Cliente', {
   nome: String, 
@@ -57,7 +57,6 @@ const Despesa = mongoose.model('Despesa', {
   paga: Boolean
 });
 
-// --- NOVO: SCHEMA PARA O CATÁLOGO DE PRODUTOS ---
 const Produto = mongoose.model('Produto', {
   nome: String,
   preco: Number,
@@ -203,7 +202,7 @@ app.delete('/api/despesas/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao excluir" }); }
 });
 
-// --- NOVO: ROTAS API PARA O CATÁLOGO DE PRODUTOS ---
+// --- ROTAS API: PRODUTOS ---
 app.get('/api/produtos', async (req, res) => {
   try {
     const listaProdutos = await Produto.find().sort({ nome: 1 });
@@ -216,6 +215,21 @@ app.post('/api/produtos', async (req, res) => {
     const novoProd = new Produto(req.body);
     res.json(await novoProd.save());
   } catch (err) { res.status(500).json({ error: "Erro ao salvar produto" }); }
+});
+
+// --- ADICIONADO: ROTA COMPLETA PUT PARA EDIÇÃO DE PRODUTOS ---
+app.put('/api/produtos/:id', async (req, res) => {
+  try {
+    const produtoAtualizado = await Produto.findByIdAndUpdate(
+      req.params.id, 
+      req.body, 
+      { new: true } // { new: true } faz o Mongo retornar o produto já modificado
+    );
+    if (!produtoAtualizado) return res.status(404).json({ error: "Produto não encontrado no catálogo" });
+    res.json(produtoAtualizado);
+  } catch (err) { 
+    res.status(500).json({ error: "Erro ao atualizar dados do produto" }); 
+  }
 });
 
 app.delete('/api/produtos/:id', async (req, res) => {
