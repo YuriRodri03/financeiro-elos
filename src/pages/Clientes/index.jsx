@@ -12,7 +12,7 @@ const aplicarMascaraMoeda = (valor) => {
   return v;
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA (Mantido) ---
+// --- COMPONENTE DE LINHA DE PARCELA (Mantido com correção do let) ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -20,17 +20,12 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   if (!p) return null;
 
   const handleBaixa = () => {
-    // MUDAMOS DE 'const' PARA 'let' PARA PERMITIR A REATRIBUIÇÃO DO ARREDONDAMENTO
     let valor = parseFloat(valorRecebido); 
-    
     if (isNaN(valor) || valor <= 0) {
       alert("Informe um valor válido.");
       return;
     }
-    
-    // Agora o JavaScript permite reatribuir sem estourar o erro no build
     valor = parseFloat(valor.toFixed(2));
-    
     darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
   };
   
@@ -100,7 +95,6 @@ export default function Clientes() {
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
 
-  // --- NOVO: ESTADOS PARA EDIÇÃO DE FOTOS ---
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
 
@@ -109,31 +103,24 @@ export default function Clientes() {
     setEditandoCadastro(null);
     setEditandoVenda(null);
     setModalRecibo(null);
-    setNovaFotoCliente(''); // Resetar foto temporária
-    setNovaFotoVenda('');   // Resetar foto temporária
+    setNovaFotoCliente(''); 
+    setNovaFotoVenda('');   
   };
 
-  // --- NOVO: FUNÇÃO PARA CONVERTER IMAGEM EM BASE64 ---
   const converterParaBase64 = (file, callback) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      callback(reader.result);
-    };
+    reader.onloadend = () => { callback(reader.result); };
     reader.readAsDataURL(file);
   };
 
   const handleMudarFotoCliente = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      converterParaBase64(file, setNovaFotoCliente);
-    }
+    if (file) { converterParaBase64(file, setNovaFotoCliente); }
   };
 
   const handleMudarFotoVenda = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      converterParaBase64(file, setNovaFotoVenda);
-    }
+    if (file) { converterParaBase64(file, setNovaFotoVenda); }
   };
 
   const salvarEdicaoCadastro = async () => {
@@ -141,7 +128,6 @@ export default function Clientes() {
     const idMongo = clienteParaEditar?._id;
     if (!idMongo) return alert("Erro: ID não encontrado.");
 
-    // Incluir a nova foto se ela tiver sido alterada
     const dadosAtualizados = {
       ...editandoCadastro,
       foto: novaFotoCliente || editandoCadastro.foto
@@ -152,21 +138,19 @@ export default function Clientes() {
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       setNovaFotoCliente('');
-      alert("Cadastro atualizado!");
+      alert("Cadastro updated!");
     } catch (err) { console.error(err); }
   };
 
   const salvarEdicaoVenda = async () => {
     if (!editandoVenda.vendaId || !editandoVenda.dataVenda) return;
 
-    // Incluir a nova foto da venda se ela tiver sido alterada
     const dadosAtualizados = {
       ...editandoVenda,
       foto: novaFotoVenda || editandoVenda.foto
     };
 
     try {
-      // Usamos a função editarVenda genérica que já deve existir no FinanceiroContext
       await editarVenda(editandoVenda.vendaId, dadosAtualizados);
       setEditandoVenda(null);
       setNovaFotoVenda('');
@@ -232,11 +216,11 @@ export default function Clientes() {
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
-      {/* HEADER (Mantido) */}
+      {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Carteira de Clientes</h1>
-          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold italic">Base de dados unificada (A-Z)</p>
+          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black italic">Base de dados unificada (A-Z)</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
@@ -254,7 +238,7 @@ export default function Clientes() {
         </div>
       </header>
 
-      {/* TABELA DE CLIENTES (Mantida) */}
+      {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
         <table className="w-full text-left">
           <thead className="bg-elos-fundo/50 border-b border-gray-100">
@@ -294,7 +278,7 @@ export default function Clientes() {
         </table>
       </div>
 
-      {/* MODAL DA FICHA DO CLIENTE (Atualizado com Visualização de Foto e Exclusão) */}
+      {/* MODAL DA FICHA DO CLIENTE */}
       {clienteNoModal && (
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={fecharModal}>
           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -308,7 +292,6 @@ export default function Clientes() {
             </header>
             
             <div className="p-10 overflow-y-auto flex-1 bg-white space-y-10">
-              {/* BLOCO DE DADOS E FOTO */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner h-fit">
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
@@ -317,7 +300,6 @@ export default function Clientes() {
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
                 </div>
 
-                {/* EXIBIÇÃO DA FOTO NA FICHA COM OPÇÃO DE EXCLUIR */}
                 <div className="bg-elos-fundo/30 p-4 rounded-3xl border border-elos-bege/20 flex flex-col items-center justify-center min-h-[200px] relative group">
                   {clienteNoModal.foto ? (
                     <>
@@ -353,25 +335,50 @@ export default function Clientes() {
                 </button>
               </div>
 
-              {/* HISTÓRICO DE PEDIDOS (Atualizado com Visualização de Foto e Exclusão) */}
+              {/* HISTÓRICO DE PEDIDOS COM VISUALIZAÇÃO DE PRODUTOS REESTRUTURADA */}
               <div className="space-y-6 pt-4">
                 <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
                   const numPed = venda.numeroPedido || "S/N";
+                  
+                  // --- LÓGICA DE ORGANIZAÇÃO VISUAL DOS PRODUTOS ---
+                  // Se existir itensCarrinho estruturado, usamos ele. Caso contrário, quebramos a string pelo '+'
+                  const produtosLista = venda.itensCarrinho && venda.itensCarrinho.length > 0 
+                    ? venda.itensCarrinho.map(item => item.nome)
+                    : String(venda.produto || '').split('+').map(p => p.trim());
+
                   return (
                     <div key={venda._id || index} className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 relative group shadow-sm mb-6">
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 w-full">
+                          <div className="flex items-center gap-2 mb-3">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
                             <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({...venda, vendaId: venda._id})}>
                               {venda.dataVenda?.split('-').reverse().join('/')} ✏️
                             </small>
                           </div>
-                          <strong className="text-xl text-elos-texto block italic font-tradicional">📦 {venda.produto || 'Produtos Ópticos'}</strong>
-                          <div className="mt-1 text-elos-verde font-black text-sm uppercase tracking-tighter">Valor: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}</div>
+
+                          {/* NOVA EXIBIÇÃO EM CHIPS E BADGES ORGANIZADOS */}
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {produtosLista.map((prodNome, pIdx) => (
+                              <div 
+                                key={pIdx} 
+                                className="flex items-center bg-elos-fundo border border-elos-bege/30 px-3.5 py-1.5 rounded-xl shadow-xs"
+                              >
+                                <span className="text-xs font-black text-elos-texto tracking-wide uppercase">
+                                  👓 {prodNome}
+                                </span>
+                              </div>
+                            ))}
+                            {produtosLista.length === 0 && (
+                              <span className="text-xs text-gray-400 italic">Nenhum item especificado</span>
+                            )}
+                          </div>
+
+                          <div className="mt-2 text-elos-verde font-black text-sm uppercase tracking-tighter">
+                            Valor Total: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}
+                          </div>
                           
-                          {/* FOTO DA VENDA/RECEITA COM OPÇÃO DE EXCLUIR */}
                           {venda.foto && (
                             <div className="mt-4 p-2 bg-elos-fundo rounded-2xl border border-elos-bege/10 w-fit relative group">
                               <p className="text-[8px] font-black uppercase text-elos-bege mb-1 ml-1">Receita Anexada:</p>
@@ -426,13 +433,12 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO DE CADASTRO (Atualizado com Edição de Foto) */}
+      {/* MODAL DE EDIÇÃO DE CADASTRO */}
       {editandoCadastro && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Perfil</h2>
             
-            {/* PRÉ-VISUALIZAÇÃO E UPLOAD DA NOVA FOTO DO CLIENTE */}
             <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
               <img 
                 src={novaFotoCliente || editandoCadastro.foto || 'https://via.placeholder.com/150'} 
@@ -470,13 +476,12 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO DE VENDA (Atualizado para Edição Completa e Foto) */}
+      {/* MODAL DE EDIÇÃO DE VENDA */}
       {editandoVenda && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Pedido</h2>
             
-            {/* PRÉ-VISUALIZAÇÃO E UPLOAD DA NOVA FOTO DA VENDA (RECEITA) */}
             <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
               {novaFotoVenda || editandoVenda.foto ? (
                 <img 
@@ -524,7 +529,7 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* MODAL DE GERAR RECIBO (Mantido) */}
+      {/* MODAL DE GERAR RECIBO */}
       {modalRecibo && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-8 space-y-6 shadow-2xl border border-elos-bege/20">
