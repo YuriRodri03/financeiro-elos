@@ -25,6 +25,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
       alert("Informe um valor válido.");
       return;
     }
+    valor = parseFloat(valor.toFixed(2));
     darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
   };
 
