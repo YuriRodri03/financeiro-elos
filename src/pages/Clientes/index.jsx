@@ -20,15 +20,20 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   if (!p) return null;
 
   const handleBaixa = () => {
-    const valor = parseFloat(valorRecebido);
+    // MUDAMOS DE 'const' PARA 'let' PARA PERMITIR A REATRIBUIÇÃO DO ARREDONDAMENTO
+    let valor = parseFloat(valorRecebido); 
+    
     if (isNaN(valor) || valor <= 0) {
       alert("Informe um valor válido.");
       return;
     }
+    
+    // Agora o JavaScript permite reatribuir sem estourar o erro no build
     valor = parseFloat(valor.toFixed(2));
+    
     darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
   };
-
+  
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4">
       <div className="flex flex-col">
