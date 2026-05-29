@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, useLocation, Link } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
 import Dashboard from './pages/Dashboard';
@@ -14,9 +14,8 @@ import Produtos from './pages/Produtos';
 
 import './index.css'; 
 
-// --- COMPONENTE DO EFEITO DE FOLHAS (CORRIGIDO) ---
+// --- COMPONENTE DO EFEITO DE FOLHAS ---
 function FolhasCaindo() {
-  // Aumentei para 25 folhas para um efeito mais visível e elegante
   const folhas = Array.from({ length: 25 }); 
   
   return (
@@ -37,35 +36,55 @@ function FolhasCaindo() {
               animationDuration: `${duration}s`,
               fontSize: `${size}px`,
               top: '-10%',
-              color: 'rgba(74, 93, 78, 0.15)' // Verde Elos com transparência suave
+              color: 'rgba(74, 93, 78, 0.15)'
             }}
           >
             🍃
           </div>
         );
       })}
-      {/* CSS injetado para garantir funcionamento em qualquer navegador */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes fall {
-          0% { 
-            transform: translateY(0) rotate(0deg); 
-            opacity: 0; 
-          }
-          10% { 
-            opacity: 1; 
-          }
-          90% { 
-            opacity: 1; 
-          }
-          100% { 
-            transform: translateY(110vh) rotate(720deg); 
-            opacity: 0; 
-          }
+          0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
         }
-        .animate-fall {
-          animation: fall linear infinite;
-        }
+        .animate-fall { animation: fall linear infinite; }
       `}} />
+    </div>
+  );
+}
+
+// --- NOVO: GERENCIADOR DE PÁGINAS PERSISTENTES ---
+function ConteudoAbasPersistentes() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  // Mapeamos os caminhos para renderizar tudo em background mantendo os inputs intactos
+  return (
+    <div className="animate-in fade-in duration-500">
+      <div style={{ display: currentPath === '/' ? 'block' : 'none' }}>
+        <Dashboard />
+      </div>
+      <div style={{ display: currentPath === '/vendas' ? 'block' : 'none' }}>
+        <Vendas />
+      </div>
+      <div style={{ display: currentPath === '/despesas' ? 'block' : 'none' }}>
+        <Despesas />
+      </div>
+      <div style={{ display: currentPath === '/clientes' ? 'block' : 'none' }}>
+        <Clientes />
+      </div>
+      <div style={{ display: currentPath === '/produtos' ? 'block' : 'none' }}>
+        <Produtos />
+      </div>
+      <div style={{ display: currentPath === '/cadastro-clientes' ? 'block' : 'none' }}>
+        <CadastroClientes />
+      </div>
+      <div style={{ display: currentPath === '/relatorios' ? 'block' : 'none' }}>
+        <RelatorioInadimplencia />
+      </div>
     </div>
   );
 }
@@ -93,12 +112,10 @@ function AppContent() {
 
   if (!autenticado) return <Login onLogin={realizarLogin} />;
 
-  // --- TELA DE CARREGAMENTO COM EFEITO ---
   if (carregando) {
     return (
       <div className="fixed inset-0 flex flex-col justify-center items-center bg-elos-fundo text-elos-verde z-[9999] overflow-hidden">
         <FolhasCaindo />
-        
         <div className="relative z-10 text-center">
           <h2 className="font-tradicional text-5xl mb-3 animate-pulse italic">Ótica Elos</h2>
           <div className="w-16 h-[1px] bg-elos-bege mx-auto mb-4 opacity-40"></div>
@@ -140,17 +157,9 @@ function AppContent() {
           </div>
         </nav>
 
-        {/* CONTEÚDO PRINCIPAL */}
-        <main className="animate-in fade-in duration-500">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/vendas" element={<Vendas />} />
-            <Route path="/despesas" element={<Despesas />} />
-            <Route path="/clientes" element={<Clientes />} />
-            <Route path="/produtos" element={<Produtos />} />
-            <Route path="/cadastro-clientes" element={<CadastroClientes />} />
-            <Route path="/relatorios" element={<RelatorioInadimplencia />} />
-          </Routes>
+        {/* CONTEÚDO PRINCIPAL ATUALIZADO */}
+        <main>
+          <ConteudoAbasPersistentes />
         </main>
       </div>
     </Router>
