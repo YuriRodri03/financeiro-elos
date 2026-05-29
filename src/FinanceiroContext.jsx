@@ -8,16 +8,19 @@ export function FinanceiroProvider({ children }) {
   const [vendas, setVendas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [despesas, setDespesas] = useState([]);
+  // --- NOVO: ESTADO PARA O CATÁLOGO DE PRODUTOS ---
+  const [produtos, setProdutos] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
-  // --- CARREGAMENTO INICIAL ---
+  // --- CARREGAMENTO INICIAL ATUALIZADO ---
   useEffect(() => {
     async function carregarDados() {
       try {
-        const [resVendas, resClientes, resDespesas] = await Promise.all([
+        const [resVendas, resClientes, resDespesas, resProdutos] = await Promise.all([
           fetch(`${API_URL}/vendas`),
           fetch(`${API_URL}/clientes`),
-          fetch(`${API_URL}/despesas`)
+          fetch(`${API_URL}/despesas`),
+          fetch(`${API_URL}/produtos`) // Nova rota do catálogo
         ]);
         
         if (!resVendas.ok || !resClientes.ok) throw new Error("Erro ao buscar dados do servidor");
@@ -25,10 +28,12 @@ export function FinanceiroProvider({ children }) {
         const dadosVendas = await resVendas.json();
         const dadosClientes = await resClientes.json();
         const dadosDespesas = resDespesas.ok ? await resDespesas.json() : [];
+        const dadosProdutos = resProdutos.ok ? await resProdutos.json() : [];
         
         setVendas(dadosVendas);
         setClientes(dadosClientes);
         setDespesas(dadosDespesas);
+        setProdutos(dadosProdutos);
       } catch (err) {
         console.error("Erro ao buscar dados do MongoDB:", err);
       } finally {
@@ -53,7 +58,6 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao salvar cliente."); }
   };
 
-  // --- CORREÇÃO DEFINITIVA: EDITAR CLIENTE COM ATUALIZAÇÃO EM CASCATA NO ESTADO ---
   const editarCliente = async (clienteId, dadosNovos) => {
     try {
       const res = await fetch(`${API_URL}/clientes/${clienteId}`, {
@@ -68,13 +72,8 @@ export function FinanceiroProvider({ children }) {
       }
 
       const clienteAtualizado = await res.json();
-
-      // 1. Atualiza a lista de clientes usando o ID único
       setClientes(prev => prev.map(c => (c._id === clienteId || c.id === clienteId) ? clienteAtualizado : c));
       
-      // 2. SINCRONIZAÇÃO COM DASHBOARD/VENDAS:
-      // Atualiza o nome do cliente em todas as vendas do estado local que possuem o mesmo CPF.
-      // Isso faz com que o Dashboard mude de "Vitora" para "Vitoria" na hora.
       setVendas(prevVendas => prevVendas.map(v => 
         v.cpf === clienteAtualizado.cpf 
           ? { ...v, cliente: clienteAtualizado.nome } 
@@ -140,6 +139,24 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { 
       alert("Erro ao registrar venda."); 
       throw err;
+    }
+  };
+
+  // --- NOVO: FUNÇÃO DE EDIÇÃO COMPLETA DE VENDA (FOTOS/RECEITAS/OBS) ---
+  const editarVenda = async (vendaId, dadosNovos) => {
+    try {
+      const res = await fetch(`${API_URL}/vendas/${vendaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosNovos)
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar o pedido no servidor.");
+      const vendaAtualizada = await res.json();
+      setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
+      return vendaAtualizada;
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao atualizar o pedido.");
     }
   };
 
@@ -234,12 +251,36 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao excluir despesa."); }
   };
 
+  // --- NOVO: FUNÇÕES DE PRODUTO (CATÁLOGO) ---
+  const adicionarProduto = async (novoProduto) => {
+    try {
+      const res = await fetch(`${API_URL}/produtos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(novoProduto)
+      });
+      const produtoSalvo = await res.json();
+      setProdutos(prev => [...prev, produtoSalvo]);
+      return produtoSalvo;
+    } catch (err) { alert("Erro ao cadastrar produto."); }
+  };
+
+  const excluirProduto = async (produtoId) => {
+    if (!window.confirm("Deseja remover este produto do catálogo?")) return;
+    try {
+      await fetch(`${API_URL}/produtos/${produtoId}`, { method: 'DELETE' });
+      setProdutos(prev => prev.filter(p => p._id !== produtoId && p.id !== produtoId));
+      alert("Produto removido do catálogo!");
+    } catch (err) { alert("Erro ao remover produto."); }
+  };
+
   return (
     <FinanceiroContext.Provider value={{ 
-      vendas, clientes, despesas, 
-      adicionarVenda, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarDataVenda,
+      vendas, clientes, despesas, produtos, // Incluído 'produtos'
+      adicionarVenda, editarVenda, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarDataVenda, // Incluído 'editarVenda'
       adicionarCliente, editarCliente, excluirCliente, 
       adicionarDespesa, darBaixaDespesa, excluirDespesa,
+      adicionarProduto, excluirProduto, // Novas funções do catálogo
       carregando 
     }}>
       {children}

@@ -7,7 +7,6 @@ const app = express();
 app.use(cors());
 
 // --- AJUSTE DE LIMITE PARA FOTOS ---
-// Aumentamos para 50mb para que o Base64 das fotos passe sem erros
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -29,7 +28,7 @@ const Cliente = mongoose.model('Cliente', {
   email: String, 
   endereco: String, 
   observacoes: String,
-  foto: String // ADICIONADO: Foto do perfil/cadastro
+  foto: String 
 });
 
 const Venda = mongoose.model('Venda', {
@@ -46,8 +45,8 @@ const Venda = mongoose.model('Venda', {
   dataVenda: String, 
   metodoPagamento: String,
   dataPrevisaoPagamento: String,
-  observacoes: String, // ADICIONADO: Detalhes técnicos da venda
-  foto: String        // ADICIONADO: Foto da receita/venda
+  observacoes: String, 
+  foto: String        
 });
 
 const Despesa = mongoose.model('Despesa', {
@@ -56,6 +55,13 @@ const Despesa = mongoose.model('Despesa', {
   categoria: String, 
   vencimento: String, 
   paga: Boolean
+});
+
+// --- NOVO: SCHEMA PARA O CATÁLOGO DE PRODUTOS ---
+const Produto = mongoose.model('Produto', {
+  nome: String,
+  preco: Number,
+  categoria: String
 });
 
 // --- SCRIPT DE ATUALIZAÇÃO PARA VENDAS ANTIGAS ---
@@ -68,7 +74,7 @@ const atualizarVendasAntigas = async () => {
         vendasSemNumero[i].numeroPedido = 2000 + i;
         await vendasSemNumero[i].save();
       }
-      console.log("✅ Vendas antigas atualizadas com sucesso!");
+      console.log("✅ Vendas antigas updated com sucesso!");
     }
   } catch (err) {
     console.error("Erro ao atualizar vendas antigas:", err);
@@ -175,7 +181,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       }
     }
     novasParcelas.sort((a, b) => a.numero - b.numero);
-    venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
     await venda.save();
     res.json(venda);
@@ -196,6 +201,28 @@ app.delete('/api/despesas/:id', async (req, res) => {
     await Despesa.findByIdAndDelete(req.params.id);
     res.json({ message: "Excluída" });
   } catch (err) { res.status(500).json({ error: "Erro ao excluir" }); }
+});
+
+// --- NOVO: ROTAS API PARA O CATÁLOGO DE PRODUTOS ---
+app.get('/api/produtos', async (req, res) => {
+  try {
+    const listaProdutos = await Produto.find().sort({ nome: 1 });
+    res.json(listaProdutos);
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar produtos" }); }
+});
+
+app.post('/api/produtos', async (req, res) => {
+  try {
+    const novoProd = new Produto(req.body);
+    res.json(await novoProd.save());
+  } catch (err) { res.status(500).json({ error: "Erro ao salvar produto" }); }
+});
+
+app.delete('/api/produtos/:id', async (req, res) => {
+  try {
+    await Produto.findByIdAndDelete(req.params.id);
+    res.json({ message: "Produto removido do catálogo" });
+  } catch (err) { res.status(500).json({ error: "Erro ao remover produto" }); }
 });
 
 const PORT = process.env.PORT || 5000;

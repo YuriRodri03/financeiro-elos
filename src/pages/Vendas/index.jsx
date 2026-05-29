@@ -3,11 +3,14 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
 export default function Vendas() {
-  const { adicionarVenda, clientes } = useFinanceiro();
+  // Puxamos 'produtos' (do seu novo catálogo) além de 'clientes'
+  const { adicionarVenda, clientes, produtos } = useFinanceiro();
 
-  // Controle do dropdown de busca
+  // Controle dos dropdowns de busca
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
   const wrapperRef = useRef(null);
+  const prodWrapperRef = useRef(null);
 
   // Estados do Formulário
   const [venda, setVenda] = useState({
@@ -17,8 +20,8 @@ export default function Vendas() {
     desconto: '', 
     parcelas: 1,
     metodoPagamento: 'Dinheiro',
-    observacoes: '', // NOVO
-    foto: '',        // NOVO (Base64)
+    observacoes: '',
+    foto: '',
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
@@ -27,12 +30,12 @@ export default function Vendas() {
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
 
-  // --- BUSCA POR NOME (Sugestões) ---
+  // --- BUSCA POR NOME DO CLIENTE (Sugestões) ---
   const sugestoes = useMemo(() => {
     if (!venda.cliente || !mostrarSugestoes) return [];
-    return clientes.filter(c => 
+    return (clientes || []).filter(c => 
       c.nome.toLowerCase().includes(venda.cliente.toLowerCase())
-    ).slice(0, 5); // Limita a 5 sugestões para não poluir a tela
+    ).slice(0, 5);
   }, [venda.cliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
@@ -40,10 +43,27 @@ export default function Vendas() {
     setMostrarSugestoes(false);
   };
 
-  // Fechar sugestões ao clicar fora
+  // --- BUSCA POR NOME DO PRODUTO (Sugestões do Catálogo) ---
+  const sugestoesProd = useMemo(() => {
+    if (!novoItem.nome || !mostrarSugestoesProd) return [];
+    return (produtos || []).filter(p => 
+      p.nome.toLowerCase().includes(novoItem.nome.toLowerCase())
+    ).slice(0, 5);
+  }, [novoItem.nome, produtos, mostrarSugestoesProd]);
+
+  const selecionarProdutoCat = (p) => {
+    setNovoItem({ 
+      nome: p.nome.toUpperCase(), 
+      preco: p.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+    });
+    setMostrarSugestoesProd(false);
+  };
+
+  // Fechar sugestões ao clicar fora (Clientes e Produtos)
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setMostrarSugestoes(false);
+      if (prodWrapperRef.current && !prodWrapperRef.current.contains(e.target)) setMostrarSugestoesProd(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -61,7 +81,7 @@ export default function Vendas() {
     }
   };
 
-  // Máscaras (IGUAIS ÀS ANTERIORES)
+  // Máscaras
   const aplicarMascaraCPF = (valor) => {
     return valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
@@ -109,7 +129,7 @@ export default function Vendas() {
     const { name, value } = e.target;
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
-      const clienteExistente = clientes.find(c => c.cpf === valorFormatado);
+      const clienteExistente = (clientes || []).find(c => c.cpf === valorFormatado);
       setVenda({ 
         ...venda, 
         cpf: valorFormatado,
@@ -127,7 +147,7 @@ export default function Vendas() {
     if (itensCarrinho.length === 0) return alert("Adicione pelo menos um item ao carrinho.");
     if (!venda.cliente || !venda.cpf) return alert("Preencha os dados do cliente.");
 
-    const clienteBase = clientes.find(c => c.cpf === venda.cpf);
+    const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
 
     const dadosParaSalvar = {
       ...venda,
@@ -155,7 +175,6 @@ export default function Vendas() {
         }, 'pedido');
       }
 
-      // Reset total dos campos
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
         metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
@@ -180,51 +199,86 @@ export default function Vendas() {
 
         <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
           
-         {/* DADOS DO CLIENTE */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-2">
-          <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
-          <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-          </div>
-
-          {/* O campo de Nome agora precisa de 'relative' e do 'ref' */}
-          <div className="space-y-2 relative" ref={wrapperRef}>
-            <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
-              <input 
-              type="text" 
-              name="cliente" 
-              value={venda.cliente} 
-              onChange={handleChange} 
-              onFocus={() => setMostrarSugestoes(true)}
-              required 
-              placeholder="Nome Completo" 
-              className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
-            />
-    
-          {/* Caixa de Sugestões */}
-            {sugestoes.length > 0 && (
-            <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
-             {sugestoes.map((c) => (
-            <div 
-              key={c.cpf} 
-              onClick={() => selecionarCliente(c)} 
-              className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
-            >
-              <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
-              <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
+          {/* DADOS DO CLIENTE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
+              <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
             </div>
-          ))}
-          </div>
-          )}
-          </div>
-        </div>
 
-          {/* CARRINHO DE COMPRAS */}
+            <div className="space-y-2 relative" ref={wrapperRef}>
+              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
+              <input 
+                type="text" 
+                name="cliente" 
+                value={venda.cliente} 
+                onChange={handleChange} 
+                onFocus={() => setMostrarSugestoes(true)}
+                required 
+                placeholder="Nome Completo" 
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+              />
+    
+              {sugestoes.length > 0 && (
+                <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
+                  {sugestoes.map((c) => (
+                    <div 
+                      key={c.cpf} 
+                      onClick={() => selecionarCliente(c)} 
+                      className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
+                    >
+                      <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
+                      <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CARRINHO DE COMPRAS INTEGRADO AO CATÁLOGO */}
           <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
             <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
-            <div className="flex flex-col md:flex-row gap-3 mb-6">
-              <input type="text" placeholder="Ex: Armação, Lente..." className="flex-1 px-4 py-3 rounded-xl border-none shadow-sm text-sm" value={novoItem.nome} onChange={(e) => setNovoItem({...novoItem, nome: e.target.value})} />
-              <input type="text" placeholder="R$ 0,00" className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold" value={novoItem.preco} onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} />
+            <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
+              
+              {/* CAMPO DE NOME DO PRODUTO COM DROPDOWN DE SUGESTÕES */}
+              <div className="flex-1 relative">
+                <input 
+                  type="text" 
+                  placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban, Lente Crizal...)" 
+                  className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm" 
+                  value={novoItem.nome} 
+                  onChange={(e) => {
+                    setNovoItem({...novoItem, nome: e.target.value});
+                    setMostrarSugestoesProd(true);
+                  }}
+                  onFocus={() => setMostrarSugestoesProd(true)}
+                />
+                
+                {sugestoesProd.length > 0 && (
+                  <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
+                    {sugestoesProd.map((p) => (
+                      <div 
+                        key={p._id || p.id} 
+                        onClick={() => selecionarProdutoCat(p)} 
+                        className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
+                      >
+                        <span className="font-bold text-sm text-elos-texto">{p.nome}</span>
+                        <span className="text-xs text-elos-verde font-black">R$ {Number(p.preco).toFixed(2).replace('.',',')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* CAMPO DE PREÇO (PREENCHE SOZINHO SE SELECIONADO DO CATÁLOGO) */}
+              <input 
+                type="text" 
+                placeholder="R$ 0,00" 
+                className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
+                value={novoItem.preco} 
+                onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
+              />
               <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
             </div>
 
@@ -242,7 +296,7 @@ export default function Vendas() {
             </div>
           </div>
 
-          {/* NOVO: OBSERVAÇÕES E FOTOS DA RECEITA */}
+          {/* DETALHES TÉCNICOS E FOTOS */}
           <div className="space-y-4">
             <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

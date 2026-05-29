@@ -10,6 +10,7 @@ import CadastroClientes from './pages/CadastroClientes';
 import RelatorioInadimplencia from './pages/Relatorios';
 import Despesas from './pages/Despesas';
 import Login from './pages/Login';
+import Produtos from './pages/Produtos';
 
 import './index.css'; 
 
@@ -124,6 +125,7 @@ function AppContent() {
                 <Link to="/vendas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Vendas</Link>
                 <Link to="/despesas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Gastos</Link>
                 <Link to="/clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Clientes</Link>
+                <Link to="/produtos" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Produtos</Link>
                 <Link to="/cadastro-clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Cadastro</Link> 
                 <Link to="/relatorios" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Cobrança</Link>
                 
@@ -145,6 +147,7 @@ function AppContent() {
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/despesas" element={<Despesas />} />
             <Route path="/clientes" element={<Clientes />} />
+            <Route path="/produtos" element={<Produtos />} />
             <Route path="/cadastro-clientes" element={<CadastroClientes />} />
             <Route path="/relatorios" element={<RelatorioInadimplencia />} />
           </Routes>
