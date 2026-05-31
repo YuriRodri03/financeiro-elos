@@ -421,7 +421,7 @@ export default function Clientes() {
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
                         {(venda.listaParcelas || []).map((p, idx) => (
-                          <LinhaParcela key={idx} p={p} vendaId={venda._id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                          <LinhaParcela key={idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
                         ))}
                       </div>
                     </div>

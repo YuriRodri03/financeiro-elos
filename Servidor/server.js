@@ -124,7 +124,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao excluir venda" }); }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA ---
+// --- BAIXA E ESTORNO DE PARCELA CORRIGIDO ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -133,13 +133,15 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
     const numAtual = parseFloat(numero);
-    let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas));
-    const index = novasParcelas.findIndex(p => p.numero === numAtual);
+    let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas || []));
+    
+    // CORREÇÃO: findIndex comparando strings para evitar divergências de tipagem (String vs Number)
+    const index = novasParcelas.findIndex(p => String(p.numero) === String(numAtual));
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
     if (paga === false) {
       const proximoNumero = numAtual + 0.5;
-      const parcelaFilhaIndex = novasParcelas.findIndex(p => p.numero === proximoNumero);
+      const parcelaFilhaIndex = novasParcelas.findIndex(p => String(p.numero) === String(proximoNumero));
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
@@ -179,8 +181,13 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         novasParcelas[index].dataPagamento = dataPagamento;
       }
     }
+    
     novasParcelas.sort((a, b) => a.numero - b.numero);
+    
+    // CORREÇÃO: Vincula explicitamente o array modificado de volta ao documento Mongo
+    venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
+    
     await venda.save();
     res.json(venda);
   } catch (err) { res.status(500).json({ error: "Erro ao processar parcela" }); }
@@ -217,19 +224,12 @@ app.post('/api/produtos', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao salvar produto" }); }
 });
 
-// --- ADICIONADO: ROTA COMPLETA PUT PARA EDIÇÃO DE PRODUTOS ---
 app.put('/api/produtos/:id', async (req, res) => {
   try {
-    const produtoAtualizado = await Produto.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
-      { new: true } // { new: true } faz o Mongo retornar o produto já modificado
-    );
+    const produtoAtualizado = await Produto.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!produtoAtualizado) return res.status(404).json({ error: "Produto não encontrado no catálogo" });
     res.json(produtoAtualizado);
-  } catch (err) { 
-    res.status(500).json({ error: "Erro ao atualizar dados do produto" }); 
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao atualizar dados do produto" }); }
 });
 
 app.delete('/api/produtos/:id', async (req, res) => {
