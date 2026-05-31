@@ -16,6 +16,21 @@ export default function Despesas() {
     paga: false
   });
 
+  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3000);
+  };
+
+  const abrirConfirmacao = (mensagem, acao) => {
+    setConfirmModal({ visivel: true, mensagem, acao });
+  };
+
   // --- LÓGICA DE FILTRAGEM ---
   const despesasFiltradas = useMemo(() => {
     return despesas
@@ -51,7 +66,7 @@ export default function Despesas() {
     const valorLimpo = Number(novaDespesa.valor.replace(/\D/g, '')) / 100;
 
     if (!novaDespesa.descricao || valorLimpo <= 0 || !novaDespesa.categoria) {
-      alert("Preencha a descrição, valor e categoria corretamente.");
+      mostrarToast("Preencha a descrição, valor e categoria corretamente.", "erro");
       return;
     }
 
@@ -67,16 +82,57 @@ export default function Despesas() {
         vencimento: new Date().toISOString().split('T')[0],
         paga: false
       });
-      alert("Despesa registrada!");
+      mostrarToast("Despesa registrada no fluxo de caixa!", "sucesso");
     } catch (err) {
-      alert("Erro ao salvar despesa.");
+      mostrarToast("Erro ao salvar despesa no banco de dados.", "erro");
     }
   };
 
   if (carregando) return null;
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* TOAST PREMIUM DA ÓTICA ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO */}
+      {confirmModal.visivel && (
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
+            <div className="text-4xl text-red-600">💸</div>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Ação</h3>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
+                className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirmModal.acao) confirmModal.acao();
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null });
+                }}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-5xl mx-auto">
         
         <header className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-elos-bege/20 pb-6 gap-6">
@@ -190,14 +246,22 @@ export default function Despesas() {
                     <div className="flex items-center gap-4">
                       {!d.paga && (
                         <button 
-                          onClick={() => darBaixaDespesa(d._id)} 
+                          onClick={() => abrirConfirmacao(`Deseja efetuar a baixa de "${d.descricao}" no valor de R$ ${d.valor.toFixed(2).replace('.', ',')}?`, () => {
+                            darBaixaDespesa(d._id);
+                            mostrarToast("Baixa realizada com sucesso!", "sucesso");
+                          })} 
                           className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
                         >
                           Dar Baixa
                         </button>
                       )}
                       <button 
-                        onClick={() => { if(confirm("Excluir registro desta despesa?")) excluirDespesa(d._id) }} 
+                        onClick={() => { 
+                          abrirConfirmacao(`Deseja remover permanentemente o registro de despesa "${d.descricao}"?`, () => {
+                            excluirDespesa(d._id);
+                            mostrarToast("Despesa removida do sistema.", "sucesso");
+                          });
+                        }} 
                         className="p-3 text-gray-300 hover:text-red-600 transition-colors"
                         title="Excluir despesa"
                       >
@@ -212,6 +276,7 @@ export default function Despesas() {
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

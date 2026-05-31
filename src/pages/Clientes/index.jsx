@@ -12,8 +12,8 @@ const aplicarMascaraMoeda = (valor) => {
   return v;
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA (Mantido com correção do let) ---
-function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
+// --- COMPONENTE DE LINHA DE PARCELA ---
+function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
 
@@ -22,11 +22,12 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela }) {
   const handleBaixa = () => {
     let valor = parseFloat(valorRecebido); 
     if (isNaN(valor) || valor <= 0) {
-      alert("Informe um valor válido.");
+      mostrarToast("Informe um valor válido para o pagamento.", "erro");
       return;
     }
     valor = parseFloat(valor.toFixed(2));
     darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
+    mostrarToast("Baixa registrada com sucesso!", "sucesso");
   };
   
   return (
@@ -98,6 +99,21 @@ export default function Clientes() {
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
 
+  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, message: '', tipo: 'sucesso' });
+    }, 3000);
+  };
+
+  const abrirConfirmacao = (mensagem, acao) => {
+    setConfirmModal({ visivel: true, mensagem, acao });
+  };
+
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
@@ -126,7 +142,7 @@ export default function Clientes() {
   const salvarEdicaoCadastro = async () => {
     const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
     const idMongo = clienteParaEditar?._id;
-    if (!idMongo) return alert("Erro: ID não encontrado.");
+    if (!idMongo) return mostrarToast("Erro: ID do cliente não mapeado.", "erro");
 
     const dadosAtualizados = {
       ...editandoCadastro,
@@ -138,8 +154,8 @@ export default function Clientes() {
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       setNovaFotoCliente('');
-      alert("Cadastro updated!");
-    } catch (err) { console.error(err); }
+      mostrarToast("Cadastro atualizado com sucesso!", "sucesso");
+    } catch (err) { mostrarToast("Erro ao editar dados no servidor.", "erro"); }
   };
 
   const salvarEdicaoVenda = async () => {
@@ -154,25 +170,27 @@ export default function Clientes() {
       await editarVenda(editandoVenda.vendaId, dadosAtualizados);
       setEditandoVenda(null);
       setNovaFotoVenda('');
-      alert("Pedido atualizado!");
-    } catch (err) { console.error(err); }
+      mostrarToast("Pedido atualizado com sucesso!", "sucesso");
+    } catch (err) { mostrarToast("Erro ao sincronizar modificações do pedido.", "erro"); }
   };
 
-  const handleExcluirFotoCliente = async () => {
-    if (!confirm("Deseja remover a foto deste cliente?")) return;
-    const idMongo = clienteNoModal?._id;
-    try {
-      await editarCliente(idMongo, { ...clienteNoModal, foto: '' });
-      alert("Foto removida!");
-    } catch (err) { alert("Erro ao remover foto."); }
+  const handleExcluirFotoCliente = () => {
+    abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
+      const idMongo = clienteNoModal?._id;
+      try {
+        await editarCliente(idMongo, { ...clienteNoModal, foto: '' });
+        mostrarToast("Foto de perfil removida.", "sucesso");
+      } catch (err) { mostrarToast("Erro ao remover arquivo.", "erro"); }
+    });
   };
 
-  const handleExcluirFotoVenda = async (vendaId, vendaAtual) => {
-    if (!confirm("Deseja remover a receita deste pedido?")) return;
-    try {
-      await editarVenda(vendaId, { ...vendaAtual, foto: '' });
-      alert("Receita removida!");
-    } catch (err) { alert("Erro ao remover receita."); }
+  const handleExcluirFotoVenda = (vendaId, vendaAtual) => {
+    abrirConfirmacao("Deseja remover permanentemente a receita digital digitalizada deste pedido?", async () => {
+      try {
+        await editarVenda(vendaId, { ...vendaAtual, foto: '' });
+        mostrarToast("Receita óptica removida do histórico.", "sucesso");
+      } catch (err) { mostrarToast("Erro ao limpar arquivo.", "erro"); }
+    });
   };
 
   const listaFinalClientes = useMemo(() => {
@@ -215,7 +233,48 @@ export default function Clientes() {
   if (carregando) return null;
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* TOAST PREMIUM DA ÓTICA ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO */}
+      {confirmModal.visivel && (
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
+            <div className="text-4xl text-elos-verde">👓</div>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Ação</h3>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
+                className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+              >
+                Não
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirmModal.acao) confirmModal.acao();
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null });
+                }}
+                className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-elos-verde/20 hover:bg-[#3a4a3e] transition-all"
+              >
+                Sim, Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
@@ -264,7 +323,7 @@ export default function Clientes() {
                     <button 
                       onClick={(e) => { 
                         e.stopPropagation();
-                        if(confirm(`Deseja excluir permanentemente o cadastro de ${cliente.nome}?`)) excluirCliente(cliente.cpf) 
+                        abrirConfirmacao(`Deseja remover permanentemente da base o cadastro de ${cliente.nome}?`, () => excluirCliente(cliente.cpf));
                       }} 
                       className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-sm"
                     >
@@ -335,14 +394,11 @@ export default function Clientes() {
                 </button>
               </div>
 
-              {/* HISTÓRICO DE PEDIDOS COM VISUALIZAÇÃO DE PRODUTOS REESTRUTURADA */}
               <div className="space-y-6 pt-4">
                 <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
                   const numPed = venda.numeroPedido || "S/N";
                   
-                  // --- LÓGICA DE ORGANIZAÇÃO VISUAL DOS PRODUTOS ---
-                  // Se existir itensCarrinho estruturado, usamos ele. Caso contrário, quebramos a string pelo '+'
                   const produtosLista = venda.itensCarrinho && venda.itensCarrinho.length > 0 
                     ? venda.itensCarrinho.map(item => item.nome)
                     : String(venda.produto || '').split('+').map(p => p.trim());
@@ -353,12 +409,11 @@ export default function Clientes() {
                         <div className="flex-1 w-full">
                           <div className="flex items-center gap-2 mb-3">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({...venda, vendaId: venda._id})}>
+                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-bege" onClick={() => setEditandoVenda({...venda, vendaId: venda._id || venda.id})}>
                               {venda.dataVenda?.split('-').reverse().join('/')} ✏️
                             </small>
                           </div>
 
-                          {/* NOVA EXIBIÇÃO EM CHIPS E BADGES ORGANIZADOS */}
                           <div className="flex flex-wrap gap-2 mb-3">
                             {produtosLista.map((prodNome, pIdx) => (
                               <div 
@@ -389,7 +444,7 @@ export default function Clientes() {
                                 onClick={() => window.open(venda.foto, '_blank')}
                               />
                               <button 
-                                onClick={() => handleExcluirFotoVenda(venda._id, venda)}
+                                onClick={() => handleExcluirFotoVenda(venda._id || venda.id, venda)}
                                 className="absolute -top-2 -right-2 bg-white text-red-500 rounded-full w-5 h-5 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity text-xs"
                               >
                                 ✕
@@ -412,7 +467,7 @@ export default function Clientes() {
                             📄 Reemitir
                           </button>
                           <button 
-                            onClick={() => { if(confirm("Deseja excluir este pedido permanentemente? (Isso não exclui o cliente)")) excluirVenda(venda._id) }} 
+                            onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente? Esta ação removerá as pendências financeiras associadas.", () => excluirVenda(venda._id || venda.id)); }} 
                             className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-sm"
                           >
                             🗑️
@@ -421,11 +476,11 @@ export default function Clientes() {
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
                         {(venda.listaParcelas || []).map((p, idx) => (
-                          <LinhaParcela key={idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} />
+                          <LinhaParcela key={idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} mostrarToast={mostrarToast} />
                         ))}
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -564,7 +619,7 @@ export default function Clientes() {
                     itensCarrinho: [{ nome: modalRecibo.produto.toUpperCase(), preco: valorLimpo }]
                   }, 'recibo');
                   setModalRecibo(null);
-                }} className="flex-1 bg-elos-verde text-white py-4 rounded-2xl font-bold hover:bg-[#3a4a3e] shadow-lg shadow-elos-verde/20 transition-all active:scale-95">Gerar PDF</button>
+                }} className="flex-1 bg-elos-verde text-white py-4 rounded-2xl font-bold hover:bg-[#3a4a3e] shadow-lg shadow-elos-verde/20 transition-all active:scale-[0.95]">Gerar PDF</button>
               <button onClick={() => setModalRecibo(null)} className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold">Cancelar</button>
             </div>
           </div>

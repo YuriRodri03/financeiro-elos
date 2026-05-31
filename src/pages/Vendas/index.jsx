@@ -30,6 +30,21 @@ export default function Vendas() {
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
 
+  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3000);
+  };
+
+  const abrirConfirmacao = (mensagem, acao) => {
+    setConfirmModal({ visivel: true, mensagem, acao });
+  };
+
   // --- BUSCA POR NOME DO CLIENTE (Sugestões) ---
   const sugestoes = useMemo(() => {
     if (!venda.cliente || !mostrarSugestoes) return [];
@@ -101,7 +116,10 @@ export default function Vendas() {
 
   // Funções do Carrinho
   const adicionarAoCarrinho = () => {
-    if (!novoItem.nome || !novoItem.preco) return alert("Preencha o item e o preço.");
+    if (!novoItem.nome || !novoItem.preco) {
+      mostrarToast("Preencha a descrição do item e o preço correspondente.", "erro");
+      return;
+    }
     const itemFormatado = {
       id: Date.now(),
       nome: novoItem.nome.toUpperCase(),
@@ -144,8 +162,14 @@ export default function Vendas() {
 
   const handleSalvar = async (e) => {
     e.preventDefault();
-    if (itensCarrinho.length === 0) return alert("Adicione pelo menos um item ao carrinho.");
-    if (!venda.cliente || !venda.cpf) return alert("Preencha os dados do cliente.");
+    if (itensCarrinho.length === 0) {
+      mostrarToast("Adicione pelo menos um item ao carrinho antes de finalizar.", "erro");
+      return;
+    }
+    if (!venda.cliente || !venda.cpf) {
+      mostrarToast("Identifique os dados do cliente vinculados a esta operação.", "erro");
+      return;
+    }
 
     const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
 
@@ -160,9 +184,9 @@ export default function Vendas() {
 
     try {
       const resultado = await adicionarVenda(dadosParaSalvar);
-      const imprimir = confirm("Venda registrada com sucesso! 👓\nDeseja gerar o Pedido com Garantia?");
       
-      if (imprimir) {
+      // Abre o modal customizado em vez do confirm do navegador
+      abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja gerar o arquivo de Pedido com Garantia em formato PDF?", () => {
         gerarPDFDocumento({
           ...dadosParaSalvar,
           numeroPedido: resultado?.numeroPedido || "S/N",
@@ -173,8 +197,10 @@ export default function Vendas() {
           email: clienteBase?.email || "Não informado",
           itensCarrinho: itensCarrinho 
         }, 'pedido');
-      }
+        mostrarToast("Pedido impresso com sucesso!", "sucesso");
+      });
 
+      // Limpa os formulários
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
         metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
@@ -183,12 +209,53 @@ export default function Vendas() {
       });
       setItensCarrinho([]);
     } catch (error) {
-      alert("Erro ao salvar a venda.");
+      mostrarToast("Erro operacional ao salvar a venda.", "erro");
     }
   };
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* TOAST PREMIUM DA ÓTICA ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO VISUAL CUSTOMIZADO */}
+      {confirmModal.visivel && (
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
+            <div className="text-4xl text-elos-verde">📄</div>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Venda Concluída</h3>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
+                className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+              >
+                Pular
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirmModal.acao) confirmModal.acao();
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null });
+                }}
+                className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-elos-verde/20 hover:bg-[#3a4a3e] transition-all"
+              >
+                Gerar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         
         <header className="mb-10 text-center md:text-left">
@@ -271,7 +338,7 @@ export default function Vendas() {
                 )}
               </div>
 
-              {/* CAMPO DE PREÇO (PREENCHE SOZINHO SE SELECIONADO DO CATÁLOGO) */}
+              {/* CAMPO DE PREÇO */}
               <input 
                 type="text" 
                 placeholder="R$ 0,00" 

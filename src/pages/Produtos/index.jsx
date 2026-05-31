@@ -12,6 +12,21 @@ export default function Produtos() {
     categoria: ''
   });
 
+  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3000);
+  };
+
+  const abrirConfirmacao = (mensagem, acao) => {
+    setConfirmModal({ visivel: true, mensagem, acao });
+  };
+
   // --- MÁSCARA DE MOEDA ---
   const aplicarMascaraMoeda = (valor) => {
     let v = valor.replace(/\D/g, '');
@@ -38,11 +53,9 @@ export default function Produtos() {
     setEditandoId(p._id || p.id);
     setNovoProduto({
       nome: p.nome,
-      // Converte o número bruto vindo do banco (ex: 450) para o formato de input (ex: "R$ 450,00")
       preco: (p.preco * 100).toString().replace(/\D/g, '').replace(/(\d)/, 'R$ $1'),
       categoria: p.categoria
     });
-    // Aplica a formatação visual correta logo após carregar
     setNovoProduto(prev => ({...prev, preco: aplicarMascaraMoeda((p.preco * 100).toString())}));
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Sobe a página suavemente
   };
@@ -57,7 +70,7 @@ export default function Produtos() {
     const precoLimpo = limparMoeda(novoProduto.preco);
 
     if (!novoProduto.nome || precoLimpo <= 0 || !novoProduto.categoria) {
-      alert("Por favor, preencha o nome, preço e categoria corretamente.");
+      mostrarToast("Por favor, preencha o nome, preço e categoria corretamente.", "erro");
       return;
     }
 
@@ -69,25 +82,64 @@ export default function Produtos() {
 
     try {
       if (editandoId) {
-        // Modo Edição
         await editarProduto(editandoId, dadosProduto);
-        alert("Produto atualizado com sucesso! 📝✨");
+        mostrarToast("Produto atualizado no catálogo! 📝✨", "sucesso");
       } else {
-        // Modo Cadastro Normal
         await adicionarProduto(dadosProduto);
-        alert("Produto adicionado ao catálogo com sucesso! 📦✨");
+        mostrarToast("Produto adicionado ao catálogo com sucesso! 📦✨", "sucesso");
       }
 
       handleCancelarEdicao(); // Reseta o estado e limpa os campos
     } catch (err) {
-      alert("Erro ao salvar produto.");
+      mostrarToast("Erro ao salvar produto.", "erro");
     }
   };
 
   if (carregando) return null;
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* TOAST PREMIUM DA ÓTICA ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO (Substitui confirm) */}
+      {confirmModal.visivel && (
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
+            <div className="text-4xl text-elos-verde">📦</div>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Remoção</h3>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
+                className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+              >
+                Não
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirmModal.acao) confirmModal.acao();
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null });
+                }}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all"
+              >
+                Sim, Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-5xl mx-auto">
         
         {/* CABEÇALHO */}
@@ -177,7 +229,6 @@ export default function Produtos() {
                       </span>
                       
                       <div className="flex items-center gap-2">
-                        {/* BOTÃO EDITAR ADICIONADO */}
                         <button 
                           onClick={() => handleIniciarEdicao(p)}
                           className="bg-elos-fundo hover:bg-elos-bege hover:text-white text-elos-bege px-4 py-2 rounded-xl text-xs font-bold transition-all"
@@ -187,7 +238,12 @@ export default function Produtos() {
                         </button>
                         
                         <button 
-                          onClick={() => excluirProduto(p._id || p.id)}
+                          onClick={() => {
+                            abrirConfirmacao(`Deseja realmente remover o produto "${p.nome}" do catálogo da Ótica Elos?`, () => {
+                              excluirProduto(p._id || p.id);
+                              mostrarToast("Produto removido com sucesso!", "sucesso");
+                            });
+                          }}
                           className="text-red-300 hover:text-red-600 text-xs font-bold p-2 transition-colors"
                           title="Remover do catálogo"
                         >

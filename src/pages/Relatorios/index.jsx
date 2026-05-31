@@ -2,8 +2,19 @@ import React, { useState } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 
 export default function RelatorioInadimplencia() {
-  const { vendas, clientes, atualizarVenda } = useFinanceiro();
+  // Ajustado para 'editarVenda', que é o nome da função que está no seu FinanceiroContext
+  const { vendas, clientes, editarVenda } = useFinanceiro();
   const [dataPrevisaoTemp, setDataPrevisaoTemp] = useState({});
+
+  // --- ESTADO PARA NOTIFICAÇÕES TOAST PREMIUM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3000);
+  };
 
   // 1. Lógica para identificar QUALQUER parcela vencida (sem carência de 30 dias)
   const obterParcelasVencidas = (venda) => {
@@ -28,10 +39,11 @@ export default function RelatorioInadimplencia() {
 
   const salvarPrevisao = async (vendaId, data) => {
     try {
-      await atualizarVenda(vendaId, { dataPrevisaoPagamento: data });
-      alert("Prazo de pagamento registrado!");
+      // Sincronizado com a rota PATCH e com o Mongoose do backend através do editarVenda
+      await editarVenda(vendaId, { dataPrevisaoPagamento: data });
+      mostrarToast("Prazo de pagamento registrado com sucesso!", "sucesso");
     } catch (error) {
-      alert("Erro ao salvar previsão.");
+      mostrarToast("Erro ao salvar prazo de previsão no banco.", "erro");
     }
   };
 
@@ -57,14 +69,30 @@ export default function RelatorioInadimplencia() {
   const abrirWhatsApp = (venda) => {
     const cadastroDoCliente = clientes.find(c => c.cpf === venda.cpf);
     const foneLimpo = (cadastroDoCliente?.telefone || venda.telefone)?.replace(/\D/g, "");
-    if (!foneLimpo) return alert("Cliente sem telefone cadastrado.");
+    if (!foneLimpo) {
+      mostrarToast("Este cliente não possui WhatsApp válido em seu cadastro.", "erro");
+      return;
+    }
     
     const mensagem = `Olá ${venda.cliente}, tudo bem? Aqui é da Ótica Elos. 🤓 Notamos que constam parcelas pendentes no seu cadastro. Poderia nos ajudar a regularizar?`;
     window.open(`https://wa.me/55${foneLimpo}?text=${encodeURIComponent(mensagem)}`, "_blank");
   };
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* TOAST PREMIUM DA ÓTICA ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto">
         <header className="mb-10 text-center md:text-left border-b border-elos-bege/20 pb-6">
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Painel de Cobrança</h1>
@@ -102,7 +130,7 @@ export default function RelatorioInadimplencia() {
                   const prazoVenceuHj = v.dataPrevisaoPagamento && v.dataPrevisaoPagamento <= hojeStr;
 
                   return (
-                    <tr key={v._id} className={`transition-all ${temPrazoFuturo ? 'opacity-40 bg-gray-50' : 'hover:bg-elos-fundo/30'}`}>
+                    <tr key={v._id || v.id} className={`transition-all ${temPrazoFuturo ? 'opacity-40 bg-gray-50' : 'hover:bg-elos-fundo/30'}`}>
                       <td className="px-8 py-6">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
@@ -121,7 +149,7 @@ export default function RelatorioInadimplencia() {
                         <div className="flex flex-wrap gap-1">
                           {v.parcelasVencidas.map(p => (
                             <span key={p.numero} className="text-[9px] bg-red-50 text-red-600 px-2 py-1 rounded-md font-bold border border-red-100">
-                              {p.numero}ª parc
+                              {p.numero === 0 ? 'Entrada' : `${p.numero}ª parc`}
                             </span>
                           ))}
                         </div>
@@ -136,10 +164,13 @@ export default function RelatorioInadimplencia() {
                             type="date" 
                             defaultValue={v.dataPrevisaoPagamento || ""}
                             className="text-[11px] p-2 bg-white border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-elos-bege"
-                            onChange={(e) => setDataPrevisaoTemp({...dataPrevisaoTemp, [v._id]: e.target.value})}
+                            onChange={(e) => setDataPrevisaoTemp({...dataPrevisaoTemp, [v._id || v.id]: e.target.value})}
                           />
                           <button 
-                            onClick={() => dataPrevisaoTemp[v._id] && salvarPrevisao(v._id, dataPrevisaoTemp[v._id])}
+                            onClick={() => {
+                              const targetId = v._id || v.id;
+                              if(dataPrevisaoTemp[targetId]) salvarPrevisao(targetId, dataPrevisaoTemp[targetId]);
+                            }}
                             className="p-2 bg-elos-bege text-white rounded-lg hover:bg-elos-verde transition-colors"
                           >
                             OK

@@ -10,8 +10,18 @@ export default function CadastroClientes() {
     email: '', 
     endereco: '', 
     observacoes: '',
-    foto: '' // NOVO: Campo para armazenar a imagem
+    foto: '' 
   });
+
+  // --- NOVO: ESTADO PARA GERENCIAR NOTIFICAÇÕES TOAST PREMIUM ---
+  const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+
+  const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    setToast({ visivel: true, mensagem, tipo });
+    setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3500); // Some sozinho após 3.5 segundos
+  };
 
   // --- LÓGICA DE FOTO PARA O CADASTRO ---
   const handleFileChange = (e) => {
@@ -57,22 +67,36 @@ export default function CadastroClientes() {
     e.preventDefault();
     
     if (novo.cpf.length < 14) {
-      alert("Por favor, preencha o CPF corretamente.");
+      mostrarToast("Por favor, preencha o CPF corretamente.", "erro");
       return;
     }
 
     try {
       await adicionarCliente(novo);
-      alert("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨");
-      // Reset incluindo a foto
+      mostrarToast("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨", "sucesso");
       setNovo({ nome: '', cpf: '', telefone: '', email: '', endereco: '', observacoes: '', foto: '' });
     } catch (error) {
-      alert("Erro ao conectar com o banco de dados. Verifique o servidor.");
+      mostrarToast("Erro ao conectar com o banco de dados. Verifique o servidor.", "erro");
     }
   };
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
+    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
+      
+      {/* NOVO: COMPONENTE VISUAL DO TOAST COMPATÍVEL COM LAYOUT ELOS */}
+      {toast.visivel && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+          <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
+            toast.tipo === 'sucesso' 
+              ? 'bg-elos-verde/95 border-elos-bege/30 text-white' 
+              : 'bg-red-900/95 border-red-500/30 text-red-100'
+          }`}>
+            <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
+            <p className="text-xs font-bold uppercase tracking-wider font-sans">{toast.mensagem}</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         
         {/* Cabeçalho */}
