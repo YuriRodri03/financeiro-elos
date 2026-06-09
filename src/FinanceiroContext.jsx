@@ -97,13 +97,16 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao excluir."); }
   };
 
-  // --- FUNÇÕES DE VENDA ---
+  // --- FUNÇÕES DE VENDA CORRIGIDA ---
   const adicionarVenda = async (novaVenda) => {
     const valorTotal = Number(novaVenda.valorTotal);
     const valorEntrada = Number(novaVenda.valorEntrada || 0);
     const valorRestante = valorTotal - valorEntrada;
     const numParcelas = Number(novaVenda.parcelas);
-    const valorDaParcela = numParcelas > 0 ? valorRestante / numParcelas : 0;
+    
+    // CORREÇÃO DE PONTO FLUTUANTE: Força o valor base a possuir no máximo 2 casas decimais livres
+    const valorDaParcelaRaw = numParcelas > 0 ? valorRestante / numParcelas : 0;
+    const valorDaParcela = parseFloat(valorDaParcelaRaw.toFixed(2));
 
     let parcelasGeradas = [];
     if (valorEntrada > 0) {
@@ -118,8 +121,11 @@ export function FinanceiroProvider({ children }) {
       const dataBase = novaVenda.metodoPagamento === 'Boleto / Crediário' ? novaVenda.dataPrimeiraParcela : novaVenda.dataVenda;
       let dataVenc = new Date(dataBase + 'T00:00:00');
       dataVenc.setMonth(dataVenc.getMonth() + i);
+      
       parcelasGeradas.push({
-        numero: i + 1, valor: valorDaParcela,
+        numero: i + 1, 
+        // CORREÇÃO: Salva no Mongo o valor limpo cortando restos como 200.000000003
+        valor: parseFloat(valorDaParcela.toFixed(2)),
         paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
         dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null,
         vencimentoOriginal: dataVenc.toISOString().split('T')[0]
@@ -265,7 +271,6 @@ export function FinanceiroProvider({ children }) {
     } catch (err) { alert("Erro ao cadastrar produto."); }
   };
 
-  // --- NOVO: FUNÇÃO PARA EDITAR O PRODUTO NO MONGO E ESTADO ---
   const editarProduto = async (produtoId, dadosNovos) => {
     try {
       const res = await fetch(`${API_URL}/produtos/${produtoId}`, {
@@ -277,7 +282,6 @@ export function FinanceiroProvider({ children }) {
       if (!res.ok) throw new Error("Erro ao salvar alterações do produto no servidor.");
 
       const produtoAtualizado = await res.json();
-      // Atualiza o estado mapeando o ID modificado
       setProdutos(prev => prev.map(p => (p._id === produtoId || p.id === produtoId) ? produtoAtualizado : p));
       return produtoAtualizado;
     } catch (err) {
@@ -302,7 +306,7 @@ export function FinanceiroProvider({ children }) {
       adicionarVenda, editarVenda, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarDataVenda, 
       adicionarCliente, editarCliente, excluirCliente, 
       adicionarDespesa, darBaixaDespesa, excluirDespesa,
-      adicionarProduto, editarProduto, excluirProduto, // Incluído 'editarProduto' no Provider
+      adicionarProduto, editarProduto, excluirProduto, 
       carregando 
     }}>
       {children}
