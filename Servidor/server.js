@@ -124,7 +124,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao excluir venda" }); }
 });
 
-// --- BAIXA E ESTORNO DE PARCELA CORRIGIDO ---
+// --- BAIXA E ESTORNO DE PARCELA (TOTALMENTE BLINDADO CONTRA CASAS DECIMAIS) ---
 app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
   try {
     const { id, numero } = req.params;
@@ -135,7 +135,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     const numAtual = parseFloat(numero);
     let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas || []));
     
-    // CORREÇÃO: findIndex comparando strings para evitar divergências de tipagem (String vs Number)
     const index = novasParcelas.findIndex(p => String(p.numero) === String(numAtual));
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
@@ -150,14 +149,19 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       novasParcelas[index].paga = false;
       novasParcelas[index].dataPagamento = null;
     } else {
-      let valorInformado = Number(valorPago || novasParcelas[index].valor);
-      let valorOriginalDaParcela = Number(novasParcelas[index].valor);
-      if (valorInformado > valorOriginalDaParcela) {
-        let excesso = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
+      // --- TRATAMENTO CORRETO DE ARREDONDAMENTO MONETÁRIO ---
+      let valorInformado = parseFloat(Number(valorPago || novasParcelas[index].valor).toFixed(2));
+      let valorOriginalDaParcela = parseFloat(Number(novasParcelas[index].valor).toFixed(2));
+      
+      // Calcula a diferença real truncada em duas casas centesimais
+      const diferenca = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
+
+      if (diferenca > 0) {
+        let excesso = diferenca;
         for (let i = index + 1; i < novasParcelas.length; i++) {
           if (excesso <= 0) break;
           if (novasParcelas[i].paga) continue;
-          let valorDaProxima = Number(novasParcelas[i].valor);
+          let valorDaProxima = parseFloat(Number(novasParcelas[i].valor).toFixed(2));
           if (excesso >= valorDaProxima) {
             novasParcelas[index].valor = parseFloat((Number(novasParcelas[index].valor) + valorDaProxima).toFixed(2));
             excesso = parseFloat((excesso - valorDaProxima).toFixed(2));
@@ -170,13 +174,23 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         }
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
-      } else if (valorInformado < valorOriginalDaParcela) {
-        const valorSobra = parseFloat((valorOriginalDaParcela - valorInformado).toFixed(2));
+      } else if (diferenca < 0) {
+        // Gera a parcela filha legítima apenas se houver menos dinheiro pago de verdade
+        const valorSobra = Math.abs(diferenca);
         novasParcelas[index].valor = valorInformado;
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
-        novasParcelas.push({ ...novasParcelas[index], numero: numAtual + 0.5, valor: valorSobra, paga: false, dataPagamento: null, observacao: `Restante da parc. ${numAtual}` });
+        novasParcelas.push({ 
+          ...novasParcelas[index], 
+          numero: numAtual + 0.5, 
+          valor: valorSobra, 
+          paga: false, 
+          dataPagamento: null, 
+          observacao: `Restante da parc. ${numAtual}` 
+        });
       } else {
+        // Se a diferença for zero, a dízima binária é apagada e salva como o valor informado redondo
+        novasParcelas[index].valor = valorInformado;
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
       }
@@ -184,7 +198,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
     
     novasParcelas.sort((a, b) => a.numero - b.numero);
     
-    // CORREÇÃO: Vincula explicitamente o array modificado de volta ao documento Mongo
     venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
     
