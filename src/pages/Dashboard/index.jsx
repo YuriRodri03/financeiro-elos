@@ -13,10 +13,10 @@ export default function Dashboard() {
   const [relatorioInicio, setRelatorioInicio] = useState('');
   const [relatorioFim, setRelatorioFim] = useState('');
 
-  // --- NOVO: ESTADO DE PRIVACIDADE ---
+  // --- ESTADO DE PRIVACIDADE ---
   const [ocultarValores, setOcultarValores] = useState(true);
 
-  // --- NOVO: ESTADO PARA NOTIFICAÇÕES TOAST PREMIUM ---
+  // --- ESTADO PARA NOTIFICAÇÕES TOAST PREMIUM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
@@ -35,7 +35,6 @@ export default function Dashboard() {
       style: 'currency',
       currency: 'BRL',
     });
-    // CORREÇÃO: Movido para antes do retorno para evitar código inacessível
     return formatado.replace(/\s/g, '\u00A0');
   };
 
@@ -77,7 +76,26 @@ export default function Dashboard() {
     mostrarToast("Balanço gerado e baixado com sucesso!", "sucesso");
   };
 
-  // --- CÁLCULOS ---
+  // --- CÁLCULO HISTÓRICO COMPLETO DO SALDO EM CAIXA ATUAL ---
+  const saldoCaixaAtualGeral = useMemo(() => {
+    let totalArrecadadoHistorico = 0;
+    
+    vendas.forEach(venda => {
+      (venda.listaParcelas || []).forEach(p => {
+        if (p.paga) {
+          totalArrecadadoHistorico += p.valor;
+        }
+      });
+    });
+
+    const totalPagoDespesasHistorico = despesas
+      .filter(d => d.paga)
+      .reduce((acc, d) => acc + d.valor, 0);
+
+    return totalArrecadadoHistorico - totalPagoDespesasHistorico;
+  }, [vendas, despesas]);
+
+  // --- CÁLCULOS FILTRADOS ---
 
   // 1. A RECEBER
   const detalhesAReceber = useMemo(() => {
@@ -233,7 +251,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* 1. FATURAMENTO BRUTO */}
+        {/* 1. FATURAMENTO BRUTO (MÊS) - Ocupando 100% de largura novamente no topo */}
         <div className="grid grid-cols-1 gap-6 mb-8">
           <div className="bg-elos-verde p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] border-[#3a4a3e] relative overflow-hidden">
             <div className="relative z-10">
@@ -348,6 +366,26 @@ export default function Dashboard() {
             <p className="text-2xl font-black text-elos-verde mt-1 font-tradicional italic">
               {ocultarValores ? "****" : formatarMoeda(volumeVendasAno)}
             </p>
+          </div>
+        </div>
+
+        {/* REPOSICIONADO: CARD HISTÓRICO DE SALDO EM CAIXA ATUAL (Fica abaixo do resumo anual) */}
+        <div className="grid grid-cols-1 gap-6 mb-10">
+          <div className={`p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] relative overflow-hidden transition-all ${
+            saldoCaixaAtualGeral >= 0 ? 'bg-elos-bege border-[#8c7664]' : 'bg-red-950 border-red-900'
+          }`}>
+            <div className="relative z-10">
+              <h3 className="text-xs font-bold text-white/60 uppercase tracking-[0.2em]">Saldo em Caixa Atual (Histórico Acumulado)</h3>
+              <p className="text-4xl font-black mt-2 text-white italic whitespace-nowrap">
+                {formatarMoeda(saldoCaixaAtualGeral)}
+              </p>
+              <p className="text-[10px] text-white/40 mt-2 uppercase font-bold italic tracking-widest">
+                Disponibilidade real em conta hoje (Total recebido - despesas pagas históricas)
+              </p>
+            </div>
+            <div className="absolute right-[-10px] bottom-[-30px] text-white/[0.04] text-8xl font-black italic select-none">
+              CAIXA
+            </div>
           </div>
         </div>
 
