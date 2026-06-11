@@ -3,8 +3,8 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
 export default function Vendas() {
-  // Puxamos 'produtos' (do seu novo catálogo) além de 'clientes'
-  const { adicionarVenda, clientes, produtos } = useFinanceiro();
+  // Puxamos 'adicionarProduto' do contexto global
+  const { adicionarVenda, clientes, produtos, adicionarProduto } = useFinanceiro();
 
   // Controle dos dropdowns de busca
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -133,6 +133,22 @@ export default function Vendas() {
     setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
   };
 
+  // --- NOVO: FUNÇÃO PARA CADASTRAR PRODUTO NA ÁRVORE GLOBAL DIRETO DO CARRINHO ---
+  const salvarItemNoCatalogo = async (item) => {
+    const dadosProduto = {
+      nome: item.nome.toUpperCase(),
+      preco: item.preco,
+      categoria: 'ARMAÇÃO' // Define uma categoria base padrão para triagem inicial
+    };
+
+    try {
+      await adicionarProduto(dadosProduto);
+      mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
+    } catch (err) {
+      mostrarToast("Erro ao sincronizar item com o catálogo.", "erro");
+    }
+  };
+
   // Cálculos Automáticos
   const subtotalItens = useMemo(() => {
     return itensCarrinho.reduce((acc, item) => acc + item.preco, 0);
@@ -185,17 +201,14 @@ export default function Vendas() {
     try {
       const resultado = await adicionarVenda(dadosParaSalvar);
       
-      // Abre o modal customizado em vez do confirm do navegador
       abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja gerar o arquivo de Pedido com Garantia em formato PDF?", () => {
         gerarPDFDocumento({
-          ...dadosParaSalvar,
-          numeroPedido: resultado?.numeroPedido || "S/N",
+          ...resultado,
           valorProduto: subtotalItens, 
-          data: venda.dataVenda.split('-').reverse().join('/'),
+          data: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : venda.dataVenda.split('-').reverse().join('/'),
           telefone: clienteBase?.telefone || "Não informado",
           endereco: clienteBase?.endereco || "Não informado",
-          email: clienteBase?.email || "Não informado",
-          itensCarrinho: itensCarrinho 
+          email: clienteBase?.email || "Não informado"
         }, 'pedido');
         mostrarToast("Pedido impresso com sucesso!", "sucesso");
       });
@@ -350,15 +363,35 @@ export default function Vendas() {
             </div>
 
             <div className="space-y-2">
-              {itensCarrinho.map(item => (
-                <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
-                  <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
-                    <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
+              {itensCarrinho.map(item => {
+                // Condição para checar se este item de carrinho exato já existe cadastrado na base do catálogo
+                const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
+
+                return (
+                  <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
+                      
+                      {/* NOVO: Botão dinâmico para indexar o item digitado manualmente direto ao catálogo de produtos */}
+                      {!jaExisteNoCatalogo && (
+                        <button
+                          type="button"
+                          onClick={() => salvarItemNoCatalogo(item)}
+                          className="px-2 py-0.5 bg-elos-bege/10 hover:bg-elos-bege hover:text-white text-elos-bege text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1"
+                          title="Salvar este produto no Catálogo permanente"
+                        >
+                          📦 Salvar no Catálogo
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
+                      <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {itensCarrinho.length === 0 && <p className="text-center text-gray-400 text-xs italic py-4">Carrinho vazio.</p>}
             </div>
           </div>
