@@ -30,7 +30,7 @@ export default function WhatsappConnect() {
   // ✅ NOVO: Função para carregar os templates salvos no MongoDB
   const carregarTemplatesMensagens = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/whatsapp/mensagens`);
+      const response = await fetch(`${API_URL}/whatsapp/mensagens`);
       if (response.ok) {
         const data = await response.json();
         setMsgAniversario(data.msg_aniversario || '');
@@ -57,7 +57,7 @@ export default function WhatsappConnect() {
     e.preventDefault();
     setSalvandoMensagens(true);
     try {
-      const response = await fetch(`${API_URL}/api/whatsapp/mensagens`, {
+      const response = await fetch(`${API_URL}/whatsapp/mensagens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +84,7 @@ export default function WhatsappConnect() {
     
     setCarregando(true);
     try {
-      const response = await fetch(`${API_URL}/api/whatsapp/desconectar`, {
+      const response = await fetch(`${API_URL}/whatsapp/desconectar`, {
         method: 'POST',
       });
       const data = await response.json();
