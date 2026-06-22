@@ -10,7 +10,7 @@ import RelatorioInadimplencia from './pages/Relatorios';
 import Despesas from './pages/Despesas';
 import Login from './pages/Login';
 import Produtos from './pages/Produtos';
-import Zap from './pages/zap'; // ✅ IMPORTADO: Atalho para a página do robô (zap.jsx)
+import Zap from './pages/Zap';
 import Navbar from './components/Navbar'; 
 
 import './index.css'; 
