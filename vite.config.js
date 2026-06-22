@@ -12,7 +12,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       manifest: {
         name: 'Ótica Elos - Gestão',
-        short_name: 'ÓticaElos',
+        short_name: 'Ótica Elos',
         description: 'Sistema de gestão financeira e clientes - Ótica Elos',
         theme_color: '#4a5d4e', // Seu verde musgo
         background_color: '#fdfaf5', // Fundo creme

@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, useLocation, Link } from 'react-router-dom';
+import { BrowserRouter as Router, useLocation, useNavigate } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
 import Dashboard from './pages/Dashboard';
 import Vendas from './pages/Vendas';
 import Clientes from './pages/Clientes';
-import CadastroClientes from './pages/CadastroClientes';
 import RelatorioInadimplencia from './pages/Relatorios';
 import Despesas from './pages/Despesas';
 import Login from './pages/Login';
 import Produtos from './pages/Produtos';
+import Zap from './pages/zap'; // ✅ IMPORTADO: Atalho para a página do robô (zap.jsx)
+import Navbar from './components/Navbar'; 
 
 import './index.css'; 
 
-// --- COMPONENTE DO EFEITO DE FOLHAS ---
+// --- COMPONENTE DO EFEITO DE FOLHAS (Mantido) ---
 function FolhasCaindo() {
   const folhas = Array.from({ length: 25 }); 
   
@@ -56,15 +57,14 @@ function FolhasCaindo() {
   );
 }
 
-// --- NOVO: GERENCIADOR DE PÁGINAS PERSISTENTES ---
+// --- GERENCIADOR DE PÁGINAS PERSISTENTES ---
 function ConteudoAbasPersistentes() {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  // Mapeamos os caminhos para renderizar tudo em background mantendo os inputs intactos
   return (
     <div className="animate-in fade-in duration-500">
-      <div style={{ display: currentPath === '/' ? 'block' : 'none' }}>
+      <div style={{ display: currentPath === '/' || currentPath === '/dashboard' ? 'block' : 'none' }}>
         <Dashboard />
       </div>
       <div style={{ display: currentPath === '/vendas' ? 'block' : 'none' }}>
@@ -79,12 +79,78 @@ function ConteudoAbasPersistentes() {
       <div style={{ display: currentPath === '/produtos' ? 'block' : 'none' }}>
         <Produtos />
       </div>
-      <div style={{ display: currentPath === '/cadastro-clientes' ? 'block' : 'none' }}>
-        <CadastroClientes />
+      {/* ✅ ADICIONADO: Renderização persistente da aba do robô de mensagens */}
+      <div style={{ display: currentPath === '/zap' ? 'block' : 'none' }}>
+        <Zap />
       </div>
       <div style={{ display: currentPath === '/relatorios' ? 'block' : 'none' }}>
         <RelatorioInadimplencia />
       </div>
+    </div>
+  );
+}
+
+// --- INTERFACE INTERNA DA NAVBAR INTEGRADA COM AS ROTAS DO ROUTER ---
+function InterfaceSistema({ aoDeslogar }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [modalConfirmSair, setModalConfirmSair] = useState(false);
+
+  // Converte a rota atual do navegador para identificar qual ID da aba está ativo
+  const obterAbaInversa = () => {
+    const rota = location.pathname;
+    if (rota === '/') return 'dashboard';
+    return rota.replace('/', '');
+  };
+
+  // Quando a Navbar manda alterar a aba, nós empurramos a nova rota na URL
+  const lidarMudancaAba = (idAba) => {
+    if (idAba === 'dashboard') navigate('/');
+    else navigate(`/${idAba}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-elos-fundo">
+      {/* RENDERIZA A NAVBAR PREMIUM CONTROLADA PELAS ROTAS */}
+      <Navbar 
+        abaAtual={obterAbaInversa()} 
+        setAbaAtiva={lidarMudancaAba} 
+        usuarioLogado="Painel Admin" 
+        onLogout={() => setModalConfirmSair(true)} 
+      />
+
+      {/* MODAL DE CONFIRMAÇÃO VISUAL PREMIUM PARA LOGOUT */}
+      {modalConfirmSair && (
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
+          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
+            <div className="text-4xl text-elos-verde">🚪</div>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Sair do Sistema</h3>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">Você deseja encerrar a sua sessão atual no ecossistema da Ótica Elos?</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setModalConfirmSair(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+              >
+                Não, Voltar
+              </button>
+              <button 
+                onClick={() => {
+                  setModalConfirmSair(false);
+                  aoDeslogar();
+                }}
+                className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-elos-verde/20 hover:bg-[#3a4a3e] transition-all"
+              >
+                Sim, Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENDERIZAÇÃO DAS TELAS PERSISTENTES */}
+      <main>
+        <ConteudoAbasPersistentes />
+      </main>
     </div>
   );
 }
@@ -104,10 +170,8 @@ function AppContent() {
   };
 
   const realizarLogout = () => {
-    if (window.confirm("Deseja sair do sistema?")) {
-      setAutenticado(false);
-      localStorage.removeItem('otica_elos_auth');
-    }
+    setAutenticado(false);
+    localStorage.removeItem('otica_elos_auth');
   };
 
   if (!autenticado) return <Login onLogin={realizarLogin} />;
@@ -127,41 +191,7 @@ function AppContent() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-elos-fundo">
-        {/* NAVBAR */}
-        <nav className="bg-white border-b border-elos-bege/20 shadow-soft sticky top-0 z-40 overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 md:px-8">
-            <div className="flex justify-between items-center h-20 gap-4">
-              
-              <div className="font-tradicional text-xl md:text-2xl text-elos-verde italic font-bold whitespace-nowrap">
-                Ótica Elos
-              </div>
-
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-2">
-                <Link to="/" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Dashboard</Link>
-                <Link to="/vendas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Vendas</Link>
-                <Link to="/despesas" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Gastos</Link>
-                <Link to="/clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Clientes</Link>
-                <Link to="/produtos" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Produtos</Link>
-                <Link to="/cadastro-clientes" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Cadastro</Link> 
-                <Link to="/relatorios" className="px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-elos-verde hover:bg-elos-fundo transition-all whitespace-nowrap">Cobrança</Link>
-                
-                <button 
-                  onClick={realizarLogout} 
-                  className="ml-2 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all whitespace-nowrap"
-                >
-                  Sair
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        {/* CONTEÚDO PRINCIPAL ATUALIZADO */}
-        <main>
-          <ConteudoAbasPersistentes />
-        </main>
-      </div>
+      <InterfaceSistema aoDeslogar={realizarLogout} />
     </Router>
   );
 }

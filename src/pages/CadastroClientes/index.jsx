@@ -6,6 +6,7 @@ export default function CadastroClientes() {
   const [novo, setNovo] = useState({
     nome: '', 
     cpf: '', 
+    dataNascimento: '',
     telefone: '', 
     email: '', 
     endereco: '', 
@@ -13,7 +14,7 @@ export default function CadastroClientes() {
     foto: '' 
   });
 
-  // --- NOVO: ESTADO PARA GERENCIAR NOTIFICAÇÕES TOAST PREMIUM ---
+  // --- ESTADO PARA GERENCIAR NOTIFICAÇÕES TOAST PREMIUM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
@@ -74,7 +75,8 @@ export default function CadastroClientes() {
     try {
       await adicionarCliente(novo);
       mostrarToast("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨", "sucesso");
-      setNovo({ nome: '', cpf: '', telefone: '', email: '', endereco: '', observacoes: '', foto: '' });
+      // Limpa os campos após salvar, incluindo a data de nascimento
+      setNovo({ nome: '', cpf: '', dataNascimento: '', telefone: '', email: '', endereco: '', observacoes: '', foto: '' });
     } catch (error) {
       mostrarToast("Erro ao conectar com o banco de dados. Verifique o servidor.", "erro");
     }
@@ -83,7 +85,7 @@ export default function CadastroClientes() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
       
-      {/* NOVO: COMPONENTE VISUAL DO TOAST COMPATÍVEL COM LAYOUT ELOS */}
+      {/* COMPONENTE VISUAL DO TOAST COMPATÍVEL COM LAYOUT ELOS */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
@@ -131,6 +133,15 @@ export default function CadastroClientes() {
               />
             </div>
 
+            {/* Data de Nascimento */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Data de Nascimento</label>
+              <input 
+                type="date" name="dataNascimento" value={novo.dataNascimento} onChange={handleChange}
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all text-gray-500"
+              />
+            </div>
+
             {/* Telefone */}
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Telefone / WhatsApp</label>
@@ -142,7 +153,7 @@ export default function CadastroClientes() {
             </div>
 
             {/* E-mail */}
-            <div className="md:col-span-2 space-y-2">
+            <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">E-mail</label>
               <input 
                 type="email" name="email" value={novo.email} onChange={handleChange} 

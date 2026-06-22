@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
+import CadastroClientes from '../CadastroClientes'; // ✅ IMPORTADO: Seu componente de cadastro
 
 // --- FUNÇÃO AUXILIAR PARA MOEDA (Mantida) ---
 const aplicarMascaraMoeda = (valor) => {
@@ -12,7 +13,7 @@ const aplicarMascaraMoeda = (valor) => {
   return v;
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA ---
+// --- COMPONENTE DE LINHA DE PARCELA (Mantido) ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -99,6 +100,9 @@ export default function Clientes() {
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
 
+  // --- NOVO: ESTADO PARA EXIBIR/OCULTAR O FORMULÁRIO DE CADASTRO NA TELA ---
+  const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
+
   // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
@@ -111,7 +115,7 @@ export default function Clientes() {
   };
 
   const abrirConfirmacao = (mensagem, acao) => {
-    setConfirmModal({ visivel: true, mensagem, acao });
+    setConfirmModal({ visivel: true, message: mensagem, acao });
   };
 
   const fecharModal = () => {
@@ -170,7 +174,7 @@ export default function Clientes() {
       await editarVenda(editandoVenda.vendaId, dadosAtualizados);
       setEditandoVenda(null);
       setNovaFotoVenda('');
-      mostrarToast("Pedido atualizado com sucesso!", "sucesso");
+      mostrarToast("Pedido updated com sucesso!", "sucesso");
     } catch (err) { mostrarToast("Erro ao sincronizar modificações do pedido.", "erro"); }
   };
 
@@ -205,12 +209,14 @@ export default function Clientes() {
       const totalDevido = vendasCli.reduce((acc, v) => acc + (v.listaParcelas || []).filter(p => !p.paga).reduce((soma, p) => soma + (p.valor || 0), 0), 0);
 
       return {
+        ...dadosCad,
         _id: dadosCad?._id || dadosCad?.id,
         nome: dadosCad?.nome || vendasCli[0]?.cliente || "Sem Nome",
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
         email: dadosCad?.email || "Não cadastrado",
         endereco: dadosCad?.endereco || "Não informado",
+        dataNascimento: dadosCad?.dataNascimento || "",
         observacoes: dadosCad?.observacoes || "",
         foto: dadosCad?.foto || "",
         historicoVendas: vendasCli,
@@ -253,7 +259,7 @@ export default function Clientes() {
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
             <div className="text-4xl text-elos-verde">👓</div>
             <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Ação</h3>
-            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.message}</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
@@ -283,6 +289,17 @@ export default function Clientes() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+          {/* ✅ NOVO: Botão rápido para abrir/fechar o painel de cadastro */}
+          <button 
+            type="button"
+            onClick={() => setMostrarFormCadastro(!mostrarFormCadastro)}
+            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2 ${
+              mostrarFormCadastro ? 'bg-elos-bege text-white' : 'bg-elos-verde text-white'
+            }`}
+          >
+            {mostrarFormCadastro ? '📁 Ocultar Cadastro' : '➕ Cadastrar Cliente'}
+          </button>
+
           <input 
             type="text" 
             className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none focus:ring-2 focus:ring-elos-bege text-sm w-full md:w-80"
@@ -296,6 +313,13 @@ export default function Clientes() {
           </div>
         </div>
       </header>
+
+      {/* ✅ NOVO: Renderiza a sua página de CadastroClientes de forma embutida se o botão for clicado */}
+      {mostrarFormCadastro && (
+        <div className="mb-10 animate-in slide-in-from-top-4 duration-300">
+          <CadastroClientes />
+        </div>
+      )}
 
       {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
@@ -355,7 +379,15 @@ export default function Clientes() {
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 shadow-inner h-fit">
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">E-mail</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.email || "Não cadastrado"}</p></div>
-                  <div className="md:col-span-2"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
+                  
+                  <div>
+                    <h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Data de Nascimento</h4>
+                    <p className="text-sm font-bold text-elos-texto">
+                      {clienteNoModal.dataNascimento ? clienteNoModal.dataNascimento.split('-').reverse().join('/') : "Não informada"}
+                    </p>
+                  </div>
+                  
+                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
                 </div>
 
@@ -518,6 +550,7 @@ export default function Clientes() {
             <div className="grid grid-cols-1 gap-4">
               <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">CPF</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Data de Nascimento</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none text-gray-500" type="date" value={editandoCadastro.dataNascimento || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, dataNascimento: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">E-mail</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="email" value={editandoCadastro.email || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, email: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
