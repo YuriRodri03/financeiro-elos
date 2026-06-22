@@ -16,7 +16,7 @@ export default function WhatsappConnect() {
   // Função para buscar o status do WhatsApp no servidor
   const buscarStatus = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/whatsapp/status`);
+      const response = await fetch(`${API_URL}/whatsapp/status`);
       const data = await response.json();
       
       setStatus(data.status);
