@@ -5,7 +5,7 @@ export default function WhatsappConnect() {
   const [qrCode, setQrCode] = useState(null);
   const [carregando, setCarregando] = useState(false);
 
-  // --- NOVO: ESTADOS PARA OS TEMPLATES DE MENSAGENS CUSTOMIZÁVEIS ---
+  // --- ESTADOS PARA OS TEMPLATES DE MENSAGENS CUSTOMIZÁVEIS ---
   const [msgAniversario, setMsgAniversario] = useState('');
   const [msgPosVenda, setMsgPosVenda] = useState('');
   const [salvandoMensagens, setSalvandoMensagens] = useState(false);
@@ -27,7 +27,7 @@ export default function WhatsappConnect() {
     }
   };
 
-  // ✅ NOVO: Função para carregar os templates salvos no MongoDB
+  // Função para carregar os templates salvos no MongoDB
   const carregarTemplatesMensagens = async () => {
     try {
       const response = await fetch(`${API_URL}/whatsapp/mensagens`);
@@ -43,7 +43,7 @@ export default function WhatsappConnect() {
 
   useEffect(() => {
     buscarStatus(); 
-    carregarTemplatesMensagens(); // ✅ Carrega os textos no primeiro boot
+    carregarTemplatesMensagens(); 
     
     const interval = setInterval(() => {
       buscarStatus();
@@ -52,7 +52,7 @@ export default function WhatsappConnect() {
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ NOVO: Função para sincronizar os textos alterados com o banco
+  // Função para sincronizar os textos alterados com o banco
   const handleSalvarMensagens = async (e) => {
     e.preventDefault();
     setSalvandoMensagens(true);
@@ -104,23 +104,32 @@ export default function WhatsappConnect() {
     }
   };
 
+  // Mapeamento de Cores adaptado para as strings de status do Baileys
   const obterCorStatus = () => {
     switch (status) {
       case 'Conectado':
-      case 'isLogged':
-        return '#10b981'; 
+      case 'open':
+        return '#10b981'; // Verde estável
       case 'Aguardando Leitura do QR Code':
-        return '#f59e0b'; 
+        return '#f59e0b'; // Laranja de atenção
       case 'Desconectado':
-        return '#ef4444'; 
+      case 'close':
+        return '#ef4444'; // Vermelho
       default:
-        return '#6b7280'; 
+        return '#6b7280'; // Cinza de carregamento
     }
+  };
+
+  // Helper para amigabilizar o texto bruto do Baileys na tela
+  const obterTextoStatusAmigavel = () => {
+    if (status === 'open') return 'Conectado';
+    if (status === 'close') return 'Desconectado';
+    return status;
   };
 
   return (
     <div style={{
-      maxWidth: '650px', // Aumentado um pouco para acomodar melhor os textareas lado a lado ou organizados
+      maxWidth: '650px',
       margin: '40px auto',
       padding: '30px',
       backgroundColor: '#ffffff',
@@ -133,7 +142,7 @@ export default function WhatsappConnect() {
           Automação de Mensagens 🟢
         </h2>
         <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '25px' }}>
-          Gerencie o canal de conexão e os textos de pós-venda e aniversários da <strong>Ótica Elos</strong>.
+          Gerencie o canal de conexão e os textos de pós-venda e birthdays da <strong>Ótica Elos</strong>.
         </p>
       </div>
 
@@ -149,16 +158,16 @@ export default function WhatsappConnect() {
         alignItems: 'center'
       }}>
         <div>
-          <span style={{ fontSize: '11px', color: '#9ca3af', block: 'inline-block', textTransform: 'uppercase', tracking: '0.05em', fontWeight: 'bold' }}>
+          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'inline-block', textTransform: 'uppercase', tracking: '0.05em', fontWeight: 'bold' }}>
             Status do Conector
           </span>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginTop: '2px' }}>
-            {status}
+            {obterTextoStatusAmigavel()}
           </div>
         </div>
 
-        {/* Exibe botão de desconectar rápido no card de status se estiver ativo */}
-        {(status === 'Conectado' || status === 'isLogged') && (
+        {/* Exibe botão de desconectar rápido se estiver ativo */}
+        {(status === 'Conectado' || status === 'open') && (
           <button
             onClick={handleDesconectar}
             disabled={carregando}
@@ -200,14 +209,14 @@ export default function WhatsappConnect() {
             />
           </div>
         </div>
-      ) : (status !== 'Conectado' && status !== 'isLogged') && (
+      ) : (status !== 'Conectado' && status !== 'open') && (
         <div style={{ padding: '20px 0', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-          🔄 Aguardando resposta do motor interno do Puppeteer...
+          🔄 Conectando com o canal estável do Baileys via WebSockets...
         </div>
       )}
 
-      {/* ✅ NOVO PAINEL: Configuração Dinâmica de Templates de Texto */}
-      <form onSubmit={handleSalvarMensagens} style={{ marginTop: '30px', spaceY: '20px' }}>
+      {/* PAINEL: Configuração Dinâmica de Templates de Texto */}
+      <form onSubmit={handleSalvarMensagens} style={{ marginTop: '30px' }}>
         <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#374151', borderBottom: '1px solid #f3f4f6', paddingBottom: '8px', marginBottom: '15px' }}>
           📝 Customização dos Disparos
         </h3>
@@ -272,7 +281,7 @@ export default function WhatsappConnect() {
           disabled={salvandoMensagens}
           style={{
             width: '100%',
-            backgroundColor: '#4a5d4e', // Tom verde clássico Elos
+            backgroundColor: '#4a5d4e', 
             color: '#ffffff',
             border: 'none',
             padding: '14px',
@@ -280,7 +289,7 @@ export default function WhatsappConnect() {
             fontSize: '13px',
             fontWeight: '700',
             textTransform: 'uppercase',
-            tracking: '0.05em',
+            letterSpacing: '0.05em',
             cursor: salvandoMensagens ? 'not-allowed' : 'pointer',
             boxShadow: '0 4px 12px rgba(74, 93, 78, 0.15)',
             transition: 'background-color 0.2s'

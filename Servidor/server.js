@@ -1,7 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const wppconnect = require('@wppconnect-team/wppconnect'); // ✅ Integrado: Lib do Robô
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys'); // ✅ Novo Motor: Baileys Ultraleve
+const QRCode = require('qrcode'); // ✅ Garante a conversão do QR do Baileys para o Base64 lido pelo front
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -20,66 +23,39 @@ let ultimaDataPosVenda = null;
 let statusConexao = 'Iniciando...';
 let qrCodeBase64 = null;
 
+// Caminho absoluto das credenciais adaptado para a pasta Servidor no Render
+const tokenPath = path.resolve('/opt/render/project/src/server/tokens/otica-elos-session');
+
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
     atualizarVendasAntigas(); 
-    inicializarMensagensPadrao(); // ✅ Inicializa as configurações de mensagens padrão se não existirem
+    inicializarMensagensPadrao(); 
     
-    // ✅ Inicializa o WhatsApp automaticamente após o banco conectar com segurança
+    // ✅ Inicializa o Baileys automaticamente após a conexão segura com o MongoDB
     inicializarWhatsApp();
   })
   .catch(err => console.error("❌ Erro na conexão:", err));
 
 // --- MODELOS (SCHEMAS) ---
-
 const Cliente = mongoose.model('Cliente', {
-  nome: String, 
-  cpf: String, 
-  dataNascimento: String, 
-  telefone: String, 
-  email: String, 
-  endereco: String, 
-  observacoes: String,
-  foto: String 
+  nome: String, cpf: String, dataNascimento: String, telefone: String, email: String, endereco: String, observacoes: String, foto: String 
 });
 
 const Venda = mongoose.model('Venda', {
-  numeroPedido: Number, 
-  cliente: String, 
-  cpf: String, 
-  produto: String, 
-  itensCarrinho: Array, 
-  valorTotal: Number,
-  valorEntrada: Number, 
-  desconto: Number, 
-  parcelas: Number, 
-  listaParcelas: Array, 
-  dataVenda: String, 
-  metodoPagamento: String,
-  dataPrevisaoPagamento: String,
-  observacoes: String, 
-  foto: String        
+  numeroPedido: Number, cliente: String, cpf: String, produto: String, itensCarrinho: Array, valorTotal: Number, valorEntrada: Number, desconto: Number, parcelas: Number, listaParcelas: Array, dataVenda: String, metodoPagamento: String, dataPrevisaoPagamento: String, observacoes: String, foto: String        
 });
 
 const Despesa = mongoose.model('Despesa', {
-  descricao: String, 
-  valor: Number, 
-  categoria: String, 
-  vencimento: String, 
-  paga: Boolean
+  descricao: String, valor: Number, category: String, vencimento: String, paga: Boolean
 });
 
 const Produto = mongoose.model('Produto', {
-  nome: String,
-  preco: Number,
-  categoria: String
+  nome: String, preco: Number, categoria: String
 });
 
-// ✅ NOVO MODELO: Para guardar textos mutáveis das notificações no MongoDB
 const Configuracao = mongoose.model('Configuracao', {
-  chave: String,
-  valor: String
+  chave: String, valor: String
 });
 
 // --- SCRIPT DE ATUALIZAÇÃO PARA VENDAS ANTIGAS ---
@@ -94,12 +70,9 @@ const atualizarVendasAntigas = async () => {
       }
       console.log("✅ Vendas antigas updated com sucesso!");
     }
-  } catch (err) {
-    console.error("Erro ao atualizar vendas antigas:", err);
-  }
+  } catch (err) { console.error("Erro ao atualizar vendas antigas:", err); }
 };
 
-// ✅ FUNÇÃO AUXILIAR: Garante que os textos existam no banco logo no primeiro boot
 const inicializarMensagensPadrao = async () => {
   try {
     const msgAniv = await Configuracao.findOne({ chave: 'msg_aniversario' });
@@ -117,13 +90,11 @@ const inicializarMensagensPadrao = async () => {
         valor: "Olá, {nome}! Tudo bem? 😊\n\nHá cerca de um mês você esteve aqui na *Ótica Elos* e levou seu(s) produto(s): *{produto}*.\n\nPassamos para saber como está sendo a sua experiência! Os óculos estão confortáveis? Precisando de qualquer ajuste na armação ou limpeza ultrassônica das lentes, lembre-se que você tem assistência gratuita vitalícia em nossa loja. 🕶️✨\n\nSua satisfação e conforto visual são nossa prioridade!"
       }).save();
     }
-  } catch (err) {
-    console.error("Erro ao inicializar mensagens padrão:", err);
-  }
+  } catch (err) { console.error("Erro ao inicializar mensagens padrão:", err); }
 };
 
 // ==========================================
-// 🛠️ ROTAS DE CONTROLE DO WHATSAPP (INTEGRADAS)
+// 🛠️ ROTAS DE CONTROLE DO WHATSAPP (MIGRADAS PARA BAILEYS)
 // ==========================================
 app.get('/api/whatsapp/status', (req, res) => {
   res.json({ status: statusConexao, qr: qrCodeBase64 });
@@ -132,14 +103,23 @@ app.get('/api/whatsapp/status', (req, res) => {
 app.post('/api/whatsapp/desconectar', async (req, res) => {
   if (!whatsappClient) return res.status(400).json({ error: 'WhatsApp não está ativo para desconectar.' });
   try {
+    statusConexao = 'Desconectando...';
     await whatsappClient.logout();
     statusConexao = 'Desconectado';
+    qrCodeBase64 = null;
     whatsappClient = null;
     res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+
+    setTimeout(() => {
+      console.log('🔄 Reiniciando motor pós-logout para disponibilizar novo QR Code...');
+      inicializarWhatsApp();
+    }, 3000);
+  } catch (error) {
+    statusConexao = 'Erro ao desconectar';
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// ✅ NOVAS ROTAS: Buscar e atualizar os textos customizáveis das mensagens no front-end
 app.get('/api/whatsapp/mensagens', async (req, res) => {
   try {
     const configs = await Configuracao.find();
@@ -158,10 +138,8 @@ app.post('/api/whatsapp/mensagens', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao salvar mensagens" }); }
 });
 
-
 // --- ROTAS API: CLIENTES ---
 app.get('/api/clientes', async (req, res) => res.json(await Cliente.find()));
-
 app.get('/api/clientes/:id', async (req, res) => {
   try {
     const cliente = await Cliente.findById(req.params.id);
@@ -169,9 +147,7 @@ app.get('/api/clientes/:id', async (req, res) => {
     res.json(cliente);
   } catch (err) { res.status(500).json({ error: "Erro ao buscar cliente" }); }
 });
-
 app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
-
 app.put('/api/clientes/:id', async (req, res) => {
   try {
     const clienteAtualizado = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -180,7 +156,6 @@ app.put('/api/clientes/:id', async (req, res) => {
     res.json(clienteAtualizado);
   } catch (err) { res.status(500).json({ error: "Erro ao editar cliente" }); }
 });
-
 app.delete('/api/clientes/:cpf', async (req, res) => {
   await Cliente.deleteOne({ cpf: req.params.cpf });
   res.json({ message: "Removido" });
@@ -188,7 +163,6 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
 
 // --- ROTAS API: VENDAS ---
 app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
-
 app.post('/api/vendas', async (req, res) => {
   try {
     const ultimaVenda = await Venda.findOne().sort({ numeroPedido: -1 });
@@ -197,26 +171,14 @@ app.post('/api/vendas', async (req, res) => {
     res.json(await novaVenda.save());
   } catch (err) { res.status(500).json({ error: "Erro ao salvar venda" }); }
 });
-
 app.patch('/api/vendas/:id', async (req, res) => {
-  try {
-    const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(venda);
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar venda" }); }
+  try { res.json(await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
-
 app.put('/api/vendas/:id', async (req, res) => {
-  try {
-    const venda = await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(venda);
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar pedido" }); }
+  try { res.json(await Venda.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
-
 app.delete('/api/vendas/:id', async (req, res) => {
-  try {
-    await Venda.findByIdAndDelete(req.params.id);
-    res.json({ message: "Venda excluída" });
-  } catch (err) { res.status(500).json({ error: "Erro ao excluir venda" }); }
+  try { await Venda.findByIdAndDelete(req.params.id); res.json({ message: "Venda excluída" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
 
 // --- BAIXA E ESTORNO DE PARCELA ---
@@ -229,7 +191,6 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
 
     const numAtual = parseFloat(numero);
     let novasParcelas = JSON.parse(JSON.stringify(venda.listaParcelas || []));
-    
     const index = novasParcelas.findIndex(p => String(p.numero) === String(numAtual));
     if (index === -1) return res.status(404).json({ error: "Parcela não encontrada" });
 
@@ -239,14 +200,13 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
-        novasParcelas.splice(parcelaFilhaIndex, 1); i--;
+        novasParcelas.splice(parcelaFilhaIndex, 1);
       }
       novasParcelas[index].paga = false;
       novasParcelas[index].dataPagamento = null;
     } else {
       let valorInformado = parseFloat(Number(valorPago || novasParcelas[index].valor).toFixed(2));
       let valorOriginalDaParcela = parseFloat(Number(novasParcelas[index].valor).toFixed(2));
-      
       const diferenca = parseFloat((valorInformado - valorOriginalDaParcela).toFixed(2));
 
       if (diferenca > 0) {
@@ -273,12 +233,7 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         novasParcelas[index].paga = true;
         novasParcelas[index].dataPagamento = dataPagamento;
         novasParcelas.push({ 
-          ...novasParcelas[index], 
-          numero: numAtual + 0.5, 
-          valor: valorSobra, 
-          paga: false, 
-          dataPagamento: null, 
-          observacao: `Restante da parc. ${numAtual}` 
+          ...novasParcelas[index], numero: numAtual + 0.5, valor: valorSobra, paga: false, dataPagamento: null, observacao: `Restante da parc. ${numAtual}` 
         });
       } else {
         novasParcelas[index].valor = valorInformado;
@@ -286,12 +241,9 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
         novasParcelas[index].dataPagamento = dataPagamento;
       }
     }
-    
     novasParcelas.sort((a, b) => a.numero - b.numero);
-    
     venda.listaParcelas = novasParcelas;
     venda.markModified('listaParcelas');
-    
     await venda.save();
     res.json(venda);
   } catch (err) { res.status(500).json({ error: "Erro ao processar parcela" }); }
@@ -301,105 +253,102 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
 app.get('/api/despesas', async (req, res) => res.json(await Despesa.find()));
 app.post('/api/despesas', async (req, res) => res.json(await new Despesa(req.body).save()));
 app.patch('/api/despesas/:id', async (req, res) => {
-  try {
-    const despesa = await Despesa.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(despesa);
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar" }); }
+  try { res.json(await Despesa.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
 app.delete('/api/despesas/:id', async (req, res) => {
-  try {
-    await Despesa.findByIdAndDelete(req.params.id);
-    res.json({ message: "Excluída" });
-  } catch (err) { res.status(500).json({ error: "Erro ao excluir" }); }
+  try { await Despesa.findByIdAndDelete(req.params.id); res.json({ message: "Excluída" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
 
 // --- ROTAS API: PRODUTOS ---
-app.get('/api/produtos', async (req, res) => {
-  try {
-    const listaProdutos = await Produto.find().sort({ nome: 1 });
-    res.json(listaProdutos);
-  } catch (err) { res.status(500).json({ error: "Erro ao buscar produtos" }); }
-});
-
-app.post('/api/produtos', async (req, res) => {
-  try {
-    const novoProd = new Produto(req.body);
-    res.json(await novoProd.save());
-  } catch (err) { res.status(500).json({ error: "Erro ao salvar produto" }); }
-});
-
+app.get('/api/produtos', async (req, res) => res.json(await Produto.find().sort({ nome: 1 })));
+app.post('/api/produtos', async (req, res) => res.json(await new Produto(req.body).save()));
 app.put('/api/produtos/:id', async (req, res) => {
-  try {
-    const produtoAtualizado = await Produto.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!produtoAtualizado) return res.status(404).json({ error: "Produto não encontrado no catálogo" });
-    res.json(produtoAtualizado);
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar dados do produto" }); }
+  try { res.json(await Produto.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
-
 app.delete('/api/produtos/:id', async (req, res) => {
-  try {
-    await Produto.findByIdAndDelete(req.params.id);
-    res.json({ message: "Produto removido do catálogo" });
-  } catch (err) { res.status(500).json({ error: "Erro ao remover produto" }); }
+  try { await Produto.findByIdAndDelete(req.params.id); res.json({ message: "Removido" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
 
 // ==========================================
-// 🤖 FUNÇÕES E LOGÍSTICAS DO ROBÔ DE DISPAROS
+// 🤖 FUNÇÕES E LOGÍSTICAS DO NOVO MOTOR BAILEYS (SEM CHROME)
 // ==========================================
-function inicializarWhatsApp() {
-  wppconnect.create({
-    session: 'otica-elos-session',
-    catchQR: (base64Qr) => {
-      statusConexao = 'Aguardando Leitura do QR Code';
-      qrCodeBase64 = base64Qr; 
-    },
-    statusFind: (statusSession) => {
-      statusConexao = statusSession;
-      console.log('Status da Sessão do Robô:', statusSession);
-    },
-    headless: true,
-    devtools: false,
-    useChrome: false,
-    debug: false,
-    logQR: false,
-    autoClose: 0,
-    puppeteerOptions: {
-      userDataDir: '/opt/render/project/src/server/tokens/otica-elos-session',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
-    }
-  })
-  .then((client) => {
-    whatsappClient = client;
-    statusConexao = 'Conectado';
-    qrCodeBase64 = null; 
-    console.log('✅ Robô de Mensagens da Ótica Elos sincronizado!');
-    
-    setTimeout(() => {
-      verificarAniversariantesDoDia();
-      verificarPosVendaTrintaDias();
-    }, 30000);
-  })
-  .catch((error) => {
+async function inicializarWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState(tokenPath);
+
+  try {
+    whatsappClient = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      defaultQueryTimeoutMs: undefined,
+    });
+
+    whatsappClient.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        statusConexao = 'Aguardando Leitura do QR Code';
+        try {
+          qrCodeBase64 = await QRCode.toDataURL(qr); // Conversão transparente para ler no front
+        } catch (err) { console.error('Erro ao gerar string do QR Code:', err); }
+      }
+
+      if (connection === 'close') {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const foiDeslogado = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+        
+        console.log(`Conexão fechada. Código: ${statusCode}. Foi deslogado? ${foiDeslogado}`);
+        statusConexao = 'Desconectado';
+        qrCodeBase64 = null;
+
+        if (foiDeslogado) {
+          console.log('🧹 Limpando credenciais antigas corrompidas do disco...');
+          try {
+            if (fs.existsSync(tokenPath)) {
+              fs.rmSync(tokenPath, { recursive: true, force: true });
+              console.log('✅ Diretório limpo!');
+            }
+          } catch (e) { console.log('Erro ao remover arquivos via fs:', e.message); }
+          
+          setTimeout(() => inicializarWhatsApp(), 2000);
+        } else {
+          inicializarWhatsApp(); 
+        }
+        
+      } else if (connection === 'open') {
+        statusConexao = 'Conectado';
+        qrCodeBase64 = null;
+        console.log('✅ WhatsApp conectado com sucesso via Baileys na Ótica Elos!');
+
+        setTimeout(() => {
+          verificarAniversariantesDoDia();
+          verificarPosVendaTrintaDias();
+        }, 15000);
+      }
+    });
+
+    whatsappClient.ev.on('creds.update', saveCreds);
+
+  } catch (error) {
     statusConexao = 'Erro ao conectar';
-    console.error('Erro ao inicializar automação do WhatsApp:', error);
-  });
+    console.error('Erro crítico ao iniciar Baileys:', error);
+  }
+}
+
+async function enviarMensagemTexto(jid, texto) {
+  if (!whatsappClient) throw new Error('Client Baileys não inicializado');
+  await whatsappClient.sendMessage(jid, { text: texto });
+}
+
+async function validarNumeroWhatsApp(numeroPuro) {
+  try {
+    const [result] = await whatsappClient.onWhatsApp(`${numeroPuro}@s.whatsapp.net`);
+    if (result && result.exists) return result.jid;
+    return `${numeroPuro}@s.whatsapp.net`;
+  } catch (e) { return `${numeroPuro}@s.whatsapp.net`; }
 }
 
 async function verificarAniversariantesDoDia() {
-  if (!whatsappClient) return;
-  try {
-    const estaConectado = await whatsappClient.isConnected();
-    if (!estaConectado) return;
-  } catch (err) { return; }
+  if (!whatsappClient || statusConexao !== 'Conectado') return;
 
   const hoje = new Date();
   const mesHoje = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -407,7 +356,7 @@ async function verificarAniversariantesDoDia() {
   const hojeDataCompleta = `${hoje.getFullYear()}-${mesHoje}-${diaHoje}`;
 
   if (ultimaDataEnvio === hojeDataCompleta) return;
-  console.log(`🔄 [Automação] Executando rotina de aniversariantes para o dia: ${diaHoje}/${mesHoje}`);
+  console.log(`🔄 [Baileys] Executando rotina de aniversariantes para o dia: ${diaHoje}/${mesHoje}`);
 
   try {
     const regexAniversario = new RegExp(`^\\d{4}-${mesHoje}-${diaHoje}$`);
@@ -419,7 +368,6 @@ async function verificarAniversariantesDoDia() {
       return;
     }
 
-    // ✅ Puxa o template salvo no MongoDB
     const configMsg = await Configuracao.findOne({ chave: 'msg_aniversario' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! 🎉 Feliz Aniversário da Ótica Elos!";
 
@@ -428,23 +376,22 @@ async function verificarAniversariantesDoDia() {
       let numeroPuro = cliente.telefone.replace(/\D/g, '');
       if (!numeroPuro.startsWith('55')) numeroPuro = `55${numeroPuro}`;
 
-      // ✅ Aplica as tags dinâmicas de forma limpa
       const mensagem = templateBase.replace(/{nome}/g, cliente.nome);
-
       let envioSucesso = false;
+
       try {
-        const infoNumero = await whatsappClient.checkNumberStatus(`${numeroPuro}@c.us`);
-        const destinatarioValido = infoNumero?.id?._serialized || `${numeroPuro}@c.us`;
-        await whatsappClient.sendText(destinatarioValido, mensagem);
-        console.log(`✅ [Sucesso Aniversário] Mensagem entregue para: ${cliente.nome}`);
+        const jidValido = await validarNumeroWhatsApp(numeroPuro);
+        await enviarMensagemTexto(jidValido, mensagem);
+        console.log(`✅ [Baileys Aniversário] Entregue para: ${cliente.nome}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no envio para ${cliente.nome}`); }
 
       if (!envioSucesso && numeroPuro.length === 13) {
         try {
           const numeroSemNonoDigito = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
-          await whatsappClient.sendText(`${numeroSemNonoDigito}@c.us`, mensagem);
-          console.log(`✅ [Sucesso Fallback] Mensagem entregue para: ${cliente.nome}`);
+          const jidFallback = await validarNumeroWhatsApp(numeroSemNonoDigito);
+          await enviarMensagemTexto(jidFallback, mensagem);
+          console.log(`✅ [Baileys Fallback] Entregue para: ${cliente.nome}`);
         } catch (errFallback) { console.error(`❌ Erro total na entrega para ${cliente.nome}`); }
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -454,11 +401,7 @@ async function verificarAniversariantesDoDia() {
 }
 
 async function verificarPosVendaTrintaDias() {
-  if (!whatsappClient) return;
-  try {
-    const estaConectado = await whatsappClient.isConnected();
-    if (!estaConectado) return;
-  } catch (err) { return; }
+  if (!whatsappClient || statusConexao !== 'Conectado') return;
 
   const hoje = new Date();
   const hojeDataCompleta = hoje.toISOString().split('T')[0];
@@ -468,7 +411,7 @@ async function verificarPosVendaTrintaDias() {
   dataTrintaDiasAtras.setDate(dataTrintaDiasAtras.getDate() - 30);
   const dataAlvoStr = dataTrintaDiasAtras.toISOString().split('T')[0];
 
-  console.log(`🔄 [Automação] Buscando contratos de pós-venda fechados em: ${dataAlvoStr}`);
+  console.log(`🔄 [Baileys] Buscando contratos de pós-venda fechados em: ${dataAlvoStr}`);
 
   try {
     const vendasTrintaDias = await Venda.find({ dataVenda: dataAlvoStr });
@@ -479,7 +422,6 @@ async function verificarPosVendaTrintaDias() {
       return;
     }
 
-    // ✅ Puxa o template salvo no MongoDB
     const configMsg = await Configuracao.findOne({ chave: 'msg_pos_venda' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! Como está seu produto {produto}?";
 
@@ -490,25 +432,24 @@ async function verificarPosVendaTrintaDias() {
       let numeroPuro = cadastroCliente.telefone.replace(/\D/g, '');
       if (!numeroPuro.startsWith('55')) numeroPuro = `55${numeroPuro}`;
 
-      // ✅ Aplica as duas tags dinâmicas de forma limpa
       const mensagem = templateBase
                         .replace(/{nome}/g, venda.cliente)
                         .replace(/{produto}/g, venda.produto);
 
       let envioSucesso = false;
       try {
-        const infoNumero = await whatsappClient.checkNumberStatus(`${numeroPuro}@c.us`);
-        const destinatarioValido = infoNumero?.id?._serialized || `${numeroPuro}@c.us`;
-        await whatsappClient.sendText(destinatarioValido, mensagem);
-        console.log(`✅ [Pós-Venda] Mensagem entregue para: ${venda.cliente}`);
+        const jidValido = await validarNumeroWhatsApp(numeroPuro);
+        await enviarMensagemTexto(jidValido, mensagem);
+        console.log(`✅ [Baileys Pós-Venda] Entregue para: ${venda.cliente}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no pós-venda de ${venda.cliente}`); }
 
       if (!envioSucesso && numeroPuro.length === 13) {
         try {
           const numeroSemNonoDigito = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
-          await whatsappClient.sendText(`${numeroSemNonoDigito}@c.us`, mensagem);
-          console.log(`✅ [Pós-Venda Fallback] Mensagem entregue para: ${venda.cliente}`);
+          const jidFallback = await validarNumeroWhatsApp(numeroSemNonoDigito);
+          await enviarMensagemTexto(jidFallback, mensagem);
+          console.log(`✅ [Baileys Pós-Venda Fallback] Entregue para: ${venda.cliente}`);
         } catch (errFallback) { console.error(`❌ Falha crítica no pós-venda de ${venda.cliente}`); }
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -524,4 +465,4 @@ setInterval(() => {
 }, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Servidor da Ótica rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Servidor da Ótica rodando na porta ${PORT} com motor Baileys estável!`));
