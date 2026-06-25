@@ -22,6 +22,9 @@ let ultimaDataEnvio = null;
 let ultimaDataPosVenda = null;
 let statusConexao = 'Iniciando...';
 let qrCodeBase64 = null;
+let idsAniversariantesEnviadosHoje = []; 
+let idsPosVendaEnviadosHoje = [];
+let dataUltimaVerificacaoJanela = "";
 
 // Caminho absoluto das credenciais adaptado para a pasta Servidor no Render
 const tokenPath = path.resolve('/opt/render/project/src/server/tokens/otica-elos-session');
@@ -355,23 +358,32 @@ async function verificarAniversariantesDoDia() {
   const diaHoje = String(hoje.getDate()).padStart(2, '0');
   const hojeDataCompleta = `${hoje.getFullYear()}-${mesHoje}-${diaHoje}`;
 
-  if (ultimaDataEnvio === hojeDataCompleta) return;
-  console.log(`🔄 [Baileys] Executando rotina de aniversariantes para o dia: ${diaHoje}/${mesHoje}`);
+  // Se virou o dia, limpa a lista de quem já recebeu para o novo dia
+  if (dataUltimaVerificacaoJanela !== hojeDataCompleta) {
+    idsAniversariantesEnviadosHoje = [];
+    idsPosVendaEnviadosHoje = [];
+    dataUltimaVerificacaoJanela = hojeDataCompleta;
+  }
+
+  console.log(`🔄 [Baileys] Checando aniversariantes ativos (Atualizando a cada hora)...`);
 
   try {
     const regexAniversario = new RegExp(`^\\d{4}-${mesHoje}-${diaHoje}$`);
+    // Busca todos os aniversariantes do dia
     const aniversariantes = await Cliente.find({ dataNascimento: regexAniversario });
 
-    if (aniversariantes.length === 0) {
-      console.log('📭 Sem aniversariantes na Ótica Elos hoje.');
-      ultimaDataEnvio = hojeDataCompleta;
+    // Filtra apenas os que AINDA NÃO receberam a mensagem hoje
+    const pendentes = aniversariantes.filter(c => !idsAniversariantesEnviadosHoje.includes(String(c._id)));
+
+    if (pendentes.length === 0) {
+      console.log('📭 Nenhum aniversariante novo pendente nesta hora.');
       return;
     }
 
     const configMsg = await Configuracao.findOne({ chave: 'msg_aniversario' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! 🎉 Feliz Aniversário da Ótica Elos!";
 
-    for (const cliente of aniversariantes) {
+    for (const cliente of pendentes) {
       if (!cliente.telefone) continue;
       let numeroPuro = cliente.telefone.replace(/\D/g, '');
       if (!numeroPuro.startsWith('55')) numeroPuro = `55${numeroPuro}`;
@@ -381,7 +393,7 @@ async function verificarAniversariantesDoDia() {
 
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        await enviarMensagemTexto(jidValido, mensagem);
+        await enviarMensagemTexto(jidValido, message);
         console.log(`✅ [Baileys Aniversário] Entregue para: ${cliente.nome}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no envio para ${cliente.nome}`); }
@@ -392,11 +404,15 @@ async function verificarAniversariantesDoDia() {
           const jidFallback = await validarNumeroWhatsApp(numeroSemNonoDigito);
           await enviarMensagemTexto(jidFallback, mensagem);
           console.log(`✅ [Baileys Fallback] Entregue para: ${cliente.nome}`);
+          envioSucesso = true;
         } catch (errFallback) { console.error(`❌ Erro total na entrega para ${cliente.nome}`); }
       }
+
+      // Se enviou com sucesso (ou falhou totalmente para não travar o loop), adiciona na lista de ignorados do dia
+      idsAniversariantesEnviadosHoje.push(String(cliente._id));
+      
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-    ultimaDataEnvio = hojeDataCompleta;
   } catch (error) { console.error('❌ Erro na rotina de aniversariantes:', error); }
 }
 
@@ -405,27 +421,25 @@ async function verificarPosVendaTrintaDias() {
 
   const hoje = new Date();
   const hojeDataCompleta = hoje.toISOString().split('T')[0];
-  if (ultimaDataPosVenda === hojeDataCompleta) return;
 
   const dataTrintaDiasAtras = new Date();
   dataTrintaDiasAtras.setDate(dataTrintaDiasAtras.getDate() - 30);
   const dataAlvoStr = dataTrintaDiasAtras.toISOString().split('T')[0];
 
-  console.log(`🔄 [Baileys] Buscando contratos de pós-venda fechados em: ${dataAlvoStr}`);
-
   try {
     const vendasTrintaDias = await Venda.find({ dataVenda: dataAlvoStr });
+    // Filtra apenas as vendas que ainda não tiveram pós-venda disparado hoje
+    const pendentes = vendasTrintaDias.filter(v => !idsPosVendaEnviadosHoje.includes(String(v._id)));
 
-    if (vendasTrintaDias.length === 0) {
-      console.log('📭 Nenhuma pendência de pós-venda para o dia de hoje.');
-      ultimaDataPosVenda = hojeDataCompleta;
+    if (pendentes.length === 0) {
+      console.log('📭 Nenhuma venda pendente de pós-venda nesta hora.');
       return;
     }
 
     const configMsg = await Configuracao.findOne({ chave: 'msg_pos_venda' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! Como está seu produto {produto}?";
 
-    for (const venda of vendasTrintaDias) {
+    for (const venda of pendentes) {
       const cadastroCliente = await Cliente.findOne({ cpf: venda.cpf });
       if (!cadastroCliente || !cadastroCliente.telefone) continue;
 
@@ -452,9 +466,12 @@ async function verificarPosVendaTrintaDias() {
           console.log(`✅ [Baileys Pós-Venda Fallback] Entregue para: ${venda.cliente}`);
         } catch (errFallback) { console.error(`❌ Falha crítica no pós-venda de ${venda.cliente}`); }
       }
+
+      // Registra que essa venda específica já foi processada hoje
+      idsPosVendaEnviadosHoje.push(String(venda._id));
+
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-    ultimaDataPosVenda = hojeDataCompleta;
   } catch (error) { console.error('❌ Erro na rotina de pós-venda:', error); }
 }
 
