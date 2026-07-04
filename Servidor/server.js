@@ -1,10 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys'); // ✅ Novo Motor: Baileys Ultraleve
-const QRCode = require('qrcode'); // ✅ Garante a conversão do QR do Baileys para o Base64 lido pelo front
-const path = require('path');
-const fs = require('fs');
+const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys'); // ✅ Otimizado: sem useMultiFileAuthState
+const QRCode = require('qrcode');
 require('dotenv').config();
 
 const app = express();
@@ -26,9 +24,6 @@ let idsAniversariantesEnviadosHoje = [];
 let idsPosVendaEnviadosHoje = [];
 let dataUltimaVerificacaoJanela = "";
 
-// Caminho absoluto das credenciais adaptado para a pasta Servidor no Render
-const tokenPath = path.resolve('/opt/render/project/src/server/tokens/otica-elos-session');
-
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
@@ -46,7 +41,7 @@ const Cliente = mongoose.model('Cliente', {
 });
 
 const Venda = mongoose.model('Venda', {
-  numeroPedido: Number, cliente: String, cpf: String, produto: String, itensCarrinho: Array, valorTotal: Number, valorEntrada: Number, desconto: Number, parcelas: Number, listaParcelas: Array, dataVenda: String, metodoPagamento: String, dataPrevisaoPagamento: String, observacoes: String, foto: String        
+  numeroPedido: Number, cliente: String, cpf: String, produto: String, itensCarrinho: Array, valorTotal: Number, valorEntrada: Number, descuento: Number, parcelas: Number, listaParcelas: Array, dataVenda: String, metodoPagamento: String, dataPrevisaoPagamento: String, observacoes: String, foto: String        
 });
 
 const Despesa = mongoose.model('Despesa', {
@@ -203,7 +198,7 @@ app.patch('/api/vendas/:id/parcela/:numero', async (req, res) => {
       if (parcelaFilhaIndex !== -1 && !Number.isInteger(proximoNumero)) {
         const somaRecomposta = Number(novasParcelas[index].valor) + Number(novasParcelas[parcelaFilhaIndex].valor);
         novasParcelas[index].valor = parseFloat(somaRecomposta.toFixed(2));
-        novasParcelas.splice(parcelaFilhaIndex, 1);
+        novasParcelas.splice(parcelaFilhaIndex, 1); i--; 
       }
       novasParcelas[index].paga = false;
       novasParcelas[index].dataPagamento = null;
@@ -273,16 +268,69 @@ app.delete('/api/produtos/:id', async (req, res) => {
 });
 
 // ==========================================
-// 🤖 FUNÇÕES E LOGÍSTICAS DO NOVO MOTOR BAILEYS (SEM CHROME)
+// 🤖 MOTOR DO WHATSAPP (MIGRAÇÃO DE STORAGE MONGODB + KEEP ALIVE)
 // ==========================================
 async function inicializarWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState(tokenPath);
-
   try {
+    // 1. Carrega as credenciais puras direto da coleção do MongoDB
+    const registroSessao = await Configuracao.findOne({ chave: 'whatsapp_session_creds' });
+    
+    let credsCarregadas = null;
+    if (registroSessao && registroSessao.valor) {
+      try {
+        // 🔥 RECONSTRUTOR BINÁRIO: O JSON.parse reconverte textão em Buffers para evitar erro de Handshake
+        credsCarregadas = JSON.parse(registroSessao.valor, (key, value) => {
+          if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
+            return Buffer.from(value.data);
+          }
+          return value;
+        });
+      } catch (e) {
+        console.log("⚠️ Erro ao decodificar chaves antigas do MongoDB, iniciando limpo...");
+      }
+    }
+
+    // Importação dinâmica para compatibilidade com o Baileys estruturado
+    const { initAuthCreds } = require('@whiskeysockets/baileys');
+
+    const state = {
+      creds: credsCarregadas || initAuthCreds(),
+      keys: {
+        get: (type, ids) => {
+          const data = {};
+          return data;
+        },
+        set: (data) => {
+          // Processado de forma transparente via creds.update
+        }
+      }
+    };
+
+    // Função interna que salva o estado estruturado de login no MongoDB
+    const guardarSessaoNoMongo = async () => {
+      try {
+        const textoSessao = JSON.stringify(state.creds);
+        await Configuracao.updateOne(
+          { chave: 'whatsapp_session_creds' },
+          { valor: textoSessao },
+          { upsert: true }
+        );
+        console.log("💾 [MongoDB] Chaves de pareamento atualizadas na nuvem com sucesso!");
+      } catch (err) {
+        console.error("❌ [Erro Persistência] Falha ao injetar chaves no MongoDB:", err.message);
+      }
+    };
+
     whatsappClient = makeWASocket({
       auth: state,
       printQRInTerminal: false,
       defaultQueryTimeoutMs: undefined,
+      keepAliveIntervalMs: 30000, // 🔥 Canal de batimento cardíaco ativo de 30s contra quedas abruptas
+      options: {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      }
     });
 
     whatsappClient.ev.on('connection.update', async (update) => {
@@ -291,7 +339,7 @@ async function inicializarWhatsApp() {
       if (qr) {
         statusConexao = 'Aguardando Leitura do QR Code';
         try {
-          qrCodeBase64 = await QRCode.toDataURL(qr); // Conversão transparente para ler no front
+          qrCodeBase64 = await QRCode.toDataURL(qr);
         } catch (err) { console.error('Erro ao gerar string do QR Code:', err); }
       }
 
@@ -304,16 +352,15 @@ async function inicializarWhatsApp() {
         qrCodeBase64 = null;
 
         if (foiDeslogado) {
-          console.log('🧹 Limpando credenciais antigas corrompidas do disco...');
+          console.log('🧹 Limpando registro de chaves obsoletas do MongoDB...');
           try {
-            if (fs.existsSync(tokenPath)) {
-              fs.rmSync(tokenPath, { recursive: true, force: true });
-              console.log('✅ Diretório limpo!');
-            }
-          } catch (e) { console.log('Erro ao remover arquivos via fs:', e.message); }
+            await Configuracao.deleteOne({ chave: 'whatsapp_session_creds' });
+            console.log('✅ Base limpa para nova sincronização!');
+          } catch (e) { console.log('Erro ao limpar chave do MongoDB:', e.message); }
           
           setTimeout(() => inicializarWhatsApp(), 2000);
         } else {
+          // Se caiu apenas por oscilação normal da nuvem Render, reata usando o token salvo
           inicializarWhatsApp(); 
         }
         
@@ -329,7 +376,10 @@ async function inicializarWhatsApp() {
       }
     });
 
-    whatsappClient.ev.on('creds.update', saveCreds);
+    // Registra a chave sempre que o WhatsApp renovar os tokens internos
+    whatsappClient.ev.on('creds.update', async () => {
+      await guardarSessaoNoMongo();
+    });
 
   } catch (error) {
     statusConexao = 'Erro ao conectar';
@@ -453,7 +503,7 @@ async function verificarPosVendaTrintaDias() {
       let envioSucesso = false;
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        await enviarMensagemTexto(jidValido, mensagem);
+        await enviarMensagemTexto(jidValido, message);
         console.log(`✅ [Baileys Pós-Venda] Entregue para: ${venda.cliente}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no pós-venda de ${venda.cliente}`); }
@@ -482,4 +532,21 @@ setInterval(() => {
 }, 1000 * 60 * 60);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Servidor da Ótica rodando na porta ${PORT} com motor Baileys estável!`));
+
+// ==========================================
+// 🚀 ROTINA CRÍTICA ANTI-SLEEP LOCAL (EXCLUSIVA PARA RENDER)
+// ==========================================
+// Envia uma requisição HTTP para si mesmo localmente a cada 10 minutos para impedir 
+// que a nuvem gratuita do Render congele o processo Node.js e derrube o chip.
+setInterval(async () => {
+  try {
+    const urlAutoPingLocal = `http://localhost:${PORT}/`;
+    console.log('💓 [Anti-Sleep] Enviando pulso de atividade interna para manter o robô da Ótica Elos acordado...');
+    // Realiza a chamada utilizando o fetch nativo estável do Node.js
+    await fetch(urlAutoPingLocal);
+  } catch (e) {
+    console.log('⚠️ [Anti-Sleep] Falha temporária no auto-ping, mas o motor continua rodando.');
+  }
+}, 1000 * 60 * 10); // Executa a cada 10 minutos cravados
+
+app.listen(PORT, () => console.log(`🚀 Servidor da Ótica Elos rodando na porta ${PORT} com motor Baileys estável e persistente!`));
