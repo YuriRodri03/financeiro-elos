@@ -135,7 +135,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   
   y += 7;
   doc.setTextColor(198, 40, 40); // Vermelho para desconto
-  const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
+  const vDescNum = Number(dados.desconto || dados.valorDesconto || dados.descontoTotal || 0);
   doc.text("Desconto:", 130, y);
   doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
