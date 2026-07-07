@@ -128,14 +128,21 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.line(110, y, 190, y);
   
   y += 8;
-  const subtotal = itens.reduce((acc, i) => acc + Number(i.preco), 0);
+  
+  // 1. Tratamento seguro para garantir que os valores sejam números puros
+  const vTotalNum = Number(dados.valorTotal || 0);
+  const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
+
+  // 2. 🔥 A MÁGICA: O Subtotal real impresso DEVE ser sempre o Total Pago + Desconto Concedido!
+  // Isso ignora qualquer erro de carrinho zerado ou vindo errado do histórico do banco.
+  const subtotal = vTotalNum + vDescNum;
+
   doc.setFont("helvetica", "normal");
   doc.text("Subtotal:", 130, y);
   doc.text("R$ " + subtotal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
   y += 7;
   doc.setTextColor(198, 40, 40); // Vermelho para desconto
-  const vDescNum = Number(dados.desconto || dados.valorDesconto || dados.descontoTotal || 0);
   doc.text("Desconto:", 130, y);
   doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
@@ -144,6 +151,8 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text("TOTAL FINAL:", 130, y);
+  
+  // 3. A conta final bate perfeitamente com o banco (Ex: 10 - 1 = 9)
   const totalFinal = subtotal - vDescNum;
   doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
