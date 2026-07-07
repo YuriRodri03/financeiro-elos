@@ -110,12 +110,12 @@ export default function Clientes() {
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
     setTimeout(() => {
-      setToast({ visivel: false, message: '', tipo: 'sucesso' });
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
     }, 3000);
   };
 
   const abrirConfirmacao = (mensagem, acao) => {
-    setConfirmModal({ visivel: true, message: mensagem, acao });
+    setConfirmModal({ visivel: true, mensagem: mensagem, acao });
   };
 
   const fecharModal = () => {
@@ -259,7 +259,7 @@ export default function Clientes() {
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
             <div className="text-4xl text-elos-verde">👓</div>
             <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Ação</h3>
-            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.message}</p>
+            <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
@@ -497,7 +497,7 @@ export default function Clientes() {
     const valorTotalNum = Number(venda.valorTotal || 0);
     const descontoNum = Number(venda.desconto || 0);
     
-    // 1. Calculamos o subtotal de fábrica que a folha do PDF deve exibir
+    // O subtotal bruto real de fábrica (Ex: 9 + 1 = 10)
     const subtotalBruto = valorTotalNum + descontoNum;
 
     gerarPDFDocumento({
@@ -507,11 +507,13 @@ export default function Clientes() {
       email: clienteNoModal.email, 
       endereco: clienteNoModal.endereco, 
       telefone: clienteNoModal.telefone,
+      
+      // Injeta os dados financeiros de forma estática e explícita
+      valorProduto: subtotalBruto,
       desconto: descontoNum,
-      valorDesconto: descontoNum,
-      descontoTotal: descontoNum,
-      // 2. Sobrescrevemos o array para o PDF para garantir que o cálculo interno do reduce 
-      // sempre use o valor bruto correto, evitando conflito com o estado do banco
+      valorTotal: valorTotalNum,
+
+      // Garante a tabela limpa
       itensCarrinho: [{ 
         nome: venda.produto || "PRODUTO ÓPTICO", 
         preco: subtotalBruto 

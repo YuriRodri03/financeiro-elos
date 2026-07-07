@@ -45,7 +45,7 @@ const Venda = mongoose.model('Venda', {
 });
 
 const Despesa = mongoose.model('Despesa', {
-  descricao: String, valor: Number, category: String, vencimento: String, paga: Boolean
+  descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
 const Produto = mongoose.model('Produto', {
