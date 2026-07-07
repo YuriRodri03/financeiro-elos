@@ -493,11 +493,36 @@ export default function Clientes() {
                         
                         <div className="flex items-center gap-3 w-full md:w-auto">
                           <button 
-                            onClick={() => gerarPDFDocumento({...venda, numeroPedido: numPed, cliente: clienteNoModal.nome, email: clienteNoModal.email, endereco: clienteNoModal.endereco, telefone: clienteNoModal.telefone}, 'pedido')} 
-                            className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
-                          >
-                            📄 Reemitir
-                          </button>
+  onClick={() => {
+    const valorTotalNum = Number(venda.valorTotal || 0);
+    const descontoNum = Number(venda.desconto || 0);
+    
+    // 1. Calculamos o subtotal de fábrica que a folha do PDF deve exibir
+    const subtotalBruto = valorTotalNum + descontoNum;
+
+    gerarPDFDocumento({
+      ...venda,
+      numeroPedido: numPed, 
+      cliente: clienteNoModal.nome, 
+      email: clienteNoModal.email, 
+      endereco: clienteNoModal.endereco, 
+      telefone: clienteNoModal.telefone,
+      desconto: descontoNum,
+      valorDesconto: descontoNum,
+      descontoTotal: descontoNum,
+      // 2. Sobrescrevemos o array para o PDF para garantir que o cálculo interno do reduce 
+      // sempre use o valor bruto correto, evitando conflito com o estado do banco
+      itensCarrinho: [{ 
+        nome: venda.produto || "PRODUTO ÓPTICO", 
+        preco: subtotalBruto 
+      }],
+      data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR'),
+    }, 'pedido');
+  }} 
+  className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+>
+  📄 Reemitir
+</button>
                           <button 
                             onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente? Esta ação removerá as pendências financeiras associadas.", () => excluirVenda(venda._id || venda.id)); }} 
                             className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-sm"

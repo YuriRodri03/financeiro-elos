@@ -189,13 +189,17 @@ export default function Vendas() {
 
     const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
 
+    // Guardamos os valores calculados na hora e o carrinho em variáveis seguras
+    const descontoNum = limparMoeda(venda.desconto);
+    const carrinhoParaPDF = [...itensCarrinho];
+
     const dadosParaSalvar = {
       ...venda,
       produto: itensCarrinho.map(i => i.nome).join(' + '), 
       itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
-      desconto: limparMoeda(venda.desconto)
+      desconto: descontoNum
     };
 
     try {
@@ -204,7 +208,8 @@ export default function Vendas() {
       abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja gerar o arquivo de Pedido com Garantia em formato PDF?", () => {
         gerarPDFDocumento({
           ...resultado,
-          valorProduto: subtotalItens, 
+          itensCarrinho: carrinhoParaPDF, // 🟢 Correção 1: Garante a tabela com os preços cheios originais
+          desconto: descontoNum,          // 🟢 Correção 2: Força o valor numérico limpo do desconto
           data: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : venda.dataVenda.split('-').reverse().join('/'),
           telefone: clienteBase?.telefone || "Não informado",
           endereco: clienteBase?.endereco || "Não informado",
@@ -213,7 +218,7 @@ export default function Vendas() {
         mostrarToast("Pedido impresso com sucesso!", "sucesso");
       });
 
-      // Limpa os formulários
+      // Limpa os formulários após o agendamento seguro do PDF
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
         metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
