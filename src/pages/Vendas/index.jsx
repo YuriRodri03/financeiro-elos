@@ -133,12 +133,11 @@ export default function Vendas() {
     setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
   };
 
-  // --- NOVO: FUNÇÃO PARA CADASTRAR PRODUTO NA ÁRVORE GLOBAL DIRETO DO CARRINHO ---
   const salvarItemNoCatalogo = async (item) => {
     const dadosProduto = {
       nome: item.nome.toUpperCase(),
       preco: item.preco,
-      categoria: 'ARMAÇÃO' // Define uma categoria base padrão para triagem inicial
+      categoria: 'ARMAÇÃO'
     };
 
     try {
@@ -189,7 +188,7 @@ export default function Vendas() {
 
     const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
 
-    // Guardamos os valores calculados na hora e o carrinho em variáveis seguras
+    // Guardamos os valores calculados na hora em variáveis seguras
     const descontoNum = limparMoeda(venda.desconto);
     const carrinhoParaPDF = [...itensCarrinho];
 
@@ -199,7 +198,7 @@ export default function Vendas() {
       itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
-      desconto: descontoFormatado
+      desconto: descontoNum // 🟢 CORRIGIDO: Vinculado corretamente à constante descontoNum
     };
 
     try {
@@ -209,7 +208,7 @@ export default function Vendas() {
         gerarPDFDocumento({
           ...resultado,
           itensCarrinho: carrinhoParaPDF, 
-          desconto: descontoFormatado,          
+          desconto: descontoNum,          
           data: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : venda.dataVenda.split('-').reverse().join('/'),
           telefone: clienteBase?.telefone || "Não informado",
           endereco: clienteBase?.endereco || "Não informado",
@@ -255,12 +254,14 @@ export default function Vendas() {
             <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
             <div className="flex gap-3">
               <button 
+                type="button"
                 onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
                 className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
               >
                 Pular
               </button>
               <button 
+                type="button"
                 onClick={() => {
                   if (confirmModal.acao) confirmModal.acao();
                   setConfirmModal({ visivel: false, mensagem: '', acao: null });
@@ -326,7 +327,6 @@ export default function Vendas() {
             <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
             <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
               
-              {/* CAMPO DE NOME DO PRODUTO COM DROPDOWN DE SUGESTÕES */}
               <div className="flex-1 relative">
                 <input 
                   type="text" 
@@ -356,7 +356,6 @@ export default function Vendas() {
                 )}
               </div>
 
-              {/* CAMPO DE PREÇO */}
               <input 
                 type="text" 
                 placeholder="R$ 0,00" 
@@ -369,15 +368,12 @@ export default function Vendas() {
 
             <div className="space-y-2">
               {itensCarrinho.map(item => {
-                // Condição para checar se este item de carrinho exato já existe cadastrado na base do catálogo
                 const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
 
                 return (
                   <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
-                      
-                      {/* NOVO: Botão dinâmico para indexar o item digitado manualmente direto ao catálogo de produtos */}
                       {!jaExisteNoCatalogo && (
                         <button
                           type="button"
@@ -423,7 +419,8 @@ export default function Vendas() {
                   <>
                     <div className="text-4xl mb-2">📸</div>
                     <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
-                    <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    {/* 🟢 ADAPTADO PARA IPHONE: Removido capture="environment" para evitar congelamento de clique nativo no iOS */}
+                    <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
                   </>
                 )}
               </div>
@@ -456,7 +453,10 @@ export default function Vendas() {
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Pagamento</label>
               <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none">
-                <option value="Dinheiro">Dinheiro</option><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Boleto / Crediário">Boleto / Crediário</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Pix">Pix</option>
+                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                <option value="Boleto / Crediário">Boleto / Crediário</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -472,6 +472,7 @@ export default function Vendas() {
             </div>
           )}
 
+          {/* 🟢 ADAPTADO PARA IPHONE: Certificado o tipo submit correto para formulários no Safari móvel */}
           <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
             Finalizar Venda
           </button>
