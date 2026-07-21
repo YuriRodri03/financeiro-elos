@@ -233,8 +233,25 @@ app.delete('/api/vendas/:id', async (req, res) => {
   try { await Venda.findByIdAndDelete(req.params.id); res.json({ message: "Venda excluída" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
 });
 
-// ✅ NOVO: ROTAS PARA ORDEM DE SERVIÇO
+// ROTAS PARA ORDEM DE SERVIÇO
 app.get('/api/ordens_servico', async (req, res) => res.json(await OrdemServico.find()));
+
+// 🟢 ADICIONADO: Buscar uma única OS pelo ID (Necessário para a tela de Edição)
+app.get('/api/ordens_servico/:id', async (req, res) => {
+  try {
+    const os = await OrdemServico.findById(req.params.id);
+    if (!os) return res.status(404).json({ error: "OS não encontrada" });
+    res.json(os);
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar a OS" }); }
+});
+
+// 🟢 ADICIONADO: Buscar todas as OS atreladas a um número de pedido
+app.get('/api/ordens_servico/pedido/:numeroPedido', async (req, res) => {
+  try {
+    const ordens = await OrdemServico.find({ numeroPedido: req.params.numeroPedido });
+    res.json(ordens);
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar OS do pedido" }); }
+});
 
 app.post('/api/ordens_servico', async (req, res) => {
   try {
@@ -246,6 +263,7 @@ app.post('/api/ordens_servico', async (req, res) => {
   }
 });
 
+// ✅ Rota de Edição mantida intacta
 app.put('/api/ordens_servico/:id', async (req, res) => {
   try {
     const osEditada = await OrdemServico.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -255,6 +273,7 @@ app.put('/api/ordens_servico/:id', async (req, res) => {
   }
 });
 
+// ✅ Rota de Exclusão mantida intacta
 app.delete('/api/ordens_servico/:id', async (req, res) => {
   try {
     await OrdemServico.findByIdAndDelete(req.params.id);
