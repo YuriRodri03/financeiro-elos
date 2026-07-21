@@ -204,7 +204,20 @@ export default function Clientes() {
 
     return todosCPFs.map(cpf => {
       const dadosCad = (clientes || []).find(c => c.cpf === cpf);
-      const vendasCli = (vendas || []).filter(v => v.cpf === cpf).sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda));
+      const vendasCli = (vendas || [])
+        .filter(v => v.cpf === cpf)
+        .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
+        .map(venda => {
+          // Garante que o array de ordensServico venha preenchido e mapeia o ID corretamente
+          const osVenda = venda.ordensServico || [];
+          return {
+            ...venda,
+            ordensServico: osVenda.map(os => ({
+              ...os,
+              idOS: os.idOS || os._id // Mapeia o ID para garantir que o botão Editar funcione
+            }))
+          };
+        });
       const totalDevido = vendasCli.reduce((acc, v) => acc + (v.listaParcelas || []).filter(p => !p.paga).reduce((soma, p) => soma + (p.valor || 0), 0), 0);
 
       return {
