@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout }) {
   const [menuAberto, setMenuAberto] = useState(false);
-  const navigate = useNavigate();
   const location = useLocation();
 
   const linksNav = [
@@ -16,16 +15,10 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
     { id: 'zap', nome: 'Automação', icone: '🟢' }, 
   ];
 
-  // Função centralizada para lidar com a navegação do menu
+  // 🟢 CORRIGIDO: Agora apenas chama a função do main.jsx (que já sabe para onde navegar) e fecha o menu.
   const handleNavegacao = (abaId) => {
     setAbaAtiva(abaId);
     setMenuAberto(false);
-    
-    // Se o usuário estiver na tela de Ordem de Serviço (ou qualquer outra rota),
-    // redireciona de volta para a tela principal do sistema onde as abas funcionam.
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
   };
 
   return (
@@ -99,7 +92,8 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
               {/* Lista Vertical de Links - Apenas rolagem para cima e para baixo */}
               <div className="flex flex-col gap-2 max-h-[65vh] overflow-y-auto no-scrollbar overflow-x-hidden">
                 {linksNav.map((link) => {
-                  const ativo = abaAtual === link.id && location.pathname === '/'; // Só fica ativo se estiver na home
+                  // 🟢 CORRIGIDO: Só compara a aba atual para manter as páginas de Vendas/Clientes acesas ao acessá-las.
+                  const ativo = abaAtual === link.id; 
                   return (
                     <button
                       key={link.id}
