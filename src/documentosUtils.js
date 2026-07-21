@@ -349,18 +349,16 @@ export const gerarPDFOrdemServico = async (dados) => {
   }
   
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "normal");
-  doc.text("ELOS", margemEsq + 5, 35); 
+  // O texto fixo duplo "ELOS" foi substituído por um título mais limpo
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("ORDEM DE SERVIÇO ÓPTICO", margemEsq + 25, 20);
   
   doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
   const numeroOS = dados.numeroOS || dados.numeroPedido || dados.numero || "________";
-  doc.text(`OSº ${numeroOS}`, 150, 25);
-  doc.setDrawColor(0, 0, 0);
-  doc.line(160, 26, 190, 26);
+  doc.text(`OS Nº ${numeroOS}`, 150, 20);
 
-  y = 45;
+  y = 40;
   
   // --- DADOS DA RX ---
   doc.setFillColor(210, 210, 210);
@@ -370,17 +368,26 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.rect(margemEsq, y, 170, 7); 
   
   y += 7;
-  const labels = ["LENTE:", "TRATAMENTO:", "ARMAÇÃO:"];
-  doc.setFont("helvetica", "bold");
+  const linhasSuperiores = [
+    { label: "LENTE:", valor: dados.lente || "" },
+    { label: "TRATAMENTO:", valor: dados.tratamento || "" },
+    { label: "ARMAÇÃO:", valor: dados.armacao || "" }
+  ];
+  
   doc.setFontSize(9);
-  labels.forEach(label => {
+  linhasSuperiores.forEach(linha => {
     doc.rect(margemEsq, y, 170, 7);
-    doc.text(label, margemEsq + 2, y + 5);
+    doc.setFont("helvetica", "bold");
+    doc.text(linha.label, margemEsq + 2, y + 5);
+    // 🟢 INJETANDO OS DADOS DIGITADOS
+    doc.setFont("helvetica", "normal");
+    doc.text(linha.valor.toUpperCase(), margemEsq + 30, y + 5);
     y += 7;
   });
 
   // --- CABEÇALHO TABELA RX ---
   doc.rect(margemEsq, y, 170, 8);
+  doc.setFont("helvetica", "bold");
   doc.text("RX", 37.5, y + 5, { align: "center" });
   doc.text("ESF", 70, y + 5, { align: "center" });
   doc.text("CIL", 100, y + 5, { align: "center" });
@@ -431,6 +438,53 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.text("HORIZONTAL", 147, y + (3.4*rowH));
   doc.text("DIAG. MAIOR", 147, y + (4.4*rowH));
 
+  // 🟢 INJETANDO OS DADOS DINÂMICOS NA TABELA (Centralizados)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const dy = 1.5; // Ajuste fino vertical para centralizar o texto na célula
+
+  // Longe
+  if(dados.longe_od_esf) doc.text(String(dados.longe_od_esf), 70, y + (0.7*rowH) + dy, { align: "center" });
+  if(dados.longe_od_cil) doc.text(String(dados.longe_od_cil), 100, y + (0.7*rowH) + dy, { align: "center" });
+  if(dados.longe_od_eixo) doc.text(String(dados.longe_od_eixo), 130, y + (0.7*rowH) + dy, { align: "center" });
+  if(dados.longe_od_dnp) doc.text(String(dados.longe_od_dnp), 167.5, y + (0.7*rowH) + dy, { align: "center" });
+
+  if(dados.longe_oe_esf) doc.text(String(dados.longe_oe_esf), 70, y + (1.7*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_cil) doc.text(String(dados.longe_oe_cil), 100, y + (1.7*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_eixo) doc.text(String(dados.longe_oe_eixo), 130, y + (1.7*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_dnp) doc.text(String(dados.longe_oe_dnp), 167.5, y + (1.7*rowH) + dy, { align: "center" });
+
+  // Adição
+  if(dados.adicao) doc.text(String(dados.adicao), 37.5, y + (2.7*rowH) + dy, { align: "center" });
+
+  // CO
+  if(dados.co_od_esf) doc.text(String(dados.co_od_esf), 70, y + (3.7*rowH) + dy, { align: "center" });
+  if(dados.co_od_cil) doc.text(String(dados.co_od_cil), 100, y + (3.7*rowH) + dy, { align: "center" });
+  if(dados.co_od_eixo) doc.text(String(dados.co_od_eixo), 130, y + (3.7*rowH) + dy, { align: "center" });
+  if(dados.co_od_dnp) doc.text(String(dados.co_od_dnp), 167.5, y + (3.7*rowH) + dy, { align: "center" });
+
+  if(dados.co_oe_esf) doc.text(String(dados.co_oe_esf), 70, y + (4.7*rowH) + dy, { align: "center" });
+  if(dados.co_oe_cil) doc.text(String(dados.co_oe_cil), 100, y + (4.7*rowH) + dy, { align: "center" });
+  if(dados.co_oe_eixo) doc.text(String(dados.co_oe_eixo), 130, y + (4.7*rowH) + dy, { align: "center" });
+  if(dados.co_oe_dnp) doc.text(String(dados.co_oe_dnp), 167.5, y + (4.7*rowH) + dy, { align: "center" });
+
+  // Perto
+  if(dados.perto_od_esf) doc.text(String(dados.perto_od_esf), 70, y + (5.7*rowH) + dy, { align: "center" });
+  if(dados.perto_od_cil) doc.text(String(dados.perto_od_cil), 100, y + (5.7*rowH) + dy, { align: "center" });
+  if(dados.perto_od_eixo) doc.text(String(dados.perto_od_eixo), 130, y + (5.7*rowH) + dy, { align: "center" });
+  if(dados.perto_od_dnp) doc.text(String(dados.perto_od_dnp), 167.5, y + (5.7*rowH) + dy, { align: "center" });
+
+  if(dados.perto_oe_esf) doc.text(String(dados.perto_oe_esf), 70, y + (6.7*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_cil) doc.text(String(dados.perto_oe_cil), 100, y + (6.7*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_eixo) doc.text(String(dados.perto_oe_eixo), 130, y + (6.7*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_dnp) doc.text(String(dados.perto_oe_dnp), 167.5, y + (6.7*rowH) + dy, { align: "center" });
+
+  // Medidas Armação
+  if(dados.medidas_vertical) doc.text(String(dados.medidas_vertical), 132, y + (3.8*rowH) + 1, { align: "center" });
+  if(dados.medidas_ponte) doc.text(String(dados.medidas_ponte), 132, y + (4.8*rowH) + 1, { align: "center" });
+  if(dados.medidas_horizontal) doc.text(String(dados.medidas_horizontal), 175, y + (3.8*rowH) + 1, { align: "center" });
+  if(dados.medidas_diag) doc.text(String(dados.medidas_diag), 175, y + (4.8*rowH) + 1, { align: "center" });
+
   y += 7 * rowH; 
   
   // --- OBSERVAÇÕES ---
@@ -440,30 +494,48 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text("OBSERVAÇÕES", 105, y + 5, { align: "center" });
-  doc.rect(margemEsq, y, 170, 7);
+  
+  // 🟢 Em vez de várias linhas separadas, cria uma caixa grande com texto responsivo
+  doc.rect(margemEsq, y, 170, 35); 
   
   y += 7;
-  for(let i=0; i<5; i++) {
-      doc.rect(margemEsq, y, 170, 7);
-      y += 7;
+  doc.setFont("helvetica", "normal");
+  if (dados.observacoes) {
+    const obsFormatada = doc.splitTextToSize(String(dados.observacoes), 165);
+    doc.text(obsFormatada, margemEsq + 2, y + 5);
   }
+  y += 28; // Pula a caixa de observação para o rodapé
 
-  // --- RODAPÉ ---
+  // --- RODAPÉ ALINHADO ---
   y += 10;
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
+  
   doc.text("LOJA:", margemEsq, y);
-  doc.line(margemEsq + 10, y, 120, y);
+  doc.line(margemEsq + 12, y + 1, 120, y + 1);
+  
   doc.text("DATA DA VENDA:", 130, y);
-  doc.line(160, y, 190, y);
+  doc.setFont("helvetica", "normal");
+  if (dados.dataVenda) {
+    const dtFormatada = dados.dataVenda.split('-').reverse().join('/');
+    doc.text(dtFormatada, 162, y);
+  }
+  doc.line(160, y + 1, 190, y + 1);
+  
   y += 10;
+  doc.setFont("helvetica", "bold");
   doc.text("CONSULTOR:", margemEsq, y);
-  doc.line(margemEsq + 24, y, 190, y);
+  doc.setFont("helvetica", "normal");
+  if (dados.consultor) doc.text(String(dados.consultor).toUpperCase(), margemEsq + 26, y);
+  doc.line(margemEsq + 24, y + 1, 190, y + 1);
+  
   y += 10;
   const nCli = dados.cliente || dados.nomeCliente || "";
+  doc.setFont("helvetica", "bold");
   doc.text("NOME DO CLIENTE:", margemEsq, y);
-  doc.text(nCli, margemEsq + 35, y - 1);
-  doc.line(margemEsq + 34, y, 190, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(nCli.toUpperCase(), margemEsq + 37, y);
+  doc.line(margemEsq + 35, y + 1, 190, y + 1);
 
   doc.save(`OS_${nCli ? nCli.replace(/\s+/g, "_") : "Cliente"}.pdf`);
 };
