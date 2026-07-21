@@ -52,7 +52,7 @@ export default function NovaOrdemServico() {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com'; 
       
-      const response = await fetch(`${baseUrl}/api/ordens_servico`, {
+      const response = await fetch(`${baseUrl}/ordens_servico`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
