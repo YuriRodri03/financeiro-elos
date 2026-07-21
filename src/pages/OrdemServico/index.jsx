@@ -50,7 +50,6 @@ export default function NovaOrdemServico() {
     };
 
     try {
-      // 🟢 CORRIGIDO: Agora ele usa a variável de ambiente (Vite) ou o seu link oficial do Render
       const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com'; 
       
       const response = await fetch(`${baseUrl}/api/ordens_servico`, {
