@@ -1,5 +1,8 @@
 import { jsPDF } from "jspdf";
 
+// ==========================================
+// 1. RECIBO E PEDIDO
+// ==========================================
 export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const doc = new jsPDF();
   const margemEsq = 20;
@@ -62,24 +65,25 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFontSize(10);
   doc.text(dados.data || new Date().toLocaleDateString('pt-BR'), 185, y + 7, { align: "right" });
 
-  // --- DADOS DO CLIENTE (Novo Bloco) ---
+  // --- DADOS DO CLIENTE ---
   y += 18;
   doc.setTextColor(0, 0, 0);
   const nCli = (dados.cliente || "CLIENTE").toUpperCase();
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("IDENTIFICAÇÃO DO CLIENTE", margemEsq, y);
+  // 🟢 Título em negrito com o nome do cliente
+  doc.text(nCli, margemEsq, y);
   
   y += 7;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Nome: ${nCli}`, margemEsq, y);
-  doc.text(`CPF: ${dados.cpf || "Não informado"}`, 120, y);
+  // 🟢 Removemos a repetição do nome e subimos os outros dados
+  doc.text(`CPF: ${dados.cpf || "Não informado"}`, margemEsq, y);
+  doc.text(`Telefone: ${dados.telefone || "Não informado"}`, 120, y);
   
   y += 5;
-  doc.text(`Telefone: ${dados.telefone || "Não informado"}`, margemEsq, y);
-  doc.text(`E-mail: ${dados.email || "Não informado"}`, 120, y);
+  doc.text(`E-mail: ${dados.email || "Não informado"}`, margemEsq, y);
   
   y += 5;
   const enderecoTxt = doc.splitTextToSize(`Endereço: ${dados.endereco || "Não informado"}`, 160);
@@ -99,7 +103,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
 
-  // Se não houver itensCarrinho, cria um item padrão com os dados básicos
   const itens = dados.itensCarrinho || [
     { nome: dados.produto || "PRODUTO ÓPTICO", preco: Number(dados.valorProduto || dados.valorTotal || 0) }
   ];
@@ -109,7 +112,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     const precoItem = "R$ " + Number(item.preco).toFixed(2).replace(".", ",");
     const nomeQuebrado = doc.splitTextToSize(nomeItem, 135);
     
-    // Fundo zebrado
     if (index % 2 !== 0) {
       doc.setFillColor(250, 250, 250);
       const alturaRetangulo = (nomeQuebrado.length * 5) + 3;
@@ -129,12 +131,8 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   
   y += 8;
   
-  // 1. Tratamento seguro para garantir que os valores sejam números puros
   const vTotalNum = Number(dados.valorTotal || 0);
   const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
-
-  // 2. 🔥 A MÁGICA: O Subtotal real impresso DEVE ser sempre o Total Pago + Desconto Concedido!
-  // Isso ignora qualquer erro de carrinho zerado ou vindo errado do histórico do banco.
   const subtotal = vTotalNum + vDescNum;
 
   doc.setFont("helvetica", "normal");
@@ -142,7 +140,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text("R$ " + subtotal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
   y += 7;
-  doc.setTextColor(198, 40, 40); // Vermelho para desconto
+  doc.setTextColor(198, 40, 40); 
   doc.text("Desconto:", 130, y);
   doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   
@@ -152,7 +150,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setFontSize(12);
   doc.text("TOTAL FINAL:", 130, y);
   
-  // 3. A conta final bate perfeitamente com o banco (Ex: 10 - 1 = 9)
   const totalFinal = subtotal - vDescNum;
   doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
@@ -187,7 +184,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     desenharAssinaturas(245);
   }
 
-  // --- SEGUNDA PÁGINA: GARANTIA (Texto Completo) ---
+  // --- SEGUNDA PÁGINA: GARANTIA ---
   if (tipo === "pedido") {
     doc.addPage();
     doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
@@ -244,7 +241,9 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.save(`${txtT}_${nCli.replace(/\s+/g, "_")}.pdf`);
 };
 
-// --- RELATÓRIO DE SAÚDE FINANCEIRA COMPLETO ---
+// ==========================================
+// 2. RELATÓRIO DE SAÚDE FINANCEIRA
+// ==========================================
 export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   const doc = new jsPDF();
   const verdeElos = [74, 93, 78];
@@ -323,4 +322,148 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   doc.text("R$ " + saldo.toFixed(2).replace('.', ','), 185, y + 21, { align: "right" });
 
   doc.save("Saude_Financeira_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
+};
+
+// ==========================================
+// 3. ORDEM DE SERVIÇO
+// ==========================================
+export const gerarPDFOrdemServico = async (dados) => {
+  const doc = new jsPDF();
+  const margemEsq = 20;
+  let y = 15;
+
+  const carregarLogo = (url) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = url;
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+    });
+  };
+
+  const logoImg = await carregarLogo("/favicon.png");
+
+  // --- CABEÇALHO ---
+  if (logoImg) {
+    doc.addImage(logoImg, "PNG", margemEsq, 10, 20, 20);
+  }
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "normal");
+  doc.text("ELOS", margemEsq + 5, 35); 
+  
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  const numeroOS = dados.numeroOS || dados.numeroPedido || dados.numero || "________";
+  doc.text(`OSº ${numeroOS}`, 150, 25);
+  doc.setDrawColor(0, 0, 0);
+  doc.line(160, 26, 190, 26);
+
+  y = 45;
+  
+  // --- DADOS DA RX ---
+  doc.setFillColor(210, 210, 210);
+  doc.rect(margemEsq, y, 170, 7, "F");
+  doc.setFontSize(10);
+  doc.text("DADOS DA RX", 105, y + 5, { align: "center" });
+  doc.rect(margemEsq, y, 170, 7); 
+  
+  y += 7;
+  const labels = ["LENTE:", "TRATAMENTO:", "ARMAÇÃO:"];
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  labels.forEach(label => {
+    doc.rect(margemEsq, y, 170, 7);
+    doc.text(label, margemEsq + 2, y + 5);
+    y += 7;
+  });
+
+  // --- CABEÇALHO TABELA RX ---
+  doc.rect(margemEsq, y, 170, 8);
+  doc.text("RX", 37.5, y + 5, { align: "center" });
+  doc.text("ESF", 70, y + 5, { align: "center" });
+  doc.text("CIL", 100, y + 5, { align: "center" });
+  doc.text("EIXO", 130, y + 5, { align: "center" });
+  doc.text("DNP LONGE", 167.5, y + 5, { align: "center" });
+  
+  y += 8;
+  const rowH = 7.5;
+  
+  // Contorno principal da tabela (7 linhas no total)
+  doc.rect(margemEsq, y, 170, 7 * rowH);
+  
+  for(let i=1; i<7; i++) { doc.line(margemEsq, y + (i*rowH), 190, y + (i*rowH)); }
+  doc.line(40, y, 40, y + (7 * rowH)); 
+  doc.line(55, y, 55, y + (7 * rowH)); 
+  doc.line(85, y, 85, y + (7 * rowH)); 
+  doc.line(115, y, 115, y + (7 * rowH)); 
+  doc.line(145, y, 145, y + (7 * rowH)); 
+  
+  // LIMPANDO A LINHA VERTICAL NA ADIÇÃO
+  doc.setFillColor(255, 255, 255);
+  doc.rect(20.2, y + (2*rowH) + 0.2, 34.6, rowH - 0.4, "F");
+  // LIMPANDO ÁREA PARA MEDIDAS DA ARMAÇÃO NO CO
+  doc.rect(55.2, y + (3*rowH) + 0.2, 59.6, (2*rowH) - 0.4, "F");
+
+  // --- TEXTOS DA TABELA ---
+  doc.setFont("helvetica", "bold");
+  doc.text("LONGE:", 30, y + rowH, { align: "center" });
+  doc.text("OD", 47.5, y + (0.7*rowH), { align: "center" });
+  doc.text("OE", 47.5, y + (1.7*rowH), { align: "center" });
+  
+  doc.text("ADIÇÃO:", 37.5, y + (2.7*rowH), { align: "center" });
+  
+  doc.text("CO:", 30, y + (4*rowH), { align: "center" });
+  doc.text("OD", 47.5, y + (3.7*rowH), { align: "center" });
+  doc.text("OE", 47.5, y + (4.7*rowH), { align: "center" });
+  
+  doc.text("PERTO:", 30, y + (6*rowH), { align: "center" });
+  doc.text("OD", 47.5, y + (5.7*rowH), { align: "center" });
+  doc.text("OE", 47.5, y + (6.7*rowH), { align: "center" });
+  
+  doc.setFontSize(7);
+  doc.text("MEDIDAS", 85, y + (3.8*rowH), { align: "center" });
+  doc.text("DA ARMAÇÃO:", 85, y + (4.4*rowH), { align: "center" });
+  doc.setFontSize(6);
+  doc.text("VERTICAL", 117, y + (3.4*rowH));
+  doc.text("PONTE", 117, y + (4.4*rowH));
+  doc.text("HORIZONTAL", 147, y + (3.4*rowH));
+  doc.text("DIAG. MAIOR", 147, y + (4.4*rowH));
+
+  y += 7 * rowH; 
+  
+  // --- OBSERVAÇÕES ---
+  y += 5;
+  doc.setFillColor(210, 210, 210);
+  doc.rect(margemEsq, y, 170, 7, "F");
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("OBSERVAÇÕES", 105, y + 5, { align: "center" });
+  doc.rect(margemEsq, y, 170, 7);
+  
+  y += 7;
+  for(let i=0; i<5; i++) {
+      doc.rect(margemEsq, y, 170, 7);
+      y += 7;
+  }
+
+  // --- RODAPÉ ---
+  y += 10;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("LOJA:", margemEsq, y);
+  doc.line(margemEsq + 10, y, 120, y);
+  doc.text("DATA DA VENDA:", 130, y);
+  doc.line(160, y, 190, y);
+  y += 10;
+  doc.text("CONSULTOR:", margemEsq, y);
+  doc.line(margemEsq + 24, y, 190, y);
+  y += 10;
+  const nCli = dados.cliente || dados.nomeCliente || "";
+  doc.text("NOME DO CLIENTE:", margemEsq, y);
+  doc.text(nCli, margemEsq + 35, y - 1);
+  doc.line(margemEsq + 34, y, 190, y);
+
+  doc.save(`OS_${nCli ? nCli.replace(/\s+/g, "_") : "Cliente"}.pdf`);
 };

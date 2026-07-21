@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout }) {
   const [menuAberto, setMenuAberto] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const linksNav = [
     { id: 'dashboard', nome: 'Dashboard', icone: '📊' },
@@ -13,13 +16,25 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
     { id: 'zap', nome: 'Automação', icone: '🟢' }, 
   ];
 
+  // Função centralizada para lidar com a navegação do menu
+  const handleNavegacao = (abaId) => {
+    setAbaAtiva(abaId);
+    setMenuAberto(false);
+    
+    // Se o usuário estiver na tela de Ordem de Serviço (ou qualquer outra rota),
+    // redireciona de volta para a tela principal do sistema onde as abas funcionam.
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+  };
+
   return (
     <>
       {/* NAVBAR SUPERIOR ULTRA COMPACTA CLEAN */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-elos-bege/10 shadow-sm px-4 md:px-10 py-4 flex items-center justify-between transition-all gap-4">
         
         {/* LOGO DA ÓTICA */}
-        <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => setAbaAtiva('dashboard')}>
+        <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => handleNavegacao('dashboard')}>
           <span className="text-2xl animate-in fade-in duration-500">👓</span>
           <div className="flex flex-col">
             <span className="font-tradicional text-xl font-black text-elos-verde italic tracking-tight leading-none">
@@ -84,14 +99,11 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
               {/* Lista Vertical de Links - Apenas rolagem para cima e para baixo */}
               <div className="flex flex-col gap-2 max-h-[65vh] overflow-y-auto no-scrollbar overflow-x-hidden">
                 {linksNav.map((link) => {
-                  const ativo = abaAtual === link.id;
+                  const ativo = abaAtual === link.id && location.pathname === '/'; // Só fica ativo se estiver na home
                   return (
                     <button
                       key={link.id}
-                      onClick={() => {
-                        setAbaAtiva(link.id);
-                        setMenuAberto(false);
-                      }}
+                      onClick={() => handleNavegacao(link.id)}
                       className={`w-full px-4 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest text-left flex items-center gap-4 transition-all whitespace-normal break-words ${
                         ativo 
                           ? 'bg-elos-verde text-white shadow-md shadow-elos-verde/10 scale-[1.01]' 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, useLocation, useNavigate } from 'react-router-dom';
+// ✅ ADICIONADO: Routes e Route
+import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
 import Dashboard from './pages/Dashboard';
@@ -12,6 +13,10 @@ import Login from './pages/Login';
 import Produtos from './pages/Produtos';
 import Zap from './pages/Zap';
 import Navbar from './components/Navbar'; 
+
+// ✅ ADICIONADO: Importe a tela de Nova Ordem de Serviço 
+// (Atenção: Verifique se o caminho da pasta bate exatamente com onde você salvou o arquivo)
+import NovaOrdemServico from './pages/OrdemServico/index'; 
 
 import './index.css'; 
 
@@ -64,6 +69,7 @@ function ConteudoAbasPersistentes() {
 
   return (
     <div className="animate-in fade-in duration-500">
+      {/* TELAS PERSISTENTES (Ficam em background para não perder estado) */}
       <div style={{ display: currentPath === '/' || currentPath === '/dashboard' ? 'block' : 'none' }}>
         <Dashboard />
       </div>
@@ -79,13 +85,17 @@ function ConteudoAbasPersistentes() {
       <div style={{ display: currentPath === '/produtos' ? 'block' : 'none' }}>
         <Produtos />
       </div>
-      {/* ✅ ADICIONADO: Renderização persistente da aba do robô de mensagens */}
       <div style={{ display: currentPath === '/zap' ? 'block' : 'none' }}>
         <Zap />
       </div>
       <div style={{ display: currentPath === '/relatorios' ? 'block' : 'none' }}>
         <RelatorioInadimplencia />
       </div>
+
+      {/* ✅ ADICIONADO: Camada de Rotas Dinâmicas (Para páginas soltas que usam variáveis na URL, como o numeroPedido) */}
+      <Routes>
+        <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
+      </Routes>
     </div>
   );
 }
@@ -100,6 +110,8 @@ function InterfaceSistema({ aoDeslogar }) {
   const obterAbaInversa = () => {
     const rota = location.pathname;
     if (rota === '/') return 'dashboard';
+    // Se estiver em uma rota aninhada (ex: /nova-os/2005), deixamos a navbar sem seleção ativa
+    if (rota.startsWith('/nova-os')) return null; 
     return rota.replace('/', '');
   };
 
@@ -147,7 +159,7 @@ function InterfaceSistema({ aoDeslogar }) {
         </div>
       )}
 
-      {/* RENDERIZAÇÃO DAS TELAS PERSISTENTES */}
+      {/* RENDERIZAÇÃO DAS TELAS PERSISTENTES E DINÂMICAS */}
       <main>
         <ConteudoAbasPersistentes />
       </main>

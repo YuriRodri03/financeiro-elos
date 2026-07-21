@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 
 export default function RelatorioInadimplencia() {
-  // Ajustado para 'editarVenda', que é o nome da função que está no seu FinanceiroContext
   const { vendas, clientes, editarVenda } = useFinanceiro();
   const [dataPrevisaoTemp, setDataPrevisaoTemp] = useState({});
 
@@ -16,7 +15,7 @@ export default function RelatorioInadimplencia() {
     }, 3000);
   };
 
-  // 1. Lógica para identificar QUALQUER parcela vencida (sem carência de 30 dias)
+  // 🟢 CORRIGIDO: Lógica para calcular vencimentos considerando a data da primeira parcela
   const obterParcelasVencidas = (venda) => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0); // Zera as horas para comparar apenas datas
@@ -24,15 +23,31 @@ export default function RelatorioInadimplencia() {
     return (venda.listaParcelas || []).filter(p => {
       if (p.paga) return false;
       
-      // Calcula a data de vencimento (venda + meses da parcela)
-      const dataVencimento = new Date(venda.dataVenda + 'T00:00:00');
-      dataVencimento.setMonth(dataVencimento.getMonth() + (p.numero - 1));
+      let dataVencimento;
+      
+      if (p.numero === 0) {
+        // A entrada sempre vence no dia em que a venda foi feita
+        dataVencimento = new Date(venda.dataVenda + 'T00:00:00');
+      } else {
+        // As demais parcelas usam a 'dataPrimeiraParcela' como base (ou caem para a data da venda se não existir)
+        const dataBaseParaCalculo = venda.dataPrimeiraParcela || venda.dataVenda;
+        dataVencimento = new Date(dataBaseParaCalculo + 'T00:00:00');
+        // Adiciona os meses correspondentes (Ex: parcela 1 = soma 0 meses; parcela 2 = soma 1 mês)
+        dataVencimento.setMonth(dataVencimento.getMonth() + (p.numero - 1));
+      }
       
       // Se a data de vencimento for menor que hoje, está atrasada
       return dataVencimento < hoje;
     }).map(p => {
-      const dataVenc = new Date(venda.dataVenda + 'T00:00:00');
-      dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+      // Repete o cálculo para devolver a data real para a interface
+      let dataVenc;
+      if (p.numero === 0) {
+        dataVenc = new Date(venda.dataVenda + 'T00:00:00');
+      } else {
+        const dataBaseParaCalculo = venda.dataPrimeiraParcela || venda.dataVenda;
+        dataVenc = new Date(dataBaseParaCalculo + 'T00:00:00');
+        dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+      }
       return { ...p, dataVencimentoReal: dataVenc };
     });
   };
@@ -148,7 +163,7 @@ export default function RelatorioInadimplencia() {
                       <td className="px-8 py-6">
                         <div className="flex flex-wrap gap-1">
                           {v.parcelasVencidas.map(p => (
-                            <span key={p.numero} className="text-[9px] bg-red-50 text-red-600 px-2 py-1 rounded-md font-bold border border-red-100">
+                            <span key={p.numero} className="text-[9px] bg-red-50 text-red-600 px-2 py-1 rounded-md font-bold border border-red-100" title={`Venceu em: ${p.dataVencimentoReal.toLocaleDateString('pt-BR')}`}>
                               {p.numero === 0 ? 'Entrada' : `${p.numero}ª parc`}
                             </span>
                           ))}

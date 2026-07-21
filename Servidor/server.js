@@ -52,8 +52,42 @@ const Produto = mongoose.model('Produto', {
   nome: String, preco: Number, categoria: String
 });
 
+const Produto = mongoose.model('Produto', {
+  nome: String, 
+  preco: Number, 
+  categoria: String,
+  quantidade: Number
+});
+
 const Configuracao = mongoose.model('Configuracao', {
   chave: String, valor: String
+});
+
+// ✅ NOVO: MODELO DE ORDEM DE SERVIÇO
+const OrdemServico = mongoose.model('OrdemServico', {
+  numeroPedido: String,
+  dataCriacao: String,
+  
+  lente: String,
+  tratamento: String,
+  armacao: String,
+  
+  longe_od_esf: String, longe_od_cil: String, longe_od_eixo: String, longe_od_dnp: String,
+  longe_oe_esf: String, longe_oe_cil: String, longe_oe_eixo: String, longe_oe_dnp: String,
+  
+  adicao: String,
+  
+  co_od_esf: String, co_od_cil: String, co_od_eixo: String, co_od_dnp: String,
+  co_oe_esf: String, co_oe_cil: String, co_oe_eixo: String, co_oe_dnp: String,
+  
+  perto_od_esf: String, perto_od_cil: String, perto_od_eixo: String, perto_od_dnp: String,
+  perto_oe_esf: String, perto_oe_cil: String, perto_oe_eixo: String, perto_oe_dnp: String,
+  
+  medidas_vertical: String, medidas_horizontal: String,
+  medidas_ponte: String, medidas_diag: String,
+  
+  observacoes: String,
+  consultor: String
 });
 
 // --- SCRIPT DE ATUALIZAÇÃO PARA VENDAS ANTIGAS ---
@@ -159,8 +193,32 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
   res.json({ message: "Removido" });
 });
 
-// --- ROTAS API: VENDAS ---
-app.get('/api/vendas', async (req, res) => res.json(await Venda.find()));
+// --- ROTAS API: VENDAS E ORDENS DE SERVIÇO ---
+
+// ✅ ATUALIZADO: Buscar Vendas e Mesclar com suas Ordens de Serviço
+app.get('/api/vendas', async (req, res) => {
+  try {
+    const vendas = await Venda.find().lean();
+    const ordensServico = await OrdemServico.find().lean();
+
+    const vendasComOS = vendas.map(venda => {
+      // Usa o número do pedido ou o ID como âncora
+      const identificadorVenda = venda.numeroPedido ? String(venda.numeroPedido) : venda._id.toString();
+      
+      const osDestaVenda = ordensServico.filter(os => String(os.numeroPedido) === identificadorVenda);
+      
+      return {
+        ...venda,
+        ordensServico: osDestaVenda.map(os => ({ ...os, idOS: os._id.toString() }))
+      };
+    });
+
+    res.json(vendasComOS);
+  } catch (err) { 
+    res.status(500).json({ error: "Erro ao buscar vendas e OS" }); 
+  }
+});
+
 app.post('/api/vendas', async (req, res) => {
   try {
     const ultimaVenda = await Venda.findOne().sort({ numeroPedido: -1 });
@@ -177,6 +235,37 @@ app.put('/api/vendas/:id', async (req, res) => {
 });
 app.delete('/api/vendas/:id', async (req, res) => {
   try { await Venda.findByIdAndDelete(req.params.id); res.json({ message: "Venda excluída" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
+});
+
+// ✅ NOVO: ROTAS PARA ORDEM DE SERVIÇO
+app.get('/api/ordens_servico', async (req, res) => res.json(await OrdemServico.find()));
+
+app.post('/api/ordens_servico', async (req, res) => {
+  try {
+    const novaOS = new OrdemServico(req.body);
+    await novaOS.save();
+    res.status(201).json(novaOS);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao salvar OS" });
+  }
+});
+
+app.put('/api/ordens_servico/:id', async (req, res) => {
+  try {
+    const osEditada = await OrdemServico.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(osEditada);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao atualizar OS" });
+  }
+});
+
+app.delete('/api/ordens_servico/:id', async (req, res) => {
+  try {
+    await OrdemServico.findByIdAndDelete(req.params.id);
+    res.json({ message: "OS excluída com sucesso" });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao deletar OS" });
+  }
 });
 
 // --- BAIXA E ESTORNO DE PARCELA ---
@@ -443,7 +532,8 @@ async function verificarAniversariantesDoDia() {
 
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        await enviarMensagemTexto(jidValido, message);
+        // Usando a variável mensagem correta (tinha um bug no original chamando "message")
+        await enviarMensagemTexto(jidValido, mensagem);
         console.log(`✅ [Baileys Aniversário] Entregue para: ${cliente.nome}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no envio para ${cliente.nome}`); }
@@ -503,7 +593,8 @@ async function verificarPosVendaTrintaDias() {
       let envioSucesso = false;
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        await enviarMensagemTexto(jidValido, message);
+        // Correção aplicada: estava chamando "message" no código original
+        await enviarMensagemTexto(jidValido, mensagem);
         console.log(`✅ [Baileys Pós-Venda] Entregue para: ${venda.cliente}`);
         envioSucesso = true;
       } catch (err) { console.log(`⚠️ Falha primária no pós-venda de ${venda.cliente}`); }

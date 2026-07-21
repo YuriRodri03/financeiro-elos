@@ -3,7 +3,8 @@ import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFSaudeFinanceira } from '../../documentosUtils';
 
 export default function Dashboard() {
-  const { vendas, despesas, carregando } = useFinanceiro();
+  // 🟢 ADICIONADO: Puxando os 'clientes' para ler a dataNascimento
+  const { vendas, despesas, clientes, carregando } = useFinanceiro();
 
   const dataAtual = new Date();
   const [mesFiltro, setMesFiltro] = useState(dataAtual.getMonth() + 1);
@@ -15,6 +16,11 @@ export default function Dashboard() {
 
   // --- ESTADO DE PRIVACIDADE ---
   const [ocultarValores, setOcultarValores] = useState(true);
+
+  // --- ESTADO PARA ANIVERSARIANTES ---
+  // Pega a data local de hoje no formato YYYY-MM-DD com segurança de fuso horário
+  const hojeLocalStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}-${String(dataAtual.getDate()).padStart(2, '0')}`;
+  const [dataAniversario, setDataAniversario] = useState(hojeLocalStr);
 
   // --- ESTADO PARA NOTIFICAÇÕES TOAST PREMIUM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
@@ -75,6 +81,21 @@ export default function Dashboard() {
     gerarPDFSaudeFinanceira(dadosRelatorio, periodoFmt);
     mostrarToast("Balanço gerado e baixado com sucesso!", "sucesso");
   };
+
+  // --- LÓGICA DOS ANIVERSARIANTES ---
+  const aniversariantesDoDia = useMemo(() => {
+    if (!clientes || !dataAniversario) return [];
+    
+    // Extrai apenas o Mês e o Dia da data selecionada no input
+    const [, mesFiltroAniv, diaFiltroAniv] = dataAniversario.split('-');
+    
+    return clientes.filter(cliente => {
+      if (!cliente.dataNascimento) return false;
+      // Extrai o Mês e Dia da data de nascimento do cliente (ignora o ano)
+      const [, mesCli, diaCli] = cliente.dataNascimento.split('-');
+      return mesCli === mesFiltroAniv && diaCli === diaFiltroAniv;
+    });
+  }, [clientes, dataAniversario]);
 
   // --- CÁLCULO HISTÓRICO COMPLETO DO SALDO EM CAIXA ATUAL ---
   const saldoCaixaAtualGeral = useMemo(() => {
@@ -251,7 +272,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* 1. FATURAMENTO BRUTO (MÊS) - Ocupando 100% de largura novamente no topo */}
+        {/* 1. FATURAMENTO BRUTO (MÊS) */}
         <div className="grid grid-cols-1 gap-6 mb-8">
           <div className="bg-elos-verde p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] border-[#3a4a3e] relative overflow-hidden">
             <div className="relative z-10">
@@ -369,7 +390,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* REPOSICIONADO: CARD HISTÓRICO DE SALDO EM CAIXA ATUAL (Fica abaixo do resumo anual) */}
+        {/* CARD HISTÓRICO DE SALDO EM CAIXA ATUAL */}
         <div className="grid grid-cols-1 gap-6 mb-10">
           <div className={`p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] relative overflow-hidden transition-all ${
             saldoCaixaAtualGeral >= 0 ? 'bg-elos-bege border-[#8c7664]' : 'bg-red-950 border-red-900'
@@ -387,6 +408,58 @@ export default function Dashboard() {
               CAIXA
             </div>
           </div>
+        </div>
+
+        {/* 🟢 WIDGET DE ANIVERSARIANTES */}
+        <div className="bg-white rounded-[2rem] shadow-soft p-8 mb-10 border border-elos-bege/10">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-50 pb-4">
+            <div>
+              <h3 className="font-tradicional text-xl italic text-elos-verde flex items-center gap-2">🎂 Aniversariantes do Dia</h3>
+              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-1">Gestão de Relacionamento e Fidelização</p>
+            </div>
+            <div className="flex flex-col gap-1 w-full md:w-auto">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Selecionar Data (Mês/Dia)</label>
+              <input
+                type="date"
+                className="p-3 bg-elos-fundo rounded-xl border border-elos-bege/20 text-sm font-bold text-elos-texto outline-none focus:ring-2 focus:ring-elos-bege/50"
+                value={dataAniversario}
+                onChange={(e) => setDataAniversario(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {aniversariantesDoDia.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {aniversariantesDoDia.map(cli => (
+                <div key={cli._id || cli.cpf} className="flex items-center justify-between p-5 bg-elos-fundo/50 rounded-2xl border border-elos-bege/20 hover:bg-elos-fundo transition-colors">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-elos-verde">{cli.nome}</span>
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">
+                      {cli.telefone || 'Sem telefone'}
+                    </span>
+                  </div>
+                  {cli.telefone && (
+                    <button
+                      onClick={() => {
+                        const foneLimpo = cli.telefone.replace(/\D/g, "");
+                        const msg = `Olá ${cli.nome}, tudo bem? Aqui é da Ótica Elos! 🎉 Passando para te desejar um Feliz Aniversário! Que seu dia seja repleto de alegria e muita paz. Temos um presente especial te esperando, venha nos visitar! 👓✨`;
+                        window.open(`https://wa.me/55${foneLimpo}?text=${encodeURIComponent(msg)}`, "_blank");
+                      }}
+                      className="bg-[#25D366] hover:bg-[#128C7E] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors flex items-center gap-2 shadow-sm active:scale-95"
+                      title="Enviar Parabéns no WhatsApp"
+                    >
+                      💬 WhatsApp
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <span className="text-4xl opacity-20 mb-3 block">🎈</span>
+              <p className="text-gray-400 text-xs italic font-bold">Nenhum cliente cadastrado faz aniversário na data selecionada.</p>
+            </div>
+          )}
         </div>
 
         {/* VENDAS RECENTES */}

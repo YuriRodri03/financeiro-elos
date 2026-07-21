@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils';
+import { gerarPDFDocumento, gerarPDFOrdemServico } from '../../documentosUtils';
 import CadastroClientes from '../CadastroClientes'; 
+import { useNavigate } from 'react-router-dom';
 
-// --- FUNÇÃO AUXILIAR PARA MOEDA (Mantida) ---
+// --- FUNÇÃO AUXILIAR PARA MOEDA ---
 const aplicarMascaraMoeda = (valor) => {
   let v = String(valor).replace(/\D/g, '');
   v = (Number(v) / 100).toLocaleString('pt-BR', {
@@ -13,7 +14,7 @@ const aplicarMascaraMoeda = (valor) => {
   return v;
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA (Mantido) ---
+// --- COMPONENTE DE LINHA DE PARCELA ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -89,6 +90,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostr
 
 export default function Clientes() {
   const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, carregando, editarVenda } = useFinanceiro();
+  const navigate = useNavigate();
   
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
@@ -312,7 +314,7 @@ export default function Clientes() {
                 </td>
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde">Ver Ficha</button>
+                    <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
                     <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirCliente(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
                   </div>
                 </td>
@@ -400,7 +402,7 @@ export default function Clientes() {
                             <div className="mt-4 p-2 bg-elos-fundo rounded-2xl border w-fit relative group">
                               <p className="text-[8px] font-black uppercase text-elos-bege mb-1">Receita Anexada:</p>
                               <img src={venda.foto} alt="Receita" className="h-20 w-auto rounded-lg shadow-sm cursor-pointer" onClick={() => window.open(venda.foto, '_blank')} />
-                              <button onClick={() => handleExcluirFotoVenda(venda._id || venda.id, venda)} className="absolute -top-2 -right-2 bg-white text-red-500 rounded-full w-5 h-5 flex items-center justify-center text-xs">✕</button>
+                              <button onClick={() => handleExcluirFotoVenda(venda._id || venda.id, venda)} className="absolute -top-2 -right-2 bg-white text-red-500 rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm">✕</button>
                             </div>
                           )}
 
@@ -411,55 +413,93 @@ export default function Clientes() {
                           )}
                         </div>
                         
-                        <div className="flex items-center gap-3 w-full md:w-auto">
+                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                          
+                          {/* 🟢 NOVO: Botão para Adicionar Nova O.S. vinculada ao Pedido */}
                           <button 
-  onClick={() => {
-    const valorTotalNum = Number(venda.valorTotal || 0);
-    const descontoNum = Number(venda.desconto || 0);
-    
-    // 1. Descobrimos o subtotal bruto total de fábrica (Ex: 9 + 1 = 10)
-    const subtotalBruto = valorTotalNum + descontoNum;
-
-    // 2. Se a venda já tiver itens no carrinho vindos do banco, recalculamos o valor bruto proporcional de cada um
-    let itensRecalculados = [];
-    if (venda.itensCarrinho && venda.itensCarrinho.length > 0) {
-      // Calculamos o fator multiplicador se houver mais de um item
-      const fatorProporcional = subtotalBruto / (venda.itensCarrinho.reduce((acc, i) => acc + Number(i.preco || 0), 0) || 1);
-      
-      itensRecalculados = venda.itensCarrinho.map(item => ({
-        ...item,
-        preco: Number((Number(item.preco || 0) * fatorProporcional).toFixed(2)) // Devolve o preço cheio de fábrica para o item
-      }));
-    } else {
-      // Caso não tenha carrinho detalhado, cria o item genérico com o preço cheio
-      itensRecalculados = [{ 
-        nome: venda.produto || "PRODUTO ÓPTICO", 
-        preco: subtotalBruto 
-      }];
-    }
-
-    gerarPDFDocumento({
-      ...venda,
-      numeroPedido: numPed, 
-      cliente: clienteNoModal.nome, 
-      email: clienteNoModal.email, 
-      endereco: clienteNoModal.endereco, 
-      telefone: clienteNoModal.telefone,
-      valorProduto: subtotalBruto,
-      desconto: descontoNum,
-      valorTotal: valorTotalNum,
-      itensCarrinho: itensRecalculados, // 🟢 Injeta o carrinho com os preços brutos corrigidos
-      data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR'),
-    }, 'pedido');
-  }} 
-  className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+  onClick={() => navigate(`/nova-os/${numPed}`)} 
+  className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
 >
-  📄 Reemitir
+  ➕ Nova OS
 </button>
-                          <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVenda(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
+
+                          <button 
+                            onClick={() => {
+                              const valorTotalNum = Number(venda.valorTotal || 0);
+                              const descontoNum = Number(venda.desconto || 0);
+                              
+                              const subtotalBruto = valorTotalNum + descontoNum;
+
+                              let itensRecalculados = [];
+                              if (venda.itensCarrinho && venda.itensCarrinho.length > 0) {
+                                const fatorProporcional = subtotalBruto / (venda.itensCarrinho.reduce((acc, i) => acc + Number(i.preco || 0), 0) || 1);
+                                itensRecalculados = venda.itensCarrinho.map(item => ({
+                                  ...item,
+                                  preco: Number((Number(item.preco || 0) * fatorProporcional).toFixed(2)) 
+                                }));
+                              } else {
+                                itensRecalculados = [{ nome: venda.produto || "PRODUTO ÓPTICO", preco: subtotalBruto }];
+                              }
+
+                              gerarPDFDocumento({
+                                ...venda,
+                                numeroPedido: numPed, 
+                                cliente: clienteNoModal.nome, 
+                                email: clienteNoModal.email, 
+                                endereco: clienteNoModal.endereco, 
+                                telefone: clienteNoModal.telefone,
+                                valorProduto: subtotalBruto,
+                                desconto: descontoNum,
+                                valorTotal: valorTotalNum,
+                                itensCarrinho: itensRecalculados, 
+                                data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR'),
+                              }, 'pedido');
+                            }} 
+                            className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+                          >
+                            📄 Reemitir
+                          </button>
+                          
+                          <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVenda(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded-2xl p-4 shadow-inner">
+
+                      {/* 🟢 NOVO: Bloco de exibição das Ordens de Serviço (caso já tenham sido criadas para este pedido) */}
+                      {venda.ordensServico && venda.ordensServico.length > 0 && (
+                        <div className="mt-4 mb-6 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                          <h4 className="text-[10px] font-black text-blue-800 uppercase mb-3 tracking-widest">Ordens de Serviço Vinculadas</h4>
+                          <div className="space-y-2">
+                            {venda.ordensServico.map((os, osIdx) => (
+                              <div key={os.idOS || osIdx} className="flex flex-col md:flex-row justify-between md:items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm gap-3">
+                                <span className="text-xs font-bold text-gray-700">
+                                  👓 OS {osIdx + 1} - Armação: <span className="font-normal">{os.armacao || 'Não informada'}</span>
+                                </span>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => gerarPDFOrdemServico({ 
+                                      ...os, 
+                                      nomeCliente: clienteNoModal.nome, 
+                                      dataVenda: venda.dataVenda, 
+                                      numeroOS: `${numPed}-${osIdx + 1}` 
+                                    })}
+                                    className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
+                                  >
+                                    🖨️ Imprimir OS
+                                  </button>
+                                  <button
+                                    onClick={() => navigate(`/ordem-servico/editar/${os.idOS}`)}
+                                    className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
+                                  >
+                                    ✏️ Editar
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
                         {(venda.listaParcelas || []).map((p, idx) => (
                           <LinhaParcela key={idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} mostrarToast={mostrarToast} />
                         ))}
