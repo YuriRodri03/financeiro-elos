@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 // ✅ ADICIONADO: Routes e Route
-import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
 import Dashboard from './pages/Dashboard';
@@ -95,6 +95,12 @@ function ConteudoAbasPersistentes() {
       {/* ✅ ADICIONADO: Camada de Rotas Dinâmicas (Para páginas soltas que usam variáveis na URL, como o numeroPedido) */}
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
+        
+        {/* 🟢 ADICIONADO: Ensina o sistema para onde ir ao clicar em Editar */}
+        <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
+        
+        {/* 🟢 ADICIONADO: Se a URL for inválida, volta para o Dashboard e evita a tela branca */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );

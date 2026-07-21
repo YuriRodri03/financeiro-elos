@@ -117,6 +117,27 @@ export default function Clientes() {
     setConfirmModal({ visivel: true, message: mensagem, acao });
   };
 
+  const handleExcluirOS = (idOS) => {
+    abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+        const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
+          // Recarrega a página levemente para o Context atualizar a lista de clientes/OS
+          setTimeout(() => window.location.reload(), 1500); 
+        } else {
+          mostrarToast("Erro ao excluir OS no servidor.", "erro");
+        }
+      } catch (error) {
+        mostrarToast("Erro de conexão ao tentar excluir a OS.", "erro");
+      }
+    });
+  };
+
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
@@ -504,6 +525,14 @@ export default function Clientes() {
                                     className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
                                   >
                                     ✏️ Editar
+                                  </button>
+                                  
+                                  {/* 🟢 NOVO: Botão de Excluir OS */}
+                                  <button
+                                    onClick={() => handleExcluirOS(os.idOS)}
+                                    className="px-4 py-2 bg-red-50 text-red-500 rounded-lg text-[10px] font-bold uppercase hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                                  >
+                                    🗑️ Excluir
                                   </button>
                                 </div>
                               </div>

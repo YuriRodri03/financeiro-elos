@@ -1,9 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function NovaOrdemServico() {
-  const { numeroPedido } = useParams();
+  // 🟢 AGORA CAPTURAMOS TANTO O NUMERO DO PEDIDO QUANTO O ID DA OS
+  const { numeroPedido, id } = useParams();
   const navigate = useNavigate();
+  const modoEdicao = !!id; // Se tem ID, estamos no modo de edição
 
   // Estado com todos os campos mapeados do modelo físico
   const [dadosOS, setDadosOS] = useState({
@@ -29,8 +31,38 @@ export default function NovaOrdemServico() {
     medidas_ponte: '', medidas_diag: '',
     
     // Rodapé
-    observacoes: '', consultor: ''
+    observacoes: '', consultor: '', numeroPedido: numeroPedido || ''
   });
+
+  // 🟢 BUSCA OS DADOS SE ESTIVER NO MODO DE EDIÇÃO
+  useEffect(() => {
+    if (modoEdicao) {
+      const carregarOS = async () => {
+        try {
+          const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+          const response = await fetch(`${baseUrl}/ordens_servico/${id}`);
+          if (response.ok) {
+            const dadosBanco = await response.json();
+            
+            // Preenche o formulário substituindo valores nulos por string vazia
+            const dadosFormatados = {};
+            Object.keys(dadosOS).forEach(key => {
+              dadosFormatados[key] = dadosBanco[key] || '';
+            });
+            // Mantém o numeroPedido original caso não venha
+            if (dadosBanco.numeroPedido) dadosFormatados.numeroPedido = dadosBanco.numeroPedido;
+            
+            setDadosOS(dadosFormatados);
+          } else {
+            alert("Não foi possível carregar os dados desta OS.");
+          }
+        } catch (error) {
+          console.error("Erro ao buscar OS:", error);
+        }
+      };
+      carregarOS();
+    }
+  }, [id]);
 
   // Função inteligente que atualiza qualquer input usando o "name" dele
   const handleChange = (e) => {
@@ -43,25 +75,32 @@ export default function NovaOrdemServico() {
   const salvarOS = async (e) => {
     e.preventDefault();
     
-    const novaOS = {
-      ...dadosOS,
-      numeroPedido: numeroPedido,
-      dataCriacao: new Date().toISOString(),
+    const osParaSalvar = {
+      ...dadosOS
     };
+
+    // Se for criação, garante que a data de criação vá junto
+    if (!modoEdicao) {
+      osParaSalvar.dataCriacao = new Date().toISOString();
+    }
 
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com'; 
       
-      const response = await fetch(`${baseUrl}/ordens_servico`, {
-        method: 'POST',
+      // 🟢 ALTERA A ROTA E O MÉTODO DEPENDENDO SE É EDIÇÃO OU CRIAÇÃO
+      const url = modoEdicao ? `${baseUrl}/ordens_servico/${id}` : `${baseUrl}/ordens_servico`;
+      const metodo = modoEdicao ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: metodo,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(novaOS),
+        body: JSON.stringify(osParaSalvar),
       });
 
       if (response.ok) {
-        alert("Ordem de Serviço cadastrada com sucesso!");
+        alert(`Ordem de Serviço ${modoEdicao ? 'atualizada' : 'cadastrada'} com sucesso!`);
         navigate(-1); // Volta para a tela anterior (Histórico)
       } else {
         alert("Erro ao salvar a Ordem de Serviço no servidor.");
@@ -77,10 +116,10 @@ export default function NovaOrdemServico() {
       <div className="bg-white p-8 rounded-lg shadow-md">
         <div className="flex justify-between items-center border-b pb-4 mb-6">
           <h2 className="text-2xl font-bold text-gray-800">
-            Nova Ordem de Serviço
+            {modoEdicao ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}
           </h2>
           <span className="text-lg font-semibold text-gray-500">
-            OS Vinculada ao Pedido #{numeroPedido}
+            OS Vinculada ao Pedido #{dadosOS.numeroPedido || numeroPedido || 'N/A'}
           </span>
         </div>
         
@@ -231,7 +270,7 @@ export default function NovaOrdemServico() {
               Cancelar
             </button>
             <button type="submit" className="px-6 py-2 bg-green-700 rounded text-white font-bold hover:bg-green-800 transition">
-              Salvar Ordem de Serviço
+              {modoEdicao ? 'Salvar Alterações' : 'Salvar Ordem de Serviço'}
             </button>
           </div>
           
