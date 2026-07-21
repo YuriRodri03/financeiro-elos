@@ -96,10 +96,22 @@ function ConteudoAbasPersistentes() {
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
         
-        {/* 🟢 ADICIONADO: Ensina o sistema para onde ir ao clicar em Editar */}
+        {/* Ensina o sistema para onde ir ao clicar em Editar */}
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
         
-        {/* 🟢 ADICIONADO: Se a URL for inválida, volta para o Dashboard e evita a tela branca */}
+        {/* 🟢 CORREÇÃO: "Rotas Fantasmas". 
+            Isso avisa ao React Router que essas URLs são válidas, 
+            impedindo que ele force o redirecionamento de volta para o Dashboard. */}
+        <Route path="/" element={null} />
+        <Route path="/dashboard" element={null} />
+        <Route path="/vendas" element={null} />
+        <Route path="/despesas" element={null} />
+        <Route path="/clientes" element={null} />
+        <Route path="/produtos" element={null} />
+        <Route path="/zap" element={null} />
+        <Route path="/relatorios" element={null} />
+
+        {/* Se a URL for realmente inválida (ex: /batata), volta para o Dashboard */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
