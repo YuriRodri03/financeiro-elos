@@ -15,6 +15,7 @@ const aplicarMascaraMoeda = (valor) => {
 };
 
 // --- COMPONENTE DE LINHA DE PARCELA ---
+// --- COMPONENTE DE LINHA DE PARCELA ---
 function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
@@ -34,11 +35,19 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostr
   
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4">
-      <div className="flex flex-col">
+      <div className="flex flex-col gap-1"> {/* Adicionei gap-1 para espaçamento visual */}
         <span className="font-bold text-elos-texto">
           {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
           <span className="text-elos-verde ml-1 font-black">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
         </span>
+        
+        {/* 🟢 NOVO: Exibição da Data de Vencimento */}
+        {p.dataVencimento && (
+          <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
+            ⏳ Vencimento: {p.dataVencimento.split('-').reverse().join('/')}
+          </small>
+        )}
+
         {p.paga && (
           <small className="text-elos-verde font-bold text-[10px] uppercase tracking-tighter">
             🗓️ Recebido em: {p.dataPagamento?.split('-').reverse().join('/')}
@@ -68,7 +77,7 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostr
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[9px] font-black text-gray-400 uppercase">Data</label>
+            <label className="text-[9px] font-black text-gray-400 uppercase">Data Pag.</label>
             <input 
               type="date" 
               className="p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
