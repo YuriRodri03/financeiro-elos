@@ -15,12 +15,27 @@ const aplicarMascaraMoeda = (valor) => {
 };
 
 // --- COMPONENTE DE LINHA DE PARCELA ---
-// --- COMPONENTE DE LINHA DE PARCELA ---
-function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
+function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
+  const vendaId = venda._id || venda.id;
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
 
-  if (!p) return null;
+  if (!p || !venda) return null;
+
+  // 🟢 Lógica idêntica à aba de cobranças para calcular o vencimento na hora
+  const calcularVencimento = () => {
+    let dataVenc;
+    if (p.numero === 0) {
+      dataVenc = new Date(venda.dataVenda + 'T00:00:00');
+    } else {
+      const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
+      dataVenc = new Date(dataBase + 'T00:00:00');
+      dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+    }
+    return dataVenc.toISOString().split('T')[0];
+  };
+
+  const dataVencimentoStr = p.dataVencimento || calcularVencimento();
 
   const handleBaixa = () => {
     let valor = parseFloat(valorRecebido); 
@@ -35,18 +50,16 @@ function LinhaParcela({ p, vendaId, darBaixaParcela, estornarBaixaParcela, mostr
   
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4">
-      <div className="flex flex-col gap-1"> {/* Adicionei gap-1 para espaçamento visual */}
+      <div className="flex flex-col gap-1">
         <span className="font-bold text-elos-texto">
           {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
           <span className="text-elos-verde ml-1 font-black">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
         </span>
         
-        {/* 🟢 NOVO: Exibição da Data de Vencimento */}
-        {p.dataVencimento && (
-          <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
-            ⏳ Vencimento: {p.dataVencimento.split('-').reverse().join('/')}
-          </small>
-        )}
+        {/* 🟢 Exibição da Data de Vencimento calculada */}
+        <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
+          ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
+        </small>
 
         {p.paga && (
           <small className="text-elos-verde font-bold text-[10px] uppercase tracking-tighter">
@@ -551,10 +564,10 @@ export default function Clientes() {
                       )}
 
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
-                        {(venda.listaParcelas || []).map((p, idx) => (
-                          <LinhaParcela key={idx} p={p} vendaId={venda._id || venda.id} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} mostrarToast={mostrarToast} />
-                        ))}
-                      </div>
+  {(venda.listaParcelas || []).map((p, idx) => (
+    <LinhaParcela key={idx} p={p} venda={venda} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} mostrarToast={mostrarToast} />
+  ))}
+</div>
                     </div>
                   );
                 })}
