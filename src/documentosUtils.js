@@ -349,14 +349,15 @@ export const gerarPDFOrdemServico = async (dados) => {
   }
   
   doc.setTextColor(0, 0, 0);
-  // O texto fixo duplo "ELOS" foi substituído por um título mais limpo
+  
+  // 🟢 TÍTULO CENTRALIZADO E NÚMERO ALINHADO À DIREITA
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("ORDEM DE SERVIÇO ÓPTICO", margemEsq + 25, 20);
+  doc.text("ORDEM DE SERVIÇO ÓPTICO", 105, 20, { align: "center" });
   
   doc.setFontSize(14);
   const numeroOS = dados.numeroOS || dados.numeroPedido || dados.numero || "________";
-  doc.text(`OS Nº ${numeroOS}`, 150, 20);
+  doc.text(`OS Nº ${numeroOS}`, 190, 20, { align: "right" });
 
   y = 40;
   
@@ -379,7 +380,6 @@ export const gerarPDFOrdemServico = async (dados) => {
     doc.rect(margemEsq, y, 170, 7);
     doc.setFont("helvetica", "bold");
     doc.text(linha.label, margemEsq + 2, y + 5);
-    // 🟢 INJETANDO OS DADOS DIGITADOS
     doc.setFont("helvetica", "normal");
     doc.text(linha.valor.toUpperCase(), margemEsq + 30, y + 5);
     y += 7;
@@ -396,94 +396,101 @@ export const gerarPDFOrdemServico = async (dados) => {
   
   y += 8;
   const rowH = 7.5;
+  const dy = 1.5; // Ajuste perfeito para centralizar no eixo Y
   
-  // Contorno principal da tabela (7 linhas no total)
+  // Contorno principal da tabela (7 linhas)
   doc.rect(margemEsq, y, 170, 7 * rowH);
-  
   for(let i=1; i<7; i++) { doc.line(margemEsq, y + (i*rowH), 190, y + (i*rowH)); }
+  
+  // Linhas verticais
   doc.line(40, y, 40, y + (7 * rowH)); 
   doc.line(55, y, 55, y + (7 * rowH)); 
   doc.line(85, y, 85, y + (7 * rowH)); 
   doc.line(115, y, 115, y + (7 * rowH)); 
   doc.line(145, y, 145, y + (7 * rowH)); 
   
-  // LIMPANDO A LINHA VERTICAL NA ADIÇÃO
+  // 🟢 LIMPANDO ÁREAS PARA CÉLULAS MESCLADAS
   doc.setFillColor(255, 255, 255);
-  doc.rect(20.2, y + (2*rowH) + 0.2, 34.6, rowH - 0.4, "F");
-  // LIMPANDO ÁREA PARA MEDIDAS DA ARMAÇÃO NO CO
-  doc.rect(55.2, y + (3*rowH) + 0.2, 59.6, (2*rowH) - 0.4, "F");
+  // Limpa linha entre OD/OE na Adição
+  doc.rect(20.2, y + (2*rowH) + 0.2, 34.6, rowH - 0.4, "F"); 
+  
+  // Limpa espaço gigante para as "Medidas da Armação" (Pega as colunas CIL, EIXO e DNP no CO)
+  doc.rect(85.2, y + (3*rowH) + 0.2, 104.6, (2*rowH) - 0.4, "F"); 
+  
+  // Redesenha as linhas internas apenas para organizar as Medidas
+  doc.setDrawColor(0, 0, 0);
+  doc.line(115, y + (3*rowH), 115, y + (5*rowH)); // Divisória Titulo / Medidas
+  doc.line(152.5, y + (3*rowH), 152.5, y + (5*rowH)); // Divisória Coluna 1 e 2 das medidas
+  doc.line(115, y + (4*rowH), 190, y + (4*rowH)); // Divisória horizontal das medidas
 
-  // --- TEXTOS DA TABELA ---
+  // --- TEXTOS FIXOS DA TABELA (PERFEITAMENTE CENTRALIZADOS) ---
   doc.setFont("helvetica", "bold");
-  doc.text("LONGE:", 30, y + rowH, { align: "center" });
-  doc.text("OD", 47.5, y + (0.7*rowH), { align: "center" });
-  doc.text("OE", 47.5, y + (1.7*rowH), { align: "center" });
   
-  doc.text("ADIÇÃO:", 37.5, y + (2.7*rowH), { align: "center" });
+  // Rótulos Laterais (Longe, Adição, CO, Perto)
+  doc.text("LONGE:", 30, y + (1 * rowH) + dy, { align: "center" });
+  doc.text("ADIÇÃO:", 37.5, y + (2.5 * rowH) + dy, { align: "center" });
+  doc.text("CO:", 30, y + (4 * rowH) + dy, { align: "center" });
+  doc.text("PERTO:", 30, y + (6 * rowH) + dy, { align: "center" });
   
-  doc.text("CO:", 30, y + (4*rowH), { align: "center" });
-  doc.text("OD", 47.5, y + (3.7*rowH), { align: "center" });
-  doc.text("OE", 47.5, y + (4.7*rowH), { align: "center" });
+  // OD e OE
+  doc.text("OD", 47.5, y + (0.5 * rowH) + dy, { align: "center" });
+  doc.text("OE", 47.5, y + (1.5 * rowH) + dy, { align: "center" });
+  doc.text("OD", 47.5, y + (3.5 * rowH) + dy, { align: "center" });
+  doc.text("OE", 47.5, y + (4.5 * rowH) + dy, { align: "center" });
+  doc.text("OD", 47.5, y + (5.5 * rowH) + dy, { align: "center" });
+  doc.text("OE", 47.5, y + (6.5 * rowH) + dy, { align: "center" });
   
-  doc.text("PERTO:", 30, y + (6*rowH), { align: "center" });
-  doc.text("OD", 47.5, y + (5.7*rowH), { align: "center" });
-  doc.text("OE", 47.5, y + (6.7*rowH), { align: "center" });
-  
+  // Título e Rótulos das Medidas
   doc.setFontSize(7);
-  doc.text("MEDIDAS", 85, y + (3.8*rowH), { align: "center" });
-  doc.text("DA ARMAÇÃO:", 85, y + (4.4*rowH), { align: "center" });
-  doc.setFontSize(6);
-  doc.text("VERTICAL", 117, y + (3.4*rowH));
-  doc.text("PONTE", 117, y + (4.4*rowH));
-  doc.text("HORIZONTAL", 147, y + (3.4*rowH));
-  doc.text("DIAG. MAIOR", 147, y + (4.4*rowH));
+  doc.text("MEDIDAS", 100, y + (3.8 * rowH) + dy, { align: "center" });
+  doc.text("DA ARMAÇÃO", 100, y + (4.4 * rowH) + dy, { align: "center" });
 
-  // 🟢 INJETANDO OS DADOS DINÂMICOS NA TABELA (Centralizados)
+  doc.setFontSize(6);
+  doc.text("VERT.:", 117, y + (3.5 * rowH) + dy);
+  doc.text("PONTE:", 117, y + (4.5 * rowH) + dy);
+  doc.text("HORIZ.:", 154, y + (3.5 * rowH) + dy);
+  doc.text("DIAG.:", 154, y + (4.5 * rowH) + dy);
+
+  // --- INJETANDO OS DADOS DINÂMICOS (ALINHADOS) ---
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  const dy = 1.5; // Ajuste fino vertical para centralizar o texto na célula
 
   // Longe
-  if(dados.longe_od_esf) doc.text(String(dados.longe_od_esf), 70, y + (0.7*rowH) + dy, { align: "center" });
-  if(dados.longe_od_cil) doc.text(String(dados.longe_od_cil), 100, y + (0.7*rowH) + dy, { align: "center" });
-  if(dados.longe_od_eixo) doc.text(String(dados.longe_od_eixo), 130, y + (0.7*rowH) + dy, { align: "center" });
-  if(dados.longe_od_dnp) doc.text(String(dados.longe_od_dnp), 167.5, y + (0.7*rowH) + dy, { align: "center" });
+  if(dados.longe_od_esf) doc.text(String(dados.longe_od_esf), 70, y + (0.5*rowH) + dy, { align: "center" });
+  if(dados.longe_od_cil) doc.text(String(dados.longe_od_cil), 100, y + (0.5*rowH) + dy, { align: "center" });
+  if(dados.longe_od_eixo) doc.text(String(dados.longe_od_eixo), 130, y + (0.5*rowH) + dy, { align: "center" });
+  if(dados.longe_od_dnp) doc.text(String(dados.longe_od_dnp), 167.5, y + (0.5*rowH) + dy, { align: "center" });
 
-  if(dados.longe_oe_esf) doc.text(String(dados.longe_oe_esf), 70, y + (1.7*rowH) + dy, { align: "center" });
-  if(dados.longe_oe_cil) doc.text(String(dados.longe_oe_cil), 100, y + (1.7*rowH) + dy, { align: "center" });
-  if(dados.longe_oe_eixo) doc.text(String(dados.longe_oe_eixo), 130, y + (1.7*rowH) + dy, { align: "center" });
-  if(dados.longe_oe_dnp) doc.text(String(dados.longe_oe_dnp), 167.5, y + (1.7*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_esf) doc.text(String(dados.longe_oe_esf), 70, y + (1.5*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_cil) doc.text(String(dados.longe_oe_cil), 100, y + (1.5*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_eixo) doc.text(String(dados.longe_oe_eixo), 130, y + (1.5*rowH) + dy, { align: "center" });
+  if(dados.longe_oe_dnp) doc.text(String(dados.longe_oe_dnp), 167.5, y + (1.5*rowH) + dy, { align: "center" });
 
   // Adição
   if(dados.adicao) doc.text(String(dados.adicao), 37.5, y + (2.7*rowH) + dy, { align: "center" });
 
-  // CO
-  if(dados.co_od_esf) doc.text(String(dados.co_od_esf), 70, y + (3.7*rowH) + dy, { align: "center" });
-  if(dados.co_od_cil) doc.text(String(dados.co_od_cil), 100, y + (3.7*rowH) + dy, { align: "center" });
-  if(dados.co_od_eixo) doc.text(String(dados.co_od_eixo), 130, y + (3.7*rowH) + dy, { align: "center" });
-  if(dados.co_od_dnp) doc.text(String(dados.co_od_dnp), 167.5, y + (3.7*rowH) + dy, { align: "center" });
+  // CO (Lembre-se: O espaço do CIL, EIXO e DNP agora é das medidas)
+  if(dados.co_od_esf) doc.text(String(dados.co_od_esf), 70, y + (3.5*rowH) + dy, { align: "center" });
+  if(dados.co_oe_esf) doc.text(String(dados.co_oe_esf), 70, y + (4.5*rowH) + dy, { align: "center" });
 
-  if(dados.co_oe_esf) doc.text(String(dados.co_oe_esf), 70, y + (4.7*rowH) + dy, { align: "center" });
-  if(dados.co_oe_cil) doc.text(String(dados.co_oe_cil), 100, y + (4.7*rowH) + dy, { align: "center" });
-  if(dados.co_oe_eixo) doc.text(String(dados.co_oe_eixo), 130, y + (4.7*rowH) + dy, { align: "center" });
-  if(dados.co_oe_dnp) doc.text(String(dados.co_oe_dnp), 167.5, y + (4.7*rowH) + dy, { align: "center" });
+  // Medidas Armação (Dados)
+  doc.setFontSize(9);
+  if(dados.medidas_vertical) doc.text(String(dados.medidas_vertical), 140, y + (3.5*rowH) + dy, { align: "center" });
+  if(dados.medidas_ponte) doc.text(String(dados.medidas_ponte), 140, y + (4.5*rowH) + dy, { align: "center" });
+  if(dados.medidas_horizontal) doc.text(String(dados.medidas_horizontal), 178, y + (3.5*rowH) + dy, { align: "center" });
+  if(dados.medidas_diag) doc.text(String(dados.medidas_diag), 178, y + (4.5*rowH) + dy, { align: "center" });
+  doc.setFontSize(10);
 
   // Perto
-  if(dados.perto_od_esf) doc.text(String(dados.perto_od_esf), 70, y + (5.7*rowH) + dy, { align: "center" });
-  if(dados.perto_od_cil) doc.text(String(dados.perto_od_cil), 100, y + (5.7*rowH) + dy, { align: "center" });
-  if(dados.perto_od_eixo) doc.text(String(dados.perto_od_eixo), 130, y + (5.7*rowH) + dy, { align: "center" });
-  if(dados.perto_od_dnp) doc.text(String(dados.perto_od_dnp), 167.5, y + (5.7*rowH) + dy, { align: "center" });
+  if(dados.perto_od_esf) doc.text(String(dados.perto_od_esf), 70, y + (5.5*rowH) + dy, { align: "center" });
+  if(dados.perto_od_cil) doc.text(String(dados.perto_od_cil), 100, y + (5.5*rowH) + dy, { align: "center" });
+  if(dados.perto_od_eixo) doc.text(String(dados.perto_od_eixo), 130, y + (5.5*rowH) + dy, { align: "center" });
+  if(dados.perto_od_dnp) doc.text(String(dados.perto_od_dnp), 167.5, y + (5.5*rowH) + dy, { align: "center" });
 
-  if(dados.perto_oe_esf) doc.text(String(dados.perto_oe_esf), 70, y + (6.7*rowH) + dy, { align: "center" });
-  if(dados.perto_oe_cil) doc.text(String(dados.perto_oe_cil), 100, y + (6.7*rowH) + dy, { align: "center" });
-  if(dados.perto_oe_eixo) doc.text(String(dados.perto_oe_eixo), 130, y + (6.7*rowH) + dy, { align: "center" });
-  if(dados.perto_oe_dnp) doc.text(String(dados.perto_oe_dnp), 167.5, y + (6.7*rowH) + dy, { align: "center" });
-
-  // Medidas Armação
-  if(dados.medidas_vertical) doc.text(String(dados.medidas_vertical), 132, y + (3.8*rowH) + 1, { align: "center" });
-  if(dados.medidas_ponte) doc.text(String(dados.medidas_ponte), 132, y + (4.8*rowH) + 1, { align: "center" });
-  if(dados.medidas_horizontal) doc.text(String(dados.medidas_horizontal), 175, y + (3.8*rowH) + 1, { align: "center" });
-  if(dados.medidas_diag) doc.text(String(dados.medidas_diag), 175, y + (4.8*rowH) + 1, { align: "center" });
+  if(dados.perto_oe_esf) doc.text(String(dados.perto_oe_esf), 70, y + (6.5*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_cil) doc.text(String(dados.perto_oe_cil), 100, y + (6.5*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_eixo) doc.text(String(dados.perto_oe_eixo), 130, y + (6.5*rowH) + dy, { align: "center" });
+  if(dados.perto_oe_dnp) doc.text(String(dados.perto_oe_dnp), 167.5, y + (6.5*rowH) + dy, { align: "center" });
 
   y += 7 * rowH; 
   
@@ -495,7 +502,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.setFont("helvetica", "bold");
   doc.text("OBSERVAÇÕES", 105, y + 5, { align: "center" });
   
-  // 🟢 Em vez de várias linhas separadas, cria uma caixa grande com texto responsivo
   doc.rect(margemEsq, y, 170, 35); 
   
   y += 7;
@@ -504,16 +510,20 @@ export const gerarPDFOrdemServico = async (dados) => {
     const obsFormatada = doc.splitTextToSize(String(dados.observacoes), 165);
     doc.text(obsFormatada, margemEsq + 2, y + 5);
   }
-  y += 28; // Pula a caixa de observação para o rodapé
+  y += 28;
 
-  // --- RODAPÉ ALINHADO ---
+  // --- RODAPÉ ALINHADO E COM NOME DA LOJA FIXO ---
   y += 10;
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   
   doc.text("LOJA:", margemEsq, y);
+  // 🟢 AQUI INSERE "ELOS" DIRETAMENTE
+  doc.setFont("helvetica", "normal");
+  doc.text("ELOS", margemEsq + 14, y); 
   doc.line(margemEsq + 12, y + 1, 120, y + 1);
   
+  doc.setFont("helvetica", "bold");
   doc.text("DATA DA VENDA:", 130, y);
   doc.setFont("helvetica", "normal");
   if (dados.dataVenda) {
