@@ -411,8 +411,18 @@ export const gerarPDFOrdemServico = async (dados) => {
   
   // 🟢 LIMPANDO ÁREAS PARA CÉLULAS MESCLADAS
   doc.setFillColor(255, 255, 255);
-  // Limpa linha entre OD/OE na Adição
+  
+  // Limpa a linha que cortava "LONGE"
+  doc.rect(20.2, y + 0.2, 19.6, (2*rowH) - 0.4, "F"); 
+  
+  // Limpa linha entre OD/OE na "ADIÇÃO"
   doc.rect(20.2, y + (2*rowH) + 0.2, 34.6, rowH - 0.4, "F"); 
+  
+  // Limpa a linha que cortava "CO"
+  doc.rect(20.2, y + (3*rowH) + 0.2, 19.6, (2*rowH) - 0.4, "F"); 
+  
+  // Limpa a linha que cortava "PERTO"
+  doc.rect(20.2, y + (5*rowH) + 0.2, 19.6, (2*rowH) - 0.4, "F"); 
   
   // Limpa espaço gigante para as "Medidas da Armação" (Pega as colunas CIL, EIXO e DNP no CO)
   doc.rect(85.2, y + (3*rowH) + 0.2, 104.6, (2*rowH) - 0.4, "F"); 
