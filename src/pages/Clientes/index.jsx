@@ -22,17 +22,23 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
 
   if (!p || !venda) return null;
 
-  // 🟢 Lógica idêntica à aba de cobranças para calcular o vencimento na hora
+  // 🟢 Lógica idêntica à aba de cobranças com trava de segurança extra
   const calcularVencimento = () => {
-    let dataVenc;
-    if (p.numero === 0) {
-      dataVenc = new Date(venda.dataVenda + 'T00:00:00');
-    } else {
-      const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
-      dataVenc = new Date(dataBase + 'T00:00:00');
-      dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+    try {
+      let dataVenc;
+      if (p.numero === 0) {
+        if (!venda.dataVenda) return '';
+        dataVenc = new Date(venda.dataVenda + 'T00:00:00');
+      } else {
+        const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
+        if (!dataBase) return '';
+        dataVenc = new Date(dataBase + 'T00:00:00');
+        dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
+      }
+      return dataVenc.toISOString().split('T')[0];
+    } catch (error) {
+      return ''; // Retorna vazio se a data for inválida para não quebrar a tela
     }
-    return dataVenc.toISOString().split('T')[0];
   };
 
   const dataVencimentoStr = p.dataVencimento || calcularVencimento();
@@ -56,10 +62,12 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
           <span className="text-elos-verde ml-1 font-black">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
         </span>
         
-        {/* 🟢 Exibição da Data de Vencimento calculada */}
-        <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
-          ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
-        </small>
+        {/* 🟢 AQUI ESTAVA O ERRO: Trocamos 'p.dataVencimento' por 'dataVencimentoStr' */}
+        {dataVencimentoStr && (
+          <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
+            ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
+          </small>
+        )}
 
         {p.paga && (
           <small className="text-elos-verde font-bold text-[10px] uppercase tracking-tighter">
