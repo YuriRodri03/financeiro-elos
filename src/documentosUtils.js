@@ -544,7 +544,7 @@ export const gerarPDFOrdemServico = async (dados) => {
   
   y += 10;
   doc.setFont("helvetica", "bold");
-  doc.text("CONSULTOR:", margemEsq, y);
+  doc.text("PACIENTE:", margemEsq, y);
   doc.setFont("helvetica", "normal");
   if (dados.consultor) doc.text(String(dados.consultor).toUpperCase(), margemEsq + 26, y);
   doc.line(margemEsq + 24, y + 1, 190, y + 1);

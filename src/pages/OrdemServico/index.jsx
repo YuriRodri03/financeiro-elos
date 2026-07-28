@@ -259,8 +259,8 @@ export default function NovaOrdemServico() {
               <textarea name="observacoes" value={dadosOS.observacoes} onChange={handleChange} rows="3" className="w-full border p-2 rounded focus:ring-2 focus:ring-green-700 outline-none resize-none"></textarea>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">CONSULTOR (A):</label>
-              <input type="text" name="consultor" value={dadosOS.consultor} onChange={handleChange} className="w-full border p-2 rounded focus:ring-2 focus:ring-green-700 outline-none" />
+              <label className="block text-sm font-bold text-gray-700 mb-1">PACIENTE:</label>
+              <input type="text" name="cliente" value={dadosOS.cliente} onChange={handleChange} className="w-full border p-2 rounded focus:ring-2 focus:ring-green-700 outline-none" />
             </div>
           </div>
 
