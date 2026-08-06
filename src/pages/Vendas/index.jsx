@@ -1,10 +1,16 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFDocumento } from '../../documentosUtils';
+import { useNavigate } from 'react-router-dom';
 
 export default function Vendas() {
-  // Puxamos 'adicionarProduto' do contexto global
-  const { adicionarVenda, clientes, produtos, adicionarProduto } = useFinanceiro();
+  const { adicionarVenda, vendas, clientes, produtos, adicionarProduto } = useFinanceiro();
+  const navigate = useNavigate();
+
+  const [abaAtiva, setAbaAtiva] = useState('nova'); // 'nova' ou 'historico'
+
+  // 🟢 NOVO: Estado para a barra de busca do histórico
+  const [buscaHistorico, setBuscaHistorico] = useState('');
 
   // Controle dos dropdowns de busca
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -102,7 +108,7 @@ export default function Vendas() {
   };
 
   const aplicarMascaraMoeda = (valor) => {
-    let v = valor.replace(/\D/g, '');
+    let v = String(valor).replace(/\D/g, '');
     if (!v) return '';
     v = (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     return v;
@@ -187,8 +193,6 @@ export default function Vendas() {
     }
 
     const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
-
-    // Guardamos os valores calculados na hora em variáveis seguras
     const descontoNum = limparMoeda(venda.desconto);
     const carrinhoParaPDF = [...itensCarrinho];
 
@@ -198,7 +202,7 @@ export default function Vendas() {
       itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: limparMoeda(venda.valorEntrada),
-      desconto: descontoNum // 🟢 CORRIGIDO: Vinculado corretamente à constante descontoNum
+      desconto: descontoNum 
     };
 
     try {
@@ -217,7 +221,6 @@ export default function Vendas() {
         mostrarToast("Pedido impresso com sucesso!", "sucesso");
       });
 
-      // Limpa os formulários após o agendamento seguro do PDF
       setVenda({
         cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
         metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
@@ -225,10 +228,32 @@ export default function Vendas() {
         dataPrimeiraParcela: new Date().toISOString().split('T')[0]
       });
       setItensCarrinho([]);
+      
+      setTimeout(() => setAbaAtiva('historico'), 1500); 
+
     } catch (error) {
       mostrarToast("Erro operacional ao salvar a venda.", "erro");
     }
   };
+
+  // 🟢 NOVO: Lógica de Filtragem do Histórico
+  const vendasFiltradas = useMemo(() => {
+    if (!vendas) return [];
+    
+    let filtradas = [...vendas];
+    
+    if (buscaHistorico) {
+      const termo = buscaHistorico.toLowerCase();
+      filtradas = filtradas.filter(v => 
+        (v.cliente && v.cliente.toLowerCase().includes(termo)) ||
+        (v.cpf && v.cpf.toLowerCase().includes(termo)) ||
+        (v.numeroPedido && String(v.numeroPedido).toLowerCase().includes(termo))
+      );
+    }
+    
+    // Mantém a ordenação das mais recentes primeiro
+    return filtradas.sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda));
+  }, [vendas, buscaHistorico]);
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -245,7 +270,7 @@ export default function Vendas() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO VISUAL CUSTOMIZADO */}
+      {/* MODAL DE CONFIRMAÇÃO */}
       {confirmModal.visivel && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
@@ -275,208 +300,325 @@ export default function Vendas() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         
-        <header className="mb-10 text-center md:text-left">
-          <h1 className="font-tradicional text-4xl text-elos-verde italic border-b-2 border-elos-bege/30 pb-4 inline-block">
-            Nova Venda - Ótica Elos
-          </h1>
-        </header>
-
-        <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
-          
-          {/* DADOS DO CLIENTE */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
-              <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
-
-            <div className="space-y-2 relative" ref={wrapperRef}>
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
-              <input 
-                type="text" 
-                name="cliente" 
-                value={venda.cliente} 
-                onChange={handleChange} 
-                onFocus={() => setMostrarSugestoes(true)}
-                required 
-                placeholder="Nome Completo" 
-                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
-              />
-    
-              {sugestoes.length > 0 && (
-                <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
-                  {sugestoes.map((c) => (
-                    <div 
-                      key={c.cpf} 
-                      onClick={() => selecionarCliente(c)} 
-                      className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
-                    >
-                      <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
-                      <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* HEADER COM ABAS GERAIS */}
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 border-b border-elos-bege/30 pb-6">
+          <div>
+            <h1 className="font-tradicional text-4xl text-elos-verde italic">Gestão de Vendas</h1>
+            <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-bold">Ótica Elos</p>
           </div>
 
-          {/* CARRINHO DE COMPRAS INTEGRADO AO CATÁLOGO */}
-          <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
-            <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
-            <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
-              
-              <div className="flex-1 relative">
+          <div className="flex bg-white p-1.5 rounded-2xl shadow-soft border border-elos-bege/10 w-full md:w-auto">
+            <button
+              onClick={() => setAbaAtiva('nova')}
+              className={`flex-1 md:w-40 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                abaAtiva === 'nova' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'
+              }`}
+            >
+              ➕ Nova Venda
+            </button>
+            <button
+              onClick={() => setAbaAtiva('historico')}
+              className={`flex-1 md:w-40 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                abaAtiva === 'historico' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'
+              }`}
+            >
+              📋 Histórico
+            </button>
+          </div>
+        </header>
+
+        {/* =======================================
+            ABA 1: NOVA VENDA (Formulário Atual)
+        ======================================== */}
+        {abaAtiva === 'nova' && (
+          <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
+            {/* DADOS DO CLIENTE */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
+                <input type="text" name="cpf" value={venda.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              </div>
+
+              <div className="space-y-2 relative" ref={wrapperRef}>
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
                 <input 
                   type="text" 
-                  placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban, Lente Crizal...)" 
-                  className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm" 
-                  value={novoItem.nome} 
-                  onChange={(e) => {
-                    setNovoItem({...novoItem, nome: e.target.value});
-                    setMostrarSugestoesProd(true);
-                  }}
-                  onFocus={() => setMostrarSugestoesProd(true)}
+                  name="cliente" 
+                  value={venda.cliente} 
+                  onChange={handleChange} 
+                  onFocus={() => setMostrarSugestoes(true)}
+                  required 
+                  placeholder="Nome Completo" 
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
                 />
-                
-                {sugestoesProd.length > 0 && (
+      
+                {sugestoes.length > 0 && (
                   <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
-                    {sugestoesProd.map((p) => (
+                    {sugestoes.map((c) => (
                       <div 
-                        key={p._id || p.id} 
-                        onClick={() => selecionarProdutoCat(p)} 
+                        key={c.cpf} 
+                        onClick={() => selecionarCliente(c)} 
                         className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
                       >
-                        <span className="font-bold text-sm text-elos-texto">{p.nome}</span>
-                        <span className="text-xs text-elos-verde font-black">R$ {Number(p.preco).toFixed(2).replace('.',',')}</span>
+                        <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
+                        <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
-              <input 
-                type="text" 
-                placeholder="R$ 0,00" 
-                className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
-                value={novoItem.preco} 
-                onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
-              />
-              <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
             </div>
 
-            <div className="space-y-2">
-              {itensCarrinho.map(item => {
-                const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
-
-                return (
-                  <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
-                      {!jaExisteNoCatalogo && (
-                        <button
-                          type="button"
-                          onClick={() => salvarItemNoCatalogo(item)}
-                          className="px-2 py-0.5 bg-elos-bege/10 hover:bg-elos-bege hover:text-white text-elos-bege text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1"
-                          title="Salvar este produto no Catálogo permanente"
+            {/* CARRINHO DE COMPRAS */}
+            <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
+              <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
+              <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
+                
+                <div className="flex-1 relative">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban, Lente Crizal...)" 
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm" 
+                    value={novoItem.nome} 
+                    onChange={(e) => {
+                      setNovoItem({...novoItem, nome: e.target.value});
+                      setMostrarSugestoesProd(true);
+                    }}
+                    onFocus={() => setMostrarSugestoesProd(true)}
+                  />
+                  
+                  {sugestoesProd.length > 0 && (
+                    <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
+                      {sugestoesProd.map((p) => (
+                        <div 
+                          key={p._id || p.id} 
+                          onClick={() => selecionarProdutoCat(p)} 
+                          className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
                         >
-                          📦 Salvar no Catálogo
-                        </button>
-                      )}
+                          <span className="font-bold text-sm text-elos-texto">{p.nome}</span>
+                          <span className="text-xs text-elos-verde font-black">R$ {Number(p.preco).toFixed(2).replace('.',',')}</span>
+                        </div>
+                      ))}
                     </div>
-                    
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
-                      <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
-                    </div>
-                  </div>
-                );
-              })}
-              {itensCarrinho.length === 0 && <p className="text-center text-gray-400 text-xs italic py-4">Carrinho vazio.</p>}
-            </div>
-          </div>
+                  )}
+                </div>
 
-          {/* DETALHES TÉCNICOS E FOTOS */}
-          <div className="space-y-4">
-            <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <textarea 
-                name="observacoes"
-                value={venda.observacoes}
-                onChange={handleChange}
-                placeholder="Anote aqui: Graus (OD/OE), Eixo, DNP, tipo de tratamento das lentes ou cor da armação..."
-                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-[2rem] outline-none h-40 resize-none text-sm italic"
-              />
+                <input 
+                  type="text" 
+                  placeholder="R$ 0,00" 
+                  className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
+                  value={novoItem.preco} 
+                  onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
+                />
+                <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
+              </div>
+
+              <div className="space-y-2">
+                {itensCarrinho.map(item => {
+                  const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
+                  return (
+                    <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
+                        {!jaExisteNoCatalogo && (
+                          <button
+                            type="button"
+                            onClick={() => salvarItemNoCatalogo(item)}
+                            className="px-2 py-0.5 bg-elos-bege/10 hover:bg-elos-bege hover:text-white text-elos-bege text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1"
+                            title="Salvar este produto no Catálogo permanente"
+                          >
+                            📦 Salvar no Catálogo
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
+                        <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {itensCarrinho.length === 0 && <p className="text-center text-gray-400 text-xs italic py-4">Carrinho vazio.</p>}
+              </div>
+            </div>
+
+            {/* DETALHES TÉCNICOS E FOTOS */}
+            <div className="space-y-4">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <textarea 
+                  name="observacoes"
+                  value={venda.observacoes}
+                  onChange={handleChange}
+                  placeholder="Anote aqui: Graus (OD/OE), Eixo, DNP, tipo de tratamento das lentes ou cor da armação..."
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-[2rem] outline-none h-40 resize-none text-sm italic"
+                />
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
+                  {venda.foto ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <img src={venda.foto} alt="Receita" className="max-h-32 rounded-xl shadow-lg border-2 border-white" />
+                      <button type="button" onClick={() => setVenda({...venda, foto: ''})} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Foto</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-4xl mb-2">📸</div>
+                      <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
+                      <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* FINANCEIRO */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
+                <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-red-400 uppercase tracking-tighter ml-1">Desconto</label>
+                <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-red-50 border border-red-100 text-red-900 font-bold rounded-2xl outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar</label>
+                <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
+                  R$ {totalFinalVenda.toFixed(2).replace('.',',')}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Valor de Entrada</label>
+                <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Pagamento</label>
+                <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none">
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Pix">Pix</option>
+                  <option value="Cartão de Crédito">Cartão de Crédito</option>
+                  <option value="Boleto / Crediário">Boleto / Crediário</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nº Parcelas</label>
+                <input type="number" name="parcelas" min="1" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              </div>
+            </div>
+
+            {venda.metodoPagamento === 'Boleto / Crediário' && (
+              <div className="bg-elos-verde text-white p-8 rounded-3xl shadow-xl animate-in slide-in-from-top duration-300">
+                <label className="font-tradicional italic text-lg mb-2 block">🗓️ Vencimento da 1ª Parcela</label>
+                <input type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange} className="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-2xl text-white outline-none" />
+              </div>
+            )}
+
+            <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
+              Finalizar Venda
+            </button>
+          </form>
+        )}
+
+        {/* =======================================
+            ABA 2: HISTÓRICO DE VENDAS (Com Botão Editar)
+        ======================================== */}
+        {abaAtiva === 'historico' && (
+          <div className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-10 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* 🟢 HEADER DO HISTÓRICO COM A BARRA DE BUSCA */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-gray-50 pb-6">
+              <h2 className="font-tradicional text-2xl text-elos-verde italic">Últimas Vendas Realizadas</h2>
               
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
-                {venda.foto ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <img src={venda.foto} alt="Receita" className="max-h-32 rounded-xl shadow-lg border-2 border-white" />
-                    <button type="button" onClick={() => setVenda({...venda, foto: ''})} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Foto</button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-4xl mb-2">📸</div>
-                    <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
-                    {/* 🟢 ADAPTADO PARA IPHONE: Removido capture="environment" para evitar congelamento de clique nativo no iOS */}
-                    <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-                  </>
+              <div className="w-full md:w-auto relative">
+                <input 
+                  type="text" 
+                  placeholder="🔍 Buscar por nome, CPF ou Nº do Pedido..." 
+                  value={buscaHistorico}
+                  onChange={(e) => setBuscaHistorico(e.target.value)}
+                  className="w-full md:w-80 px-5 py-3 bg-elos-fundo/50 border border-elos-bege/20 rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-elos-verde/30 shadow-inner"
+                />
+              </div>
+            </div>
+            
+            {vendasFiltradas.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="text-[10px] uppercase font-black text-gray-400 border-b tracking-widest bg-gray-50/50">
+                    <tr>
+                      <th className="pb-3 pt-3 px-4 rounded-tl-xl">Data</th>
+                      <th className="pb-3 pt-3 px-4">Cliente</th>
+                      <th className="pb-3 pt-3 px-4">Total</th>
+                      <th className="pb-3 pt-3 px-4">Pagamento</th>
+                      <th className="pb-3 pt-3 px-4 text-right rounded-tr-xl">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {vendasFiltradas.map(v => (
+                      <tr key={v._id || v.id} className="hover:bg-gray-50 transition-colors group">
+                        <td className="py-4 px-4 text-xs font-bold text-gray-500">
+                          {v.dataVenda ? v.dataVenda.split('-').reverse().join('/') : '--/--/----'}
+                        </td>
+                        <td className="py-4 px-4 font-bold text-elos-verde">
+                          {v.cliente}
+                          <div className="text-[9px] text-gray-400 font-black uppercase mt-1">
+                            Nº Pedido: #{v.numeroPedido || 'S/N'}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 font-black text-elos-texto italic">
+                          R$ {Number(v.valorTotal).toFixed(2).replace('.',',')}
+                        </td>
+                        <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          {v.metodoPagamento}
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {/* BOTÃO IMPRIMIR PDF */}
+                            <button 
+                              onClick={() => {
+                                const clienteBase = (clientes || []).find(c => c.cpf === v.cpf);
+                                gerarPDFDocumento({
+                                  ...v,
+                                  data: v.dataVenda ? v.dataVenda.split('-').reverse().join('/') : '',
+                                  telefone: clienteBase?.telefone || "Não informado",
+                                  endereco: clienteBase?.endereco || "Não informado",
+                                  email: clienteBase?.email || "Não informado"
+                                }, 'pedido');
+                              }}
+                              className="px-3 py-2 bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold uppercase hover:bg-elos-bege hover:text-white transition-colors"
+                              title="Reimprimir Pedido"
+                            >
+                              🖨️
+                            </button>
+
+                            {/* BOTÃO DE EDITAR */}
+                            <button 
+                              onClick={() => navigate(`/vendas/editar/${v._id || v.id}`)}
+                              className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
+                              title="Editar Venda"
+                            >
+                              ✏️ Editar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-gray-400 italic font-bold text-lg mb-2">Nenhuma venda encontrada.</p>
+                {buscaHistorico && (
+                  <p className="text-xs text-gray-400">Não localizamos resultados para "{buscaHistorico}".</p>
                 )}
               </div>
-            </div>
+            )}
           </div>
-
-          {/* FINANCEIRO */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
-              <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-red-400 uppercase tracking-tighter ml-1">Desconto</label>
-              <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-red-50 border border-red-100 text-red-900 font-bold rounded-2xl outline-none" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar</label>
-              <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
-                R$ {totalFinalVenda.toFixed(2).replace('.',',')}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Valor de Entrada</label>
-              <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Pagamento</label>
-              <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none">
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Pix">Pix</option>
-                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                <option value="Boleto / Crediário">Boleto / Crediário</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nº Parcelas</label>
-              <input type="number" name="parcelas" min="1" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-            </div>
-          </div>
-
-          {venda.metodoPagamento === 'Boleto / Crediário' && (
-            <div className="bg-elos-verde text-white p-8 rounded-3xl shadow-xl animate-in slide-in-from-top duration-300">
-              <label className="font-tradicional italic text-lg mb-2 block">🗓️ Vencimento da 1ª Parcela</label>
-              <input type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange} className="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-2xl text-white outline-none" />
-            </div>
-          )}
-
-          {/* 🟢 ADAPTADO PARA IPHONE: Certificado o tipo submit correto para formulários no Safari móvel */}
-          <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
-            Finalizar Venda
-          </button>
-        </form>
+        )}
       </div>
     </div>
   );

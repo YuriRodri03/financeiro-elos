@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-// ✅ ADICIONADO: Routes e Route
 import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
@@ -14,11 +13,11 @@ import Produtos from './pages/Produtos';
 import Zap from './pages/Zap';
 import Navbar from './components/Navbar'; 
 
-// ✅ ADICIONADO: Importe a tela de Nova Ordem de Serviço 
 import NovaOrdemServico from './pages/OrdemServico/index'; 
-
-// 🟢 NOVO: Importando o Painel de OS (como você salvou como index.jsx dentro da pasta PainelOS)
 import PainelOS from './pages/PainelOS'; 
+
+// 🟢 NOVO: Importando a página de Editar Venda
+import EditarVenda from './pages/EditarVenda/index'; 
 
 import './index.css'; 
 
@@ -94,7 +93,6 @@ function ConteudoAbasPersistentes() {
         <RelatorioInadimplencia />
       </div>
       
-      {/* 🟢 NOVO: Aba Persistente do Painel de OS (assim você não perde as buscas ao mudar de tela) */}
       <div style={{ display: currentPath === '/ordens-servico' ? 'block' : 'none' }}>
         <PainelOS />
       </div>
@@ -102,11 +100,12 @@ function ConteudoAbasPersistentes() {
       {/* ✅ ADICIONADO: Camada de Rotas Dinâmicas */}
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
-        
-        {/* Ensina o sistema para onde ir ao clicar em Editar */}
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
         
-        {/* 🟢 CORREÇÃO: "Rotas Fantasmas". */}
+        {/* 🟢 NOVO: Rota para a tela de Editar Venda */}
+        <Route path="/vendas/editar/:id" element={<EditarVenda />} />
+        
+        {/* "Rotas Fantasmas" para as abas persistentes */}
         <Route path="/" element={null} />
         <Route path="/dashboard" element={null} />
         <Route path="/vendas" element={null} />
@@ -115,8 +114,6 @@ function ConteudoAbasPersistentes() {
         <Route path="/produtos" element={null} />
         <Route path="/zap" element={null} />
         <Route path="/relatorios" element={null} />
-        
-        {/* 🟢 NOVO: Rota fantasma para a aba não quebrar o Router */}
         <Route path="/ordens-servico" element={null} />
 
         {/* Se a URL for realmente inválida (ex: /batata), volta para o Dashboard */}
@@ -136,9 +133,12 @@ function InterfaceSistema({ aoDeslogar }) {
   const obterAbaInversa = () => {
     const rota = location.pathname;
     if (rota === '/') return 'dashboard';
-    // Se estiver em uma rota aninhada (ex: /nova-os/2005), deixamos a navbar sem seleção ativa
+    
+    // Ignora a marcação da navbar ao entrar em sub-rotas dinâmicas
     if (rota.startsWith('/nova-os')) return null; 
     if (rota.startsWith('/ordem-servico/editar')) return null; 
+    if (rota.startsWith('/vendas/editar')) return null; // 🟢 NOVO
+    
     return rota.replace('/', '');
   };
 
