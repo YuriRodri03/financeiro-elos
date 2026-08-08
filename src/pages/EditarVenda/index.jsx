@@ -17,7 +17,7 @@ export default function EditarVenda() {
     metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0],
-    listaParcelasAntigas: [] // 🟢 Guarda as parcelas anteriores para não perder os pagamentos já feitos!
+    listaParcelasAntigas: [] // 🟢 Guarda as parcelas anteriores para não perder os pagamentos já feitos se mantiver crediário!
   });
 
   const [itensCarrinho, setItensCarrinho] = useState([]);
@@ -124,6 +124,14 @@ export default function EditarVenda() {
       setVenda({ ...venda, cpf: valorFormatado, cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente) });
     } else if (name === 'valorEntrada' || name === 'desconto') {
       setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
+    } else if (name === 'metodoPagamento') {
+      // 🟢 CORREÇÃO: Aplica inteligência visual também na edição ao trocar a forma de pagamento
+      const isAVista = value === 'Dinheiro' || value === 'Pix';
+      setVenda({ 
+        ...venda, 
+        [name]: value, 
+        parcelas: isAVista ? 1 : venda.parcelas 
+      });
     } else {
       setVenda({ ...venda, [name]: value });
     }
@@ -136,14 +144,17 @@ export default function EditarVenda() {
 
     const descontoNum = limparMoeda(venda.desconto);
     const valorEntradaNum = limparMoeda(venda.valorEntrada);
-    const numParcelas = Number(venda.parcelas) || 1;
-    
-    // 🟢 MAGIA: RECALCULA AS PARCELAS BASEADO NO NOVO TOTAL!
     const valorRestante = totalFinalVenda - valorEntradaNum;
-    const valorDaParcela = parseFloat((numParcelas > 0 ? valorRestante / numParcelas : 0).toFixed(2));
+    
+    // 🟢 REGRA DA EDIÇÃO ATUALIZADA: Só divide se o METODO ATUAL for Crediário!
+    const isCrediario = venda.metodoPagamento === 'Boleto / Crediário';
+    const isCartao = venda.metodoPagamento === 'Cartão de Crédito';
+    const numParcelasGerar = isCrediario ? (Number(venda.parcelas) || 1) : 1;
+    
+    const valorDaParcela = parseFloat((numParcelasGerar > 0 ? valorRestante / numParcelasGerar : 0).toFixed(2));
     
     let novasParcelas = [];
-    const parcelasAntigas = venda.listaParcelasAntigas;
+    const parcelasAntigas = venda.listaParcelasAntigas || [];
 
     // Recria a Entrada
     if (valorEntradaNum > 0) {
@@ -158,15 +169,16 @@ export default function EditarVenda() {
       });
     }
 
-    // Recria as Parcelas divididas
-    for (let i = 0; i < numParcelas; i++) {
+    // Recria as Parcelas divididas (ou parcela única no caso de Cartão/Pix)
+    for (let i = 0; i < numParcelasGerar; i++) {
       const parcelaAntiga = parcelasAntigas.find(p => p.numero === i + 1);
       
-      const dataBase = venda.metodoPagamento === 'Boleto / Crediário' ? venda.dataPrimeiraParcela : venda.dataVenda;
+      const dataBase = isCrediario ? venda.dataPrimeiraParcela : venda.dataVenda;
       let dataVenc = new Date(dataBase + 'T00:00:00');
       dataVenc.setMonth(dataVenc.getMonth() + i);
 
-      const isPaga = venda.metodoPagamento !== 'Boleto / Crediário' ? true : (parcelaAntiga ? parcelaAntiga.paga : false);
+      // Se for Cartão/Pix, força a ser PAGA, ignorando como estava no passado
+      const isPaga = !isCrediario ? true : (parcelaAntiga ? parcelaAntiga.paga : false);
       const dtPagto = isPaga ? (parcelaAntiga?.dataPagamento || venda.dataVenda) : null;
 
       novasParcelas.push({
@@ -174,7 +186,8 @@ export default function EditarVenda() {
         valor: valorDaParcela,
         paga: isPaga,
         dataPagamento: dtPagto,
-        vencimentoOriginal: parcelaAntiga?.vencimentoOriginal || dataVenc.toISOString().split('T')[0]
+        vencimentoOriginal: parcelaAntiga?.vencimentoOriginal || dataVenc.toISOString().split('T')[0],
+        observacao: isCartao && Number(venda.parcelas) > 1 ? `No cartão em ${venda.parcelas}x` : ''
       });
     }
 
@@ -398,9 +411,21 @@ export default function EditarVenda() {
                 <option value="Boleto / Crediário">Boleto / Crediário</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nº Parcelas</label>
-              <input type="number" name="parcelas" min="1" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+            
+            {/* 🟢 CORREÇÃO VISUAL APLICADA NA EDIÇÃO! */}
+            <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
+                {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
+              </label>
+              <input 
+                type="number" 
+                name="parcelas" 
+                min="1" 
+                value={venda.parcelas} 
+                onChange={handleChange} 
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+                disabled={venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix'} 
+              />
             </div>
           </div>
 

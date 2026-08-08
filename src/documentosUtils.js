@@ -57,13 +57,14 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  const txtT = tipo === "recibo" ? "Recibo" : "Pedido";
+  const txtT = tipo === "recibo" ? "Recibo de Pagamento" : "Pedido com Garantia";
   
   const numeroExibicao = dados.numeroPedido || dados.numero || "S/N";
   doc.text(`${txtT} #${numeroExibicao}`, margemEsq + 5, y + 7);
   
   doc.setFontSize(10);
-  doc.text(dados.data || new Date().toLocaleDateString('pt-BR'), 185, y + 7, { align: "right" });
+  // Usa a data específica passada no Recibo, ou a data de hoje/da venda no Pedido
+  doc.text(dados.dataRecibo || dados.data || new Date().toLocaleDateString('pt-BR'), 185, y + 7, { align: "right" });
 
   // --- DADOS DO CLIENTE ---
   y += 18;
@@ -94,7 +95,8 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Produtos / Serviços", margemEsq + 2, y + 5);
+  // Se for recibo simples, muda o título da tabela para "Descrição do Pagamento"
+  doc.text(tipo === "recibo" ? "Descrição do Recebimento" : "Produtos / Serviços", margemEsq + 2, y + 5);
   doc.text("Valor", 185, y + 5, { align: "right" });
 
   y += 8;
@@ -133,23 +135,47 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
   const subtotal = vTotalNum + vDescNum;
 
-  doc.setFont("helvetica", "normal");
-  doc.text("Subtotal:", 130, y);
-  doc.text("R$ " + subtotal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
-  
-  y += 7;
-  doc.setTextColor(198, 40, 40); 
-  doc.text("Desconto:", 130, y);
-  doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
-  
-  y += 8;
-  doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("TOTAL FINAL:", 130, y);
-  
-  const totalFinal = subtotal - vDescNum;
-  doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+  // Se for Pedido Completo, mostramos os detalhes das Entradas já pagas!
+  if (tipo === "pedido") {
+    doc.setFont("helvetica", "normal");
+    doc.text("Subtotal:", 130, y);
+    doc.text("R$ " + subtotal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+    
+    y += 7;
+    doc.setTextColor(198, 40, 40); 
+    doc.text("Desconto:", 130, y);
+    doc.text("- R$ " + vDescNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+    
+    y += 8;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    const totalFinal = subtotal - vDescNum;
+    doc.text("TOTAL DO PEDIDO:", 130, y);
+    doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+
+    // 🟢 MAGIA: Puxa o total de tudo que já foi pago pelo cliente neste pedido
+    const totalPago = (dados.listaParcelas || []).filter(p => p.paga).reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const saldoDevedor = totalFinal - totalPago;
+
+    y += 7;
+    doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.text("Total Recebido (Entradas):", 130, y);
+    doc.text("R$ " + totalPago.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+
+    y += 7;
+    doc.setTextColor(saldoDevedor > 0 ? 198 : verdeElos[0], saldoDevedor > 0 ? 40 : verdeElos[1], saldoDevedor > 0 ? 40 : verdeElos[2]);
+    doc.setFontSize(12);
+    doc.text(saldoDevedor > 0 ? "SALDO DEVEDOR:" : "STATUS:", 130, y);
+    doc.text(saldoDevedor > 0 ? "R$ " + saldoDevedor.toFixed(2).replace(".", ",") : "PAGO", 185, y, { align: "right" });
+
+  } else {
+    // Se for só um RECIBO SIMPLES da parcela
+    doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("VALOR RECEBIDO:", 130, y);
+    doc.text("R$ " + vTotalNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+  }
 
   // --- PAGAMENTO ---
   y += 15;
@@ -159,7 +185,9 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text("FORMA DE PAGAMENTO", margemEsq, y);
   y += 6;
   doc.setFont("helvetica", "normal");
-  const pgtoInfo = `${dados.metodoPagamento || "Dinheiro"} ${dados.parcelas > 1 ? `(${dados.parcelas}x)` : ""}`;
+  const pgtoInfo = tipo === "pedido" 
+    ? `${dados.metodoPagamento || "Dinheiro"} ${dados.parcelas > 1 ? `(${dados.parcelas}x)` : ""}` 
+    : (dados.metodoPagamento || "Dinheiro");
   doc.text(pgtoInfo, margemEsq, y);
 
   const desenharAssinaturas = (posY) => {
@@ -172,7 +200,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text("Ótica Elos (Anderson Soares)", 55, posY + 5, { align: "center" });
     doc.text(nCli, 150, posY + 5, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.text("Fortaleza, " + (dados.data || new Date().toLocaleDateString('pt-BR')), 105, posY + 15, { align: "center" });
+    doc.text("Fortaleza, " + (dados.dataRecibo || dados.data || new Date().toLocaleDateString('pt-BR')), 105, posY + 15, { align: "center" });
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     doc.text("obrigado por construir esse elo conosco.", 105, posY + 25, { align: "center" });
@@ -236,7 +264,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     desenharAssinaturas(yG + 15);
   }
 
-  // 🟢 CORRIGIDO: Força a abertura da janela de impressão ao invés do download direto
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
 };
@@ -321,7 +348,6 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   doc.text("LUCRO / SALDO LÍQUIDO REAL:", margemEsq + 5, y + 21);
   doc.text("R$ " + saldo.toFixed(2).replace('.', ','), 185, y + 21, { align: "right" });
 
-  // 🟢 Relatórios costumam ser baixados para arquivamento, então mantive o .save() aqui
   doc.save("Saude_Financeira_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
 };
 
@@ -344,13 +370,11 @@ export const gerarPDFOrdemServico = async (dados) => {
 
   const logoImg = await carregarLogo("/favicon.png");
 
-  // --- CABEÇALHO ---
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 6, 12, 12);
   }
   
   doc.setTextColor(0, 0, 0);
-  
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.text("ORDEM DE SERVIÇO ÓPTICO", 105, 12, { align: "center" });
@@ -361,7 +385,6 @@ export const gerarPDFOrdemServico = async (dados) => {
 
   y = 22;
   
-  // --- DADOS DA RX ---
   doc.setFillColor(210, 210, 210);
   doc.rect(margemEsq, y, 170, 6, "F");
   doc.setFontSize(9);
@@ -385,7 +408,6 @@ export const gerarPDFOrdemServico = async (dados) => {
     y += 6;
   });
 
-  // --- CABEÇALHO TABELA RX ---
   doc.rect(margemEsq, y, 170, 6);
   doc.setFont("helvetica", "bold");
   doc.text("RX", 37.5, y + 4.2, { align: "center" });
@@ -397,35 +419,29 @@ export const gerarPDFOrdemServico = async (dados) => {
   y += 6;
   const rowH = 6; 
   
-  // Contorno principal da tabela (7 linhas)
   doc.rect(margemEsq, y, 170, 7 * rowH);
   for(let i=1; i<7; i++) { doc.line(margemEsq, y + (i*rowH), 190, y + (i*rowH)); }
   
-  // Linhas verticais
   doc.line(40, y, 40, y + (7 * rowH)); 
   doc.line(55, y, 55, y + (7 * rowH)); 
   doc.line(85, y, 85, y + (7 * rowH)); 
   doc.line(115, y, 115, y + (7 * rowH)); 
   doc.line(145, y, 145, y + (7 * rowH)); 
   
-  // LIMPANDO ÁREAS PARA CÉLULAS MESCLADAS
   doc.setFillColor(255, 255, 255);
   doc.rect(20.2, y + 0.2, 19.6, 11.6, "F"); 
   doc.rect(20.2, y + 18.2, 19.6, 11.6, "F"); 
   doc.rect(20.2, y + 30.2, 19.6, 11.6, "F"); 
   doc.rect(85.2, y + 18.2, 104.6, 11.6, "F"); 
   
-  // MESCLANDO A LINHA DA ADIÇÃO INTEIRA
   doc.rect(20.2, y + 12.2, 34.6, 5.6, "F"); 
   doc.rect(55.2, y + 12.2, 134.6, 5.6, "F"); 
   
-  // Redesenha as linhas internas apenas para organizar as Medidas
   doc.setDrawColor(0, 0, 0);
   doc.line(115, y + 18, 115, y + 30); 
   doc.line(152.5, y + 18, 152.5, y + 30); 
   doc.line(115, y + 24, 190, y + 24); 
 
-  // --- TEXTOS FIXOS DA TABELA ---
   doc.setFont("helvetica", "bold");
   doc.text("LONGE:", 30, y + 7.5, { align: "center" });
   doc.text("ADIÇÃO:", 37.5, y + 16.5, { align: "center" });
@@ -449,7 +465,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.text("HORIZ.:", 154, y + 22);
   doc.text("DIAG.:", 154, y + 28);
 
-  // --- INJETANDO OS DADOS DINÂMICOS ---
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
 
@@ -493,7 +508,6 @@ export const gerarPDFOrdemServico = async (dados) => {
 
   y += 42; 
   
-  // --- OBSERVAÇÕES ---
   y += 3;
   doc.setFillColor(210, 210, 210);
   doc.rect(margemEsq, y, 170, 5, "F");
@@ -510,7 +524,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   }
   y += 18;
 
-  // --- RODAPÉ ---
   y += 6;
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
@@ -550,7 +563,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.setTextColor(150, 150, 150);
   doc.text("✂️ Linha de corte (Metade da folha A4)", 105, 147.5, { align: "center" });
 
-  // 🟢 CORRIGIDO: Força a abertura da janela de impressão ao invés do download direto
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
 };

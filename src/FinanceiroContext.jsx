@@ -112,9 +112,13 @@ export function FinanceiroProvider({ children }) {
     const valorTotal = Number(novaVenda.valorTotal);
     const valorEntrada = Number(novaVenda.valorEntrada || 0);
     const valorRestante = valorTotal - valorEntrada;
-    const numParcelas = Number(novaVenda.parcelas);
     
-    const valorDaParcelaRaw = numParcelas > 0 ? valorRestante / numParcelas : 0;
+    // 🟢 REGRA INTELIGENTE: Só divide em várias dívidas se for Crediário
+    const isCrediario = novaVenda.metodoPagamento === 'Boleto / Crediário';
+    const isCartao = novaVenda.metodoPagamento === 'Cartão de Crédito';
+    const numParcelasGerar = isCrediario ? Number(novaVenda.parcelas) : 1;
+    
+    const valorDaParcelaRaw = numParcelasGerar > 0 ? valorRestante / numParcelasGerar : 0;
     const valorDaParcela = parseFloat(valorDaParcelaRaw.toFixed(2));
 
     let parcelasGeradas = [];
@@ -126,21 +130,24 @@ export function FinanceiroProvider({ children }) {
       });
     }
 
-    for (let i = 0; i < numParcelas; i++) {
-      const dataBase = novaVenda.metodoPagamento === 'Boleto / Crediário' ? novaVenda.dataPrimeiraParcela : novaVenda.dataVenda;
+    for (let i = 0; i < numParcelasGerar; i++) {
+      const dataBase = isCrediario ? novaVenda.dataPrimeiraParcela : novaVenda.dataVenda;
       let dataVenc = new Date(dataBase + 'T00:00:00');
       dataVenc.setMonth(dataVenc.getMonth() + i);
       
       parcelasGeradas.push({
         numero: i + 1, 
         valor: parseFloat(valorDaParcela.toFixed(2)),
-        paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
-        dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null,
-        vencimentoOriginal: dataVenc.toISOString().split('T')[0]
+        paga: !isCrediario, // Se não for crediário (Cartão/Pix), já nasce PAGA
+        dataPagamento: !isCrediario ? novaVenda.dataVenda : null,
+        vencimentoOriginal: dataVenc.toISOString().split('T')[0],
+        // 🟢 Salva uma observação limpa caso tenha sido no cartão
+        observacao: isCartao && Number(novaVenda.parcelas) > 1 ? `No cartão em ${novaVenda.parcelas}x` : ''
       });
     }
 
     const vendaCompleta = { ...novaVenda, listaParcelas: parcelasGeradas };
+    
     try {
       const res = await fetch(`${API_URL}/vendas`, {
         method: 'POST',
@@ -169,7 +176,7 @@ export function FinanceiroProvider({ children }) {
       
       const vendaAtualizadaBackend = await res.json();
       
-      // 🟢 O SEGREDO ESTÁ AQUI: Mescla os dados digitados por cima da resposta do servidor
+      // Mescla os dados digitados por cima da resposta do servidor para a UI atualizar na hora
       const vendaFinal = { ...vendaAtualizadaBackend, ...dadosNovos };
 
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaFinal : v));

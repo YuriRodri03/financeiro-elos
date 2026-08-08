@@ -176,6 +176,14 @@ export default function Vendas() {
       });
     } else if (name === 'valorEntrada' || name === 'desconto') {
       setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
+    } else if (name === 'metodoPagamento') {
+      // 🟢 CORREÇÃO: Aplica inteligência ao trocar a forma de pagamento
+      const isAVista = value === 'Dinheiro' || value === 'Pix';
+      setVenda({ 
+        ...venda, 
+        [name]: value, 
+        parcelas: isAVista ? 1 : venda.parcelas 
+      });
     } else {
       setVenda({ ...venda, [name]: value });
     }
@@ -371,7 +379,7 @@ export default function Vendas() {
               </div>
             </div>
 
-            {/* CARRINHO DE COMPRAS */}
+            {/* CARRINHO DE COMPRAS INTEGRADO AO CATÁLOGO */}
             <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
               <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
               <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
@@ -418,6 +426,7 @@ export default function Vendas() {
               <div className="space-y-2">
                 {itensCarrinho.map(item => {
                   const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
+
                   return (
                     <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
                       <div className="flex items-center gap-3">
@@ -433,6 +442,7 @@ export default function Vendas() {
                           </button>
                         )}
                       </div>
+                      
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
                         <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
@@ -455,6 +465,7 @@ export default function Vendas() {
                   placeholder="Anote aqui: Graus (OD/OE), Eixo, DNP, tipo de tratamento das lentes ou cor da armação..."
                   className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-[2rem] outline-none h-40 resize-none text-sm italic"
                 />
+                
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
                   {venda.foto ? (
                     <div className="flex flex-col items-center gap-3">
@@ -504,9 +515,21 @@ export default function Vendas() {
                   <option value="Boleto / Crediário">Boleto / Crediário</option>
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nº Parcelas</label>
-                <input type="number" name="parcelas" min="1" value={venda.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+
+              {/* 🟢 CORREÇÃO VISUAL: Controle Dinâmico do Campo de Parcelas */}
+              <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
+                  {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
+                </label>
+                <input 
+                  type="number" 
+                  name="parcelas" 
+                  min="1" 
+                  value={venda.parcelas} 
+                  onChange={handleChange} 
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+                  disabled={venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix'} 
+                />
               </div>
             </div>
 

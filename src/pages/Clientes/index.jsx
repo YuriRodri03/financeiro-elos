@@ -15,14 +15,13 @@ const aplicarMascaraMoeda = (valor) => {
 };
 
 // --- COMPONENTE DE LINHA DE PARCELA ---
-function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrarToast }) {
+function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrarToast, abrirConfirmacao }) {
   const vendaId = venda._id || venda.id;
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
 
   if (!p || !venda) return null;
 
-  // 🟢 Lógica idêntica à aba de cobranças com trava de segurança extra
   const calcularVencimento = () => {
     try {
       let dataVenc;
@@ -37,21 +36,46 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
       }
       return dataVenc.toISOString().split('T')[0];
     } catch (error) {
-      return ''; // Retorna vazio se a data for inválida para não quebrar a tela
+      return ''; 
     }
   };
 
   const dataVencimentoStr = p.dataVencimento || calcularVencimento();
 
-  const handleBaixa = () => {
+  const handleBaixa = async () => {
     let valor = parseFloat(valorRecebido); 
     if (isNaN(valor) || valor <= 0) {
       mostrarToast("Informe um valor válido para o pagamento.", "erro");
       return;
     }
     valor = parseFloat(valor.toFixed(2));
-    darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
+    
+    // 1. Aguarda a baixa acontecer no servidor via Contexto
+    await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
     mostrarToast("Baixa registrada com sucesso!", "sucesso");
+
+    // 2. 🟢 MAGIA: Pergunta automaticamente se quer o recibo
+    const nomeProduto = p.numero === 0 
+      ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
+      : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
+
+    abrirConfirmacao(`Pagamento de R$ ${valor.toFixed(2).replace('.', ',')} recebido com sucesso! Deseja emitir o Recibo Simples desta parcela agora?`, () => {
+      // Puxamos a função direto do utilitário para gerar só o recibozinho rápido
+      gerarPDFDocumento({
+        cliente: venda.cliente, 
+        cpf: venda.cpf, 
+        telefone: venda.telefone || "Não cadastrado", 
+        endereco: venda.endereco || "Não cadastrado", 
+        email: venda.email || "Não cadastrado",
+        valorTotal: valor, 
+        produto: nomeProduto, 
+        dataRecibo: dataBaixa.split('-').reverse().join('/'), 
+        metodoPagamento: "Dinheiro / Transferência", // Campo genérico, já que é baixa avulsa
+        desconto: 0,
+        numeroPedido: venda.numeroPedido,
+        itensCarrinho: [{ nome: nomeProduto.toUpperCase(), preco: valor }]
+      }, 'recibo');
+    });
   };
   
   return (
@@ -62,7 +86,6 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
           <span className="text-elos-verde ml-1 font-black">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
         </span>
         
-        {/* 🟢 AQUI ESTAVA O ERRO: Trocamos 'p.dataVencimento' por 'dataVencimentoStr' */}
         {dataVencimentoStr && (
           <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
             ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
@@ -572,10 +595,18 @@ export default function Clientes() {
                       )}
 
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
-  {(venda.listaParcelas || []).map((p, idx) => (
-    <LinhaParcela key={idx} p={p} venda={venda} darBaixaParcela={darBaixaParcela} estornarBaixaParcela={estornarBaixaParcela} mostrarToast={mostrarToast} />
-  ))}
-</div>
+    {(venda.listaParcelas || []).map((p, idx) => (
+      <LinhaParcela 
+        key={idx} 
+        p={p} 
+        venda={venda} 
+        darBaixaParcela={darBaixaParcela} 
+        estornarBaixaParcela={estornarBaixaParcela} 
+        mostrarToast={mostrarToast}
+        abrirConfirmacao={abrirConfirmacao}
+      />
+    ))}
+  </div>
                     </div>
                   );
                 })}
