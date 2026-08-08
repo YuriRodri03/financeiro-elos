@@ -8,7 +8,6 @@ export function FinanceiroProvider({ children }) {
   const [vendas, setVendas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [despesas, setDespesas] = useState([]);
-  // --- NOVO: ESTADO PARA O CATÁLOGO DE PRODUTOS ---
   const [produtos, setProdutos] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
@@ -20,7 +19,7 @@ export function FinanceiroProvider({ children }) {
           fetch(`${API_URL}/vendas`),
           fetch(`${API_URL}/clientes`),
           fetch(`${API_URL}/despesas`),
-          fetch(`${API_URL}/produtos`) // Nova rota do catálogo
+          fetch(`${API_URL}/produtos`) 
         ]);
         
         if (!resVendas.ok || !resClientes.ok) throw new Error("Erro ao buscar dados do servidor");
@@ -46,16 +45,25 @@ export function FinanceiroProvider({ children }) {
   // --- FUNÇÕES DE CLIENTE ---
   const adicionarCliente = async (novoCliente) => {
     const existe = clientes.find(c => c.cpf === novoCliente.cpf);
-    if (existe) return alert("Este CPF já está cadastrado!");
+    if (existe) {
+      alert("Este CPF já está cadastrado!");
+      throw new Error("CPF já cadastrado");
+    }
     try {
       const res = await fetch(`${API_URL}/clientes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(novoCliente)
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       const clienteSalvo = await res.json();
       setClientes(prev => [...prev, clienteSalvo]);
-    } catch (err) { alert("Erro ao salvar cliente."); }
+      return clienteSalvo;
+    } catch (err) { 
+      console.error(err);
+      throw err; 
+    }
   };
 
   const editarCliente = async (clienteId, dadosNovos) => {
@@ -83,7 +91,6 @@ export function FinanceiroProvider({ children }) {
       return clienteAtualizado;
     } catch (err) { 
       console.error("Erro no Contexto:", err);
-      alert(err.message); 
       throw err;
     }
   };
@@ -94,17 +101,19 @@ export function FinanceiroProvider({ children }) {
       await fetch(`${API_URL}/clientes/${cpf}`, { method: 'DELETE' });
       setClientes(prev => prev.filter(c => c.cpf !== cpf));
       alert("Cliente removido!");
-    } catch (err) { alert("Erro ao excluir."); }
+    } catch (err) { 
+      alert("Erro ao excluir."); 
+      throw err;
+    }
   };
 
-  // --- FUNÇÕES DE VENDA CORRIGIDA ---
+  // --- FUNÇÕES DE VENDA ---
   const adicionarVenda = async (novaVenda) => {
     const valorTotal = Number(novaVenda.valorTotal);
     const valorEntrada = Number(novaVenda.valorEntrada || 0);
     const valorRestante = valorTotal - valorEntrada;
     const numParcelas = Number(novaVenda.parcelas);
     
-    // CORREÇÃO DE PONTO FLUTUANTE: Força o valor base a possuir no máximo 2 casas decimais livres
     const valorDaParcelaRaw = numParcelas > 0 ? valorRestante / numParcelas : 0;
     const valorDaParcela = parseFloat(valorDaParcelaRaw.toFixed(2));
 
@@ -124,7 +133,6 @@ export function FinanceiroProvider({ children }) {
       
       parcelasGeradas.push({
         numero: i + 1, 
-        // CORREÇÃO: Salva no Mongo o valor limpo cortando restos como 200.000000003
         valor: parseFloat(valorDaParcela.toFixed(2)),
         paga: novaVenda.metodoPagamento !== 'Boleto / Crediário',
         dataPagamento: novaVenda.metodoPagamento !== 'Boleto / Crediário' ? novaVenda.dataVenda : null,
@@ -139,16 +147,17 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vendaCompleta)
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       const vendaSalva = await res.json();
       setVendas(prev => [...prev, vendaSalva]);
       return vendaSalva;
     } catch (err) { 
-      alert("Erro ao registrar venda."); 
+      console.error(err);
       throw err;
     }
   };
 
-  // --- FUNÇÃO DE EDIÇÃO COMPLETA DE VENDA (FOTOS/RECEITAS/OBS) ---
   const editarVenda = async (vendaId, dadosNovos) => {
     try {
       const res = await fetch(`${API_URL}/vendas/${vendaId}`, {
@@ -157,24 +166,34 @@ export function FinanceiroProvider({ children }) {
         body: JSON.stringify(dadosNovos)
       });
       if (!res.ok) throw new Error("Erro ao atualizar o pedido no servidor.");
-      const vendaAtualizada = await res.json();
-      setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
-      return vendaAtualizada;
+      
+      const vendaAtualizadaBackend = await res.json();
+      
+      // 🟢 O SEGREDO ESTÁ AQUI: Mescla os dados digitados por cima da resposta do servidor
+      const vendaFinal = { ...vendaAtualizadaBackend, ...dadosNovos };
+
+      setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaFinal : v));
+      return vendaFinal;
     } catch (err) {
       console.error(err);
-      alert("Erro ao atualizar o pedido.");
+      throw err;
     }
   };
 
   const editarDataVenda = async (vendaId, novaData) => {
     try {
-      await fetch(`${API_URL}/vendas/${vendaId}`, {
+      const res = await fetch(`${API_URL}/vendas/${vendaId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataVenda: novaData })
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? { ...v, dataVenda: novaData } : v));
-    } catch (err) { alert("Erro ao atualizar data."); }
+    } catch (err) { 
+      alert("Erro ao atualizar data."); 
+      throw err;
+    }
   };
 
   const darBaixaParcela = async (vendaId, numeroParcela, dataPagamento, valorPago) => {
@@ -198,6 +217,7 @@ export function FinanceiroProvider({ children }) {
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
     } catch (err) { 
       alert("Erro ao dar baixa. Verifique o valor informado."); 
+      throw err;
     }
   };
 
@@ -211,18 +231,27 @@ export function FinanceiroProvider({ children }) {
       });
       
       if (!res.ok) throw new Error("Erro no estorno");
+      
       const vendaAtualizada = await res.json();
       setVendas(prev => prev.map(v => (v._id === vendaId || v.id === vendaId) ? vendaAtualizada : v));
       alert("Estorno realizado com sucesso!");
-    } catch (err) { alert("Erro ao estornar."); }
+    } catch (err) { 
+      alert("Erro ao estornar."); 
+      throw err;
+    }
   };
 
   const excluirVenda = async (vendaId) => {
     if (!window.confirm("Excluir venda do banco permanentemente?")) return;
     try {
-      await fetch(`${API_URL}/vendas/${vendaId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/vendas/${vendaId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       setVendas(prev => prev.filter(v => (v._id !== vendaId && v.id !== vendaId)));
-    } catch (err) { alert("Erro ao excluir."); }
+    } catch (err) { 
+      alert("Erro ao excluir."); 
+      throw err;
+    }
   };
 
   // --- FUNÇÕES DE DESPESA ---
@@ -233,28 +262,44 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(novaDespesa)
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       const salva = await res.json();
       setDespesas(prev => [...prev, salva]);
-    } catch (err) { alert("Erro ao salvar despesa."); }
+      return salva;
+    } catch (err) { 
+      console.error(err);
+      throw err; 
+    }
   };
 
   const darBaixaDespesa = async (id) => {
     try {
-      await fetch(`${API_URL}/despesas/${id}`, {
+      const res = await fetch(`${API_URL}/despesas/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paga: true })
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       setDespesas(prev => prev.map(d => (d._id === id || d.id === id) ? { ...d, paga: true } : d));
-    } catch (err) { alert("Erro ao pagar despesa."); }
+    } catch (err) { 
+      alert("Erro ao pagar despesa."); 
+      throw err;
+    }
   };
 
   const excluirDespesa = async (id) => {
     if (!window.confirm("Excluir despesa?")) return;
     try {
-      await fetch(`${API_URL}/despesas/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/despesas/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       setDespesas(prev => prev.filter(d => (d._id !== id && d.id !== id)));
-    } catch (err) { alert("Erro ao excluir despesa."); }
+    } catch (err) { 
+      alert("Erro ao excluir despesa."); 
+      throw err;
+    }
   };
 
   // --- FUNÇÕES DE PRODUTO (CATÁLOGO) ---
@@ -265,10 +310,15 @@ export function FinanceiroProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(novoProduto)
       });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       const produtoSalvo = await res.json();
       setProdutos(prev => [...prev, produtoSalvo]);
       return produtoSalvo;
-    } catch (err) { alert("Erro ao cadastrar produto."); }
+    } catch (err) { 
+      console.error(err);
+      throw err; 
+    }
   };
 
   const editarProduto = async (produtoId, dadosNovos) => {
@@ -286,7 +336,6 @@ export function FinanceiroProvider({ children }) {
       return produtoAtualizado;
     } catch (err) {
       console.error(err);
-      alert("Erro ao editar o produto.");
       throw err;
     }
   };
@@ -294,10 +343,15 @@ export function FinanceiroProvider({ children }) {
   const excluirProduto = async (produtoId) => {
     if (!window.confirm("Deseja remover este produto do catálogo?")) return;
     try {
-      await fetch(`${API_URL}/produtos/${produtoId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/produtos/${produtoId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Erro no servidor");
+
       setProdutos(prev => prev.filter(p => p._id !== produtoId && p.id !== produtoId));
       alert("Produto removido do catálogo!");
-    } catch (err) { alert("Erro ao remover produto."); }
+    } catch (err) { 
+      alert("Erro ao remover produto."); 
+      throw err;
+    }
   };
 
   return (

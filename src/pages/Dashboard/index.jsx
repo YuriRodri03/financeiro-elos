@@ -11,6 +11,9 @@ export default function Dashboard() {
   const [modalTipo, setModalTipo] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('mensal'); // 'mensal', 'anual', 'geral'
 
+  // 🟢 NOVO: Estado para controlar qual mês foi tocado no celular para exibir o gráfico
+  const [mesExpandido, setMesExpandido] = useState(null);
+
   const [relatorioInicio, setRelatorioInicio] = useState('');
   const [relatorioFim, setRelatorioFim] = useState('');
 
@@ -20,6 +23,8 @@ export default function Dashboard() {
   const [dataAniversario, setDataAniversario] = useState(hojeLocalStr);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+
+  const anosDisponiveis = Array.from({ length: 11 }, (_, i) => dataAtual.getFullYear() - 2 + i);
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
@@ -155,7 +160,7 @@ export default function Dashboard() {
   const totalNoCaixaAno = dadosGraficoAnual.reduce((acc, m) => acc + m.receitas, 0);
   const totalDespesasAno = dadosGraficoAnual.reduce((acc, m) => acc + m.despesas, 0);
   const volumeVendasAno = vendas.reduce((acc, v) => new Date(v.dataVenda + 'T00:00:00').getFullYear() === Number(anoFiltro) ? acc + Number(v.valorTotal) : acc, 0);
-  const maxValorGraficoAno = Math.max(...dadosGraficoAnual.map(d => Math.max(d.receitas, d.despesas)), 1); // Evita divisão por zero
+  const maxValorGraficoAno = Math.max(...dadosGraficoAnual.map(d => Math.max(d.receitas, d.despesas)), 1);
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -225,7 +230,9 @@ export default function Dashboard() {
               <div className="w-[1px] bg-gray-100 mx-2"></div>
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Ano</label>
-                <input type="number" className="bg-transparent font-bold w-16 outline-none" value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} />
+                <select className="bg-transparent font-bold outline-none cursor-pointer pr-2" value={anoFiltro} onChange={(e) => setAnoFiltro(Number(e.target.value))}>
+                  {anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+                </select>
               </div>
             </div>
 
@@ -327,7 +334,9 @@ export default function Dashboard() {
             <div className="flex gap-4 bg-white p-4 rounded-2xl shadow-sm border border-elos-bege/10 w-fit mb-6">
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Ano de Exercício</label>
-                <input type="number" className="bg-transparent font-bold w-24 outline-none" value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} />
+                <select className="bg-transparent font-bold outline-none cursor-pointer pr-2" value={anoFiltro} onChange={(e) => setAnoFiltro(Number(e.target.value))}>
+                  {anosDisponiveis.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+                </select>
               </div>
             </div>
 
@@ -347,7 +356,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* GRÁFICO ANUAL (PURO TAILWIND CSS) */}
+            {/* GRÁFICO ANUAL */}
             <div className="bg-white p-8 rounded-[2rem] shadow-soft border border-elos-bege/10 mb-8">
               <div className="flex justify-between items-end mb-8">
                 <div>
@@ -360,9 +369,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* ÁREA DO GRÁFICO */}
+              {/* ÁREA DO GRÁFICO 🟢 CORRIGIDA PARA TOUCH */}
               <div className="h-64 flex items-end justify-between gap-1 md:gap-2 pb-4 border-b border-gray-100 relative">
-                {/* Linhas guias horizontais */}
                 <div className="absolute top-0 left-0 w-full border-t border-dashed border-gray-100"></div>
                 <div className="absolute top-1/2 left-0 w-full border-t border-dashed border-gray-100"></div>
                 
@@ -371,11 +379,18 @@ export default function Dashboard() {
                   const alturaDespesa = Math.max((d.despesas / maxValorGraficoAno) * 100, 0);
                   
                   return (
-                    <div key={index} className="flex-1 flex flex-col items-center gap-1 group relative z-10 h-full justify-end">
-                      {/* Tooltip Hover */}
-                      <div className="absolute -top-12 opacity-0 group-hover:opacity-100 bg-gray-900 text-white p-2 rounded-lg text-[9px] whitespace-nowrap pointer-events-none transition-opacity z-20 shadow-xl">
-                        Receita: {formatarMoeda(d.receitas)}<br/>
-                        Despesa: {formatarMoeda(d.despesas)}
+                    <div 
+                      key={index} 
+                      className="flex-1 flex flex-col items-center gap-1 group relative z-10 h-full justify-end cursor-pointer"
+                      onClick={() => setMesExpandido(mesExpandido === index ? null : index)}
+                    >
+                      {/* 🟢 BALÃOZINHO TOUCH/HOVER */}
+                      <div className={`absolute -top-14 left-1/2 -translate-x-1/2 bg-gray-900 text-white p-2.5 rounded-xl text-[9px] md:text-[10px] whitespace-nowrap pointer-events-none transition-all z-30 shadow-2xl ${
+                        mesExpandido === index ? 'opacity-100 translate-y-0 visible' : 'opacity-0 translate-y-2 invisible md:visible md:group-hover:opacity-100 md:group-hover:translate-y-0'
+                      }`}>
+                        <div className="text-green-400 font-bold mb-0.5">R: {formatarMoeda(d.receitas)}</div>
+                        <div className="text-red-400 font-bold">D: {formatarMoeda(d.despesas)}</div>
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
                       </div>
                       
                       <div className="flex items-end gap-0.5 w-full justify-center h-full">
@@ -388,7 +403,7 @@ export default function Dashboard() {
                           style={{ height: `${alturaDespesa}%`, minHeight: d.despesas > 0 ? '4px' : '0' }}
                         ></div>
                       </div>
-                      <span className="text-[8px] md:text-[10px] font-black text-gray-400 mt-2">{d.mes}</span>
+                      <span className={`text-[8px] md:text-[10px] font-black mt-2 transition-colors ${mesExpandido === index ? 'text-elos-verde' : 'text-gray-400'}`}>{d.mes}</span>
                     </div>
                   );
                 })}
@@ -404,9 +419,9 @@ export default function Dashboard() {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
             
             {/* SALDO EM CAIXA ACUMULADO */}
-            <div className={`p-8 rounded-[2.5rem] shadow-soft text-white border-l-[12px] relative overflow-hidden transition-all ${saldoCaixaAtualGeral >= 0 ? 'bg-elos-bege border-[#8c7664]' : 'bg-red-950 border-red-900'}`}>
+            <div className={`p-8 rounded-[2rem] shadow-soft text-white border-l-[12px] relative overflow-hidden transition-all ${saldoCaixaAtualGeral >= 0 ? 'bg-elos-verde border-[#3a4a3e]' : 'bg-red-900 border-red-950'}`}>
               <div className="relative z-10">
-                <h3 className="text-xs font-bold text-white/60 uppercase tracking-[0.2em]">Saldo em Conta Corrente (Histórico Acumulado)</h3>
+                <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]">Saldo em Conta Corrente (Histórico Acumulado)</h3>
                 <p className="text-4xl md:text-5xl font-black mt-2 text-white italic">{formatarMoeda(saldoCaixaAtualGeral)}</p>
                 <p className="text-[10px] text-white/50 mt-2 uppercase font-bold tracking-widest">Disponibilidade real (Todo recebido - Todas saídas)</p>
               </div>
@@ -415,15 +430,18 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* DÍVIDA ACUMULADA */}
-              <div onClick={() => setModalTipo('receber')} className="bg-elos-bege/10 p-8 rounded-[2.5rem] border border-elos-bege/30 shadow-sm cursor-pointer hover:bg-elos-bege/20 transition-colors flex flex-col justify-center">
-                <h4 className="text-xs font-black text-elos-bege uppercase tracking-widest mb-2 italic">Valores a Receber (Geral Inadimplência)</h4>
-                <p className="text-4xl font-bold text-elos-bege font-black">{formatarMoeda(totalAReceberGeral)}</p>
-                <p className="text-[10px] text-elos-bege/60 mt-3 uppercase font-bold">Clique para ver os clientes devedores</p>
+              <div onClick={() => setModalTipo('receber')} className="bg-white p-6 rounded-[2rem] shadow-soft border-t-8 border-orange-500 cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-between h-full">
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Dívida Geral)</h3>
+                  <p className="text-3xl font-black text-orange-500 mt-1">{formatarMoeda(totalAReceberGeral)}</p>
+                  <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold italic">Ver clientes devedores</p>
+                </div>
+                <div className="text-orange-100 text-4xl">⏳</div>
               </div>
 
               {/* SAÚDE FINANCEIRA PDF */}
-              <div className="bg-white p-8 rounded-[2.5rem] shadow-soft border border-elos-bege/20 flex flex-col justify-center">
-                <h3 className="font-tradicional text-xl text-elos-verde mb-4 flex items-center gap-2">🏥 Emitir Balanço Financeiro PDF</h3>
+              <div className="bg-white p-6 rounded-[2rem] shadow-soft border-t-8 border-blue-600 flex flex-col justify-between h-full">
+                <h3 className="font-tradicional text-xl text-elos-verde mb-4 flex items-center gap-2">🏥 Emitir Balanço PDF</h3>
                 <div className="flex flex-col gap-4">
                   <div className="flex gap-4">
                     <div className="flex-1">
@@ -435,7 +453,7 @@ export default function Dashboard() {
                       <input type="date" className="w-full p-2 bg-elos-fundo rounded-xl border-none text-sm" value={relatorioFim} onChange={(e) => setRelatorioFim(e.target.value)} />
                     </div>
                   </div>
-                  <button onClick={handleGerarRelatorioSaude} className="bg-elos-verde hover:bg-elos-verde/90 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg w-full transition-transform active:scale-95">
+                  <button onClick={handleGerarRelatorioSaude} className="bg-elos-verde hover:bg-elos-verde/90 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md w-full transition-transform active:scale-95">
                     📊 Baixar Relatório DRE
                   </button>
                 </div>
@@ -443,7 +461,7 @@ export default function Dashboard() {
             </div>
 
             {/* ANIVERSARIANTES WIDGET */}
-            <div className="bg-white rounded-[2.5rem] shadow-soft p-8 border border-elos-bege/10">
+            <div className="bg-white rounded-[2rem] shadow-soft p-8 border-t-8 border-purple-500">
               <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4 border-b border-gray-50 pb-4">
                 <div>
                   <h3 className="font-tradicional text-2xl italic text-elos-verde">🎂 Gestão de Relacionamento (CRM)</h3>

@@ -72,13 +72,11 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  // 🟢 Título em negrito com o nome do cliente
   doc.text(nCli, margemEsq, y);
   
   y += 7;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  // 🟢 Removemos a repetição do nome e subimos os outros dados
   doc.text(`CPF: ${dados.cpf || "Não informado"}`, margemEsq, y);
   doc.text(`Telefone: ${dados.telefone || "Não informado"}`, 120, y);
   
@@ -238,7 +236,9 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     desenharAssinaturas(yG + 15);
   }
 
-  doc.save(`${txtT}_${nCli.replace(/\s+/g, "_")}.pdf`);
+  // 🟢 CORRIGIDO: Força a abertura da janela de impressão ao invés do download direto
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
 };
 
 // ==========================================
@@ -321,6 +321,7 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
   doc.text("LUCRO / SALDO LÍQUIDO REAL:", margemEsq + 5, y + 21);
   doc.text("R$ " + saldo.toFixed(2).replace('.', ','), 185, y + 21, { align: "right" });
 
+  // 🟢 Relatórios costumam ser baixados para arquivamento, então mantive o .save() aqui
   doc.save("Saude_Financeira_" + periodo.inicio.replace(/\//g, '-') + ".pdf");
 };
 
@@ -328,7 +329,7 @@ export const gerarPDFSaudeFinanceira = (dadosRelatorio, periodo) => {
 // 3. ORDEM DE SERVIÇO
 // ==========================================
 export const gerarPDFOrdemServico = async (dados) => {
-  const doc = new jsPDF({ orientation: "landscape", format: "a5" });
+  const doc = new jsPDF();
   const margemEsq = 20;
   let y = 12; 
 
@@ -407,16 +408,16 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.line(115, y, 115, y + (7 * rowH)); 
   doc.line(145, y, 145, y + (7 * rowH)); 
   
-  // 🟢 LIMPANDO ÁREAS PARA CÉLULAS MESCLADAS
+  // LIMPANDO ÁREAS PARA CÉLULAS MESCLADAS
   doc.setFillColor(255, 255, 255);
-  doc.rect(20.2, y + 0.2, 19.6, 11.6, "F"); // Longe
-  doc.rect(20.2, y + 18.2, 19.6, 11.6, "F"); // CO
-  doc.rect(20.2, y + 30.2, 19.6, 11.6, "F"); // Perto
-  doc.rect(85.2, y + 18.2, 104.6, 11.6, "F"); // Medidas Armação
+  doc.rect(20.2, y + 0.2, 19.6, 11.6, "F"); 
+  doc.rect(20.2, y + 18.2, 19.6, 11.6, "F"); 
+  doc.rect(20.2, y + 30.2, 19.6, 11.6, "F"); 
+  doc.rect(85.2, y + 18.2, 104.6, 11.6, "F"); 
   
-  // 🟢 MESCLANDO A LINHA DA ADIÇÃO INTEIRA
-  doc.rect(20.2, y + 12.2, 34.6, 5.6, "F"); // Lado esquerdo (Espaço do título 'ADIÇÃO:')
-  doc.rect(55.2, y + 12.2, 134.6, 5.6, "F"); // Lado direito (Espaço mesclado para o valor numérico)
+  // MESCLANDO A LINHA DA ADIÇÃO INTEIRA
+  doc.rect(20.2, y + 12.2, 34.6, 5.6, "F"); 
+  doc.rect(55.2, y + 12.2, 134.6, 5.6, "F"); 
   
   // Redesenha as linhas internas apenas para organizar as Medidas
   doc.setDrawColor(0, 0, 0);
@@ -426,14 +427,11 @@ export const gerarPDFOrdemServico = async (dados) => {
 
   // --- TEXTOS FIXOS DA TABELA ---
   doc.setFont("helvetica", "bold");
-  
-  // Rótulos Laterais
   doc.text("LONGE:", 30, y + 7.5, { align: "center" });
-  doc.text("ADIÇÃO:", 37.5, y + 16.5, { align: "center" }); // 🟢 Título centralizado na esquerda
+  doc.text("ADIÇÃO:", 37.5, y + 16.5, { align: "center" });
   doc.text("CO:", 30, y + 25.5, { align: "center" });
   doc.text("PERTO:", 30, y + 37.5, { align: "center" });
   
-  // OD e OE
   doc.text("OD", 47.5, y + 4.5, { align: "center" });
   doc.text("OE", 47.5, y + 10.5, { align: "center" });
   doc.text("OD", 47.5, y + 22.5, { align: "center" });
@@ -441,7 +439,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.text("OD", 47.5, y + 34.5, { align: "center" });
   doc.text("OE", 47.5, y + 40.5, { align: "center" });
   
-  // Título e Rótulos das Medidas
   doc.setFontSize(7);
   doc.text("MEDIDAS", 100, y + 22.5, { align: "center" });
   doc.text("DA ARMAÇÃO", 100, y + 27.5, { align: "center" });
@@ -456,7 +453,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
 
-  // Longe
   if(dados.longe_od_esf) doc.text(String(dados.longe_od_esf), 70, y + 4.5, { align: "center" });
   if(dados.longe_od_cil) doc.text(String(dados.longe_od_cil), 100, y + 4.5, { align: "center" });
   if(dados.longe_od_eixo) doc.text(String(dados.longe_od_eixo), 130, y + 4.5, { align: "center" });
@@ -467,20 +463,17 @@ export const gerarPDFOrdemServico = async (dados) => {
   if(dados.longe_oe_eixo) doc.text(String(dados.longe_oe_eixo), 130, y + 10.5, { align: "center" });
   if(dados.longe_oe_dnp) doc.text(String(dados.longe_oe_dnp), 167.5, y + 10.5, { align: "center" });
 
-  // 🟢 VALOR DA ADIÇÃO (Colocado exatamente no meio do blocão gigante mesclado à direita)
   if(dados.adicao) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10); // Ligeiramente maior para destaque
+    doc.setFontSize(10);
     doc.text(String(dados.adicao), 122.5, y + 16.5, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9); // Retorna a fonte ao tamanho normal
+    doc.setFontSize(9);
   }
 
-  // CO
   if(dados.co_od_esf) doc.text(String(dados.co_od_esf), 70, y + 22.5, { align: "center" });
   if(dados.co_oe_esf) doc.text(String(dados.co_oe_esf), 70, y + 28.5, { align: "center" });
 
-  // Medidas Armação (Dados)
   doc.setFontSize(8);
   if(dados.medidas_vertical) doc.text(String(dados.medidas_vertical), 140, y + 22.5, { align: "center" });
   if(dados.medidas_ponte) doc.text(String(dados.medidas_ponte), 140, y + 28.5, { align: "center" });
@@ -488,7 +481,6 @@ export const gerarPDFOrdemServico = async (dados) => {
   if(dados.medidas_diag) doc.text(String(dados.medidas_diag), 178, y + 28.5, { align: "center" });
   doc.setFontSize(9);
 
-  // Perto
   if(dados.perto_od_esf) doc.text(String(dados.perto_od_esf), 70, y + 34.5, { align: "center" });
   if(dados.perto_od_cil) doc.text(String(dados.perto_od_cil), 100, y + 34.5, { align: "center" });
   if(dados.perto_od_eixo) doc.text(String(dados.perto_od_eixo), 130, y + 34.5, { align: "center" });
@@ -552,5 +544,13 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.text(nCli.toUpperCase(), margemEsq + 32, y);
   doc.line(margemEsq + 30, y + 1, 190, y + 1);
 
-  doc.save(`OS_${nCli ? nCli.replace(/\s+/g, "_") : "Cliente"}.pdf`);
+  doc.setDrawColor(200, 200, 200); 
+  doc.line(10, 148.5, 200, 148.5); 
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text("✂️ Linha de corte (Metade da folha A4)", 105, 147.5, { align: "center" });
+
+  // 🟢 CORRIGIDO: Força a abertura da janela de impressão ao invés do download direto
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
 };
