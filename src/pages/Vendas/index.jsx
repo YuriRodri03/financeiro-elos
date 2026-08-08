@@ -7,56 +7,42 @@ export default function Vendas() {
   const { adicionarVenda, vendas, clientes, produtos, adicionarProduto } = useFinanceiro();
   const navigate = useNavigate();
 
-  const [abaAtiva, setAbaAtiva] = useState('nova'); // 'nova' ou 'historico'
+  const [abaAtiva, setAbaAtiva] = useState('nova');
 
-  // 🟢 NOVO: Estado para a barra de busca do histórico
   const [buscaHistorico, setBuscaHistorico] = useState('');
 
-  // Controle dos dropdowns de busca
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
 
-  // Estados do Formulário
   const [venda, setVenda] = useState({
-    cliente: '',
-    cpf: '',
-    valorEntrada: '',
-    desconto: '', 
-    parcelas: 1,
-    metodoPagamento: 'Dinheiro',
-    observacoes: '',
-    foto: '',
+    cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
+    metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
 
-  // Estados do Carrinho
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
 
-  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
-  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+  
+  // 🟢 CORREÇÃO: O modal de confirmação agora aceita uma ação de cancelar (para a fila de impressão funcionar)
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
-    setTimeout(() => {
-      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
-    }, 3000);
+    setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
   };
 
-  const abrirConfirmacao = (mensagem, acao) => {
-    setConfirmModal({ visivel: true, mensagem, acao });
+  const abrirConfirmacao = (mensagem, acao, acaoCancelar = null) => {
+    setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
-  // --- BUSCA POR NOME DO CLIENTE (Sugestões) ---
   const sugestoes = useMemo(() => {
     if (!venda.cliente || !mostrarSugestoes) return [];
-    return (clientes || []).filter(c => 
-      c.nome.toLowerCase().includes(venda.cliente.toLowerCase())
-    ).slice(0, 5);
+    return (clientes || []).filter(c => c.nome.toLowerCase().includes(venda.cliente.toLowerCase())).slice(0, 5);
   }, [venda.cliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
@@ -64,23 +50,16 @@ export default function Vendas() {
     setMostrarSugestoes(false);
   };
 
-  // --- BUSCA POR NOME DO PRODUTO (Sugestões do Catálogo) ---
   const sugestoesProd = useMemo(() => {
     if (!novoItem.nome || !mostrarSugestoesProd) return [];
-    return (produtos || []).filter(p => 
-      p.nome.toLowerCase().includes(novoItem.nome.toLowerCase())
-    ).slice(0, 5);
+    return (produtos || []).filter(p => p.nome.toLowerCase().includes(novoItem.nome.toLowerCase())).slice(0, 5);
   }, [novoItem.nome, produtos, mostrarSugestoesProd]);
 
   const selecionarProdutoCat = (p) => {
-    setNovoItem({ 
-      nome: p.nome.toUpperCase(), 
-      preco: p.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
-    });
+    setNovoItem({ nome: p.nome.toUpperCase(), preco: p.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) });
     setMostrarSugestoesProd(false);
   };
 
-  // Fechar sugestões ao clicar fora (Clientes e Produtos)
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setMostrarSugestoes(false);
@@ -90,100 +69,55 @@ export default function Vendas() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- LÓGICA DE FOTO PARA O BANCO ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setVenda({ ...venda, foto: reader.result });
-      };
+      reader.onloadend = () => setVenda({ ...venda, foto: reader.result });
       reader.readAsDataURL(file);
     }
   };
 
-  // Máscaras
-  const aplicarMascaraCPF = (valor) => {
-    return valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  };
-
+  const aplicarMascaraCPF = (valor) => valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   const aplicarMascaraMoeda = (valor) => {
     let v = String(valor).replace(/\D/g, '');
     if (!v) return '';
-    v = (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    return v;
+    return (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
-
   const limparMoeda = (valor) => {
     if (!valor) return 0;
-    const numeroLimpo = String(valor).replace(/[^\d]/g, '');
-    return Number(numeroLimpo) / 100;
+    return Number(String(valor).replace(/[^\d]/g, '')) / 100;
   };
 
-  // Funções do Carrinho
   const adicionarAoCarrinho = () => {
-    if (!novoItem.nome || !novoItem.preco) {
-      mostrarToast("Preencha a descrição do item e o preço correspondente.", "erro");
-      return;
-    }
-    const itemFormatado = {
-      id: Date.now(),
-      nome: novoItem.nome.toUpperCase(),
-      preco: limparMoeda(novoItem.preco)
-    };
-    setItensCarrinho([...itensCarrinho, itemFormatado]);
+    if (!novoItem.nome || !novoItem.preco) return mostrarToast("Preencha a descrição do item e o preço correspondente.", "erro");
+    setItensCarrinho([...itensCarrinho, { id: Date.now(), nome: novoItem.nome.toUpperCase(), preco: limparMoeda(novoItem.preco) }]);
     setNovoItem({ nome: '', preco: '' });
   };
 
-  const removerDoCarrinho = (id) => {
-    setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
-  };
+  const removerDoCarrinho = (id) => setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
 
   const salvarItemNoCatalogo = async (item) => {
-    const dadosProduto = {
-      nome: item.nome.toUpperCase(),
-      preco: item.preco,
-      categoria: 'ARMAÇÃO'
-    };
-
     try {
-      await adicionarProduto(dadosProduto);
+      await adicionarProduto({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
       mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
-    } catch (err) {
-      mostrarToast("Erro ao sincronizar item com o catálogo.", "erro");
-    }
+    } catch (err) { mostrarToast("Erro ao sincronizar item com o catálogo.", "erro"); }
   };
 
-  // Cálculos Automáticos
-  const subtotalItens = useMemo(() => {
-    return itensCarrinho.reduce((acc, item) => acc + item.preco, 0);
-  }, [itensCarrinho]);
-
-  const totalFinalVenda = useMemo(() => {
-    const desconto = limparMoeda(venda.desconto);
-    return Math.max(0, subtotalItens - desconto);
-  }, [subtotalItens, venda.desconto]);
+  const subtotalItens = useMemo(() => itensCarrinho.reduce((acc, item) => acc + item.preco, 0), [itensCarrinho]);
+  const totalFinalVenda = useMemo(() => Math.max(0, subtotalItens - limparMoeda(venda.desconto)), [subtotalItens, venda.desconto]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
       const clienteExistente = (clientes || []).find(c => c.cpf === valorFormatado);
-      setVenda({ 
-        ...venda, 
-        cpf: valorFormatado,
-        cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente)
-      });
+      setVenda({ ...venda, cpf: valorFormatado, cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente) });
     } else if (name === 'valorEntrada' || name === 'desconto') {
       setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
     } else if (name === 'metodoPagamento') {
-      // 🟢 CORREÇÃO: Aplica inteligência ao trocar a forma de pagamento
       const isAVista = value === 'Dinheiro' || value === 'Pix';
-      setVenda({ 
-        ...venda, 
-        [name]: value, 
-        parcelas: isAVista ? 1 : venda.parcelas 
-      });
+      setVenda({ ...venda, [name]: value, parcelas: isAVista ? 1 : venda.parcelas });
     } else {
       setVenda({ ...venda, [name]: value });
     }
@@ -191,17 +125,12 @@ export default function Vendas() {
 
   const handleSalvar = async (e) => {
     e.preventDefault();
-    if (itensCarrinho.length === 0) {
-      mostrarToast("Adicione pelo menos um item ao carrinho antes de finalizar.", "erro");
-      return;
-    }
-    if (!venda.cliente || !venda.cpf) {
-      mostrarToast("Identifique os dados do cliente vinculados a esta operação.", "erro");
-      return;
-    }
+    if (itensCarrinho.length === 0) return mostrarToast("Adicione pelo menos um item ao carrinho antes de finalizar.", "erro");
+    if (!venda.cliente || !venda.cpf) return mostrarToast("Identifique os dados do cliente vinculados a esta operação.", "erro");
 
     const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
     const descontoNum = limparMoeda(venda.desconto);
+    const valorEntradaNum = limparMoeda(venda.valorEntrada);
     const carrinhoParaPDF = [...itensCarrinho];
 
     const dadosParaSalvar = {
@@ -209,14 +138,52 @@ export default function Vendas() {
       produto: itensCarrinho.map(i => i.nome).join(' + '), 
       itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
-      valorEntrada: limparMoeda(venda.valorEntrada),
+      valorEntrada: valorEntradaNum,
       desconto: descontoNum 
     };
 
     try {
       const resultado = await adicionarVenda(dadosParaSalvar);
-      
-      abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja gerar o arquivo de Pedido com Garantia em formato PDF?", () => {
+
+      // Função auxiliar que limpa o formulário e vai para o Histórico
+      const irParaHistorico = () => {
+        setVenda({
+          cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
+          metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
+          dataVenda: new Date().toISOString().split('T')[0],
+          dataPrimeiraParcela: new Date().toISOString().split('T')[0]
+        });
+        setItensCarrinho([]);
+        setAbaAtiva('historico');
+      };
+
+      // 🟢 MAGIA DA FILA DE IMPRESSÃO: Função que pergunta sobre o Recibo da Entrada
+      const perguntarReciboEntrada = () => {
+        if (valorEntradaNum > 0) {
+          setTimeout(() => {
+            abrirConfirmacao(`Deseja também imprimir o RECIBO DA ENTRADA de R$ ${valorEntradaNum.toFixed(2).replace('.',',')}?`, () => {
+              gerarPDFDocumento({
+                ...resultado,
+                produto: `Entrada / Sinal (Pedido #${resultado.numeroPedido || 'S/N'})`,
+                dataRecibo: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : '',
+                valorTotal: valorEntradaNum,
+                desconto: 0,
+                metodoPagamento: resultado.metodoPagamento,
+                itensCarrinho: [{ nome: `ENTRADA / SINAL (PEDIDO #${resultado.numeroPedido || 'S/N'})`, preco: valorEntradaNum }],
+                telefone: clienteBase?.telefone || "Não informado",
+                endereco: clienteBase?.endereco || "Não informado",
+                email: clienteBase?.email || "Não informado"
+              }, 'recibo');
+              irParaHistorico();
+            }, irParaHistorico);
+          }, 400); // Atraso sutil para o modal trocar suavemente
+        } else {
+          irParaHistorico();
+        }
+      };
+
+      // Inicia a fila de impressão perguntando primeiro pelo Pedido
+      abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja imprimir o PEDIDO COM GARANTIA em PDF?", () => {
         gerarPDFDocumento({
           ...resultado,
           itensCarrinho: carrinhoParaPDF, 
@@ -226,28 +193,17 @@ export default function Vendas() {
           endereco: clienteBase?.endereco || "Não informado",
           email: clienteBase?.email || "Não informado"
         }, 'pedido');
-        mostrarToast("Pedido impresso com sucesso!", "sucesso");
-      });
-
-      setVenda({
-        cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-        metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
-        dataVenda: new Date().toISOString().split('T')[0],
-        dataPrimeiraParcela: new Date().toISOString().split('T')[0]
-      });
-      setItensCarrinho([]);
-      
-      setTimeout(() => setAbaAtiva('historico'), 1500); 
+        mostrarToast("Pedido gerado com sucesso!", "sucesso");
+        perguntarReciboEntrada();
+      }, perguntarReciboEntrada); // Se o cara apertar Pular, ele pergunta do recibo do mesmo jeito!
 
     } catch (error) {
       mostrarToast("Erro operacional ao salvar a venda.", "erro");
     }
   };
 
-  // 🟢 NOVO: Lógica de Filtragem do Histórico
   const vendasFiltradas = useMemo(() => {
     if (!vendas) return [];
-    
     let filtradas = [...vendas];
     
     if (buscaHistorico) {
@@ -258,8 +214,6 @@ export default function Vendas() {
         (v.numeroPedido && String(v.numeroPedido).toLowerCase().includes(termo))
       );
     }
-    
-    // Mantém a ordenação das mais recentes primeiro
     return filtradas.sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda));
   }, [vendas, buscaHistorico]);
 
@@ -278,17 +232,20 @@ export default function Vendas() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO */}
+      {/* MODAL DE CONFIRMAÇÃO AUTOMATIZADO */}
       {confirmModal.visivel && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
             <div className="text-4xl text-elos-verde">📄</div>
-            <h3 className="font-tradicional text-xl italic text-elos-verde">Venda Concluída</h3>
+            <h3 className="font-tradicional text-xl italic text-elos-verde">Impressão</h3>
             <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
             <div className="flex gap-3">
               <button 
                 type="button"
-                onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })}
+                onClick={() => {
+                  if (confirmModal.acaoCancelar) confirmModal.acaoCancelar();
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
+                }}
                 className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
               >
                 Pular
@@ -297,7 +254,7 @@ export default function Vendas() {
                 type="button"
                 onClick={() => {
                   if (confirmModal.acao) confirmModal.acao();
-                  setConfirmModal({ visivel: false, mensagem: '', acao: null });
+                  setConfirmModal({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
                 }}
                 className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-elos-verde/20 hover:bg-[#3a4a3e] transition-all"
               >
@@ -515,8 +472,8 @@ export default function Vendas() {
                   <option value="Boleto / Crediário">Boleto / Crediário</option>
                 </select>
               </div>
-
-              {/* 🟢 CORREÇÃO VISUAL: Controle Dinâmico do Campo de Parcelas */}
+              
+              {/* Controle Dinâmico do Campo de Parcelas */}
               <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
                   {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
@@ -547,12 +504,11 @@ export default function Vendas() {
         )}
 
         {/* =======================================
-            ABA 2: HISTÓRICO DE VENDAS (Com Botão Editar)
+            ABA 2: HISTÓRICO DE VENDAS
         ======================================== */}
         {abaAtiva === 'historico' && (
           <div className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-10 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
             
-            {/* 🟢 HEADER DO HISTÓRICO COM A BARRA DE BUSCA */}
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-gray-50 pb-6">
               <h2 className="font-tradicional text-2xl text-elos-verde italic">Últimas Vendas Realizadas</h2>
               
@@ -599,7 +555,6 @@ export default function Vendas() {
                         </td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2">
-                            {/* BOTÃO IMPRIMIR PDF */}
                             <button 
                               onClick={() => {
                                 const clienteBase = (clientes || []).find(c => c.cpf === v.cpf);
@@ -616,8 +571,6 @@ export default function Vendas() {
                             >
                               🖨️
                             </button>
-
-                            {/* BOTÃO DE EDITAR */}
                             <button 
                               onClick={() => navigate(`/vendas/editar/${v._id || v.id}`)}
                               className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
