@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento, gerarPDFOrdemServico } from '../../documentosUtils';
+// 🟢 AQUI: Adicionado o gerarPDFCarne na importação
+import { gerarPDFDocumento, gerarPDFOrdemServico, gerarPDFCarne } from '../../documentosUtils';
 import CadastroClientes from '../CadastroClientes'; 
 import { useNavigate } from 'react-router-dom';
 
@@ -54,13 +55,12 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
     await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
     mostrarToast("Baixa registrada com sucesso!", "sucesso");
 
-    // 2. 🟢 MAGIA: Pergunta automaticamente se quer o recibo
+    // 2. Pergunta automaticamente se quer o recibo
     const nomeProduto = p.numero === 0 
       ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
       : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
 
     abrirConfirmacao(`Pagamento de R$ ${valor.toFixed(2).replace('.', ',')} recebido com sucesso! Deseja emitir o Recibo Simples desta parcela agora?`, () => {
-      // Puxamos a função direto do utilitário para gerar só o recibozinho rápido
       gerarPDFDocumento({
         cliente: venda.cliente, 
         cpf: venda.cpf, 
@@ -151,6 +151,9 @@ export default function Clientes() {
   const [editandoCadastro, setEditandoCadastro] = useState(null);
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
+  
+  // 🟢 NOVO ESTADO: Modal do Carnê Pix
+  const [modalCarne, setModalCarne] = useState(null);
 
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
@@ -180,7 +183,6 @@ export default function Clientes() {
         
         if (response.ok) {
           mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
-          // Recarrega a página levemente para o Context atualizar a lista de clientes/OS
           setTimeout(() => window.location.reload(), 1500); 
         } else {
           mostrarToast("Erro ao excluir OS no servidor.", "erro");
@@ -196,6 +198,7 @@ export default function Clientes() {
     setEditandoCadastro(null);
     setEditandoVenda(null);
     setModalRecibo(null);
+    setModalCarne(null); // Fecha o modal do carnê
     setNovaFotoCliente(''); 
     setNovaFotoVenda('');   
   };
@@ -282,13 +285,12 @@ export default function Clientes() {
         .filter(v => v.cpf === cpf)
         .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
         .map(venda => {
-          // Garante que o array de ordensServico venha preenchido e mapeia o ID corretamente
           const osVenda = venda.ordensServico || [];
           return {
             ...venda,
             ordensServico: osVenda.map(os => ({
               ...os,
-              idOS: os.idOS || os._id // Mapeia o ID para garantir que o botão Editar funcione
+              idOS: os.idOS || os._id 
             }))
           };
         });
@@ -468,8 +470,9 @@ export default function Clientes() {
                         <div className="flex-1 w-full">
                           <div className="flex items-center gap-2 mb-3">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer" onClick={() => setEditandoVenda({...venda, vendaId: venda._id || venda.id})}>
-                              {venda.dataVenda?.split('-').reverse().join('/')} ✏️
+                            
+                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer" onClick={() => navigate(`/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
+                              {venda.dataVenda?.split('-').reverse().join('/')} ✏️ EDITAR
                             </small>
                           </div>
 
@@ -502,13 +505,12 @@ export default function Clientes() {
                         
                         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                           
-                          {/* 🟢 NOVO: Botão para Adicionar Nova O.S. vinculada ao Pedido */}
                           <button 
-  onClick={() => navigate(`/nova-os/${numPed}`)} 
-  className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
->
-  ➕ Nova OS
-</button>
+                            onClick={() => navigate(`/nova-os/${numPed}`)} 
+                            className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+                          >
+                            ➕ Nova OS
+                          </button>
 
                           <button 
                             onClick={() => {
@@ -544,14 +546,28 @@ export default function Clientes() {
                             }} 
                             className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
                           >
-                            📄 Reemitir
+                            📄 Reemitir Pedido
                           </button>
-                          
+
+                          {/* 🟢 BOTÃO DO CARNÊ AQUI - Abre o Modal para digitar a chave */}
+                          {venda.metodoPagamento === 'Boleto / Crediário' && (
+                            <button 
+                              onClick={() => {
+                                setModalCarne({
+                                  vendaBase: venda,
+                                  chavePix: "(85) 8550-6571" // Chave sugerida automaticamente
+                                });
+                              }}
+                              className="flex-1 md:flex-none bg-orange-50 text-orange-600 border-2 border-orange-100 hover:bg-orange-500 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
+                            >
+                              🎟️ Gerar Carnê
+                            </button>
+                          )}
+
                           <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVenda(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
                         </div>
                       </div>
 
-                      {/* 🟢 NOVO: Bloco de exibição das Ordens de Serviço (caso já tenham sido criadas para este pedido) */}
                       {venda.ordensServico && venda.ordensServico.length > 0 && (
                         <div className="mt-4 mb-6 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
                           <h4 className="text-[10px] font-black text-blue-800 uppercase mb-3 tracking-widest">Ordens de Serviço Vinculadas</h4>
@@ -579,8 +595,6 @@ export default function Clientes() {
                                   >
                                     ✏️ Editar
                                   </button>
-                                  
-                                  {/* 🟢 NOVO: Botão de Excluir OS */}
                                   <button
                                     onClick={() => handleExcluirOS(os.idOS)}
                                     className="px-4 py-2 bg-red-50 text-red-500 rounded-lg text-[10px] font-bold uppercase hover:bg-red-500 hover:text-white transition-colors shadow-sm"
@@ -595,18 +609,18 @@ export default function Clientes() {
                       )}
 
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
-    {(venda.listaParcelas || []).map((p, idx) => (
-      <LinhaParcela 
-        key={idx} 
-        p={p} 
-        venda={venda} 
-        darBaixaParcela={darBaixaParcela} 
-        estornarBaixaParcela={estornarBaixaParcela} 
-        mostrarToast={mostrarToast}
-        abrirConfirmacao={abrirConfirmacao}
-      />
-    ))}
-  </div>
+                        {(venda.listaParcelas || []).map((p, idx) => (
+                          <LinhaParcela 
+                            key={idx} 
+                            p={p} 
+                            venda={venda} 
+                            darBaixaParcela={darBaixaParcela} 
+                            estornarBaixaParcela={estornarBaixaParcela} 
+                            mostrarToast={mostrarToast} 
+                            abrirConfirmacao={abrirConfirmacao} 
+                          />
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -687,7 +701,43 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* MODAL DE GERAR RECIBO */}
+      {/* 🟢 MODAL DE DIGITAR CHAVE PIX PARA O CARNÊ */}
+      {modalCarne && (
+        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
+          <div className="bg-white p-8 rounded-[32px] max-w-sm w-full border border-orange-100 shadow-2xl">
+            <div className="text-center">
+              <div className="text-4xl text-orange-500 mb-2">🎟️</div>
+              <h2 className="font-tradicional text-2xl text-elos-verde italic">Gerar Carnê</h2>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1 mb-6">QR Code de Pagamento</p>
+            </div>
+            <div className="space-y-2 mb-6">
+              <label className="text-[10px] font-black text-orange-600 uppercase tracking-tighter ml-1">Chave PIX da Loja (Celular, CPF ou CNPJ)</label>
+              <input 
+                type="text" 
+                className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl font-bold text-elos-texto text-sm outline-none focus:ring-2 focus:ring-orange-200" 
+                value={modalCarne.chavePix} 
+                onChange={(e) => setModalCarne({...modalCarne, chavePix: e.target.value})} 
+                placeholder="Ex: 85988887777"
+              />
+              <p className="text-[9px] text-gray-400 italic ml-1 mt-1">O QR Code impresso no carnê apontará para esta chave.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setModalCarne(null)} className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
+              <button 
+                onClick={() => {
+                  gerarPDFCarne({ ...modalCarne.vendaBase, cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf }, modalCarne.chavePix);
+                  setModalCarne(null);
+                }} 
+                className="flex-[1.5] bg-orange-500 text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+              >
+                Imprimir Carnê
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE GERAR RECIBO (PAGAMENTO MANUAL TOTAL) */}
       {modalRecibo && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
           <div className="bg-white p-8 rounded-[32px] max-w-md w-full border border-elos-bege/20 shadow-2xl">
@@ -724,7 +774,7 @@ export default function Clientes() {
                 const valorLimpo = Number(modalRecibo.valorFmt.replace(/\D/g, '')) / 100;
                 gerarPDFDocumento({
                   cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf, telefone: clienteNoModal.telefone, endereco: clienteNoModal.endereco, email: clienteNoModal.email,
-                  valorTotal: valorLimpo, produto: modalRecibo.produto, data: modalRecibo.data.split('-').reverse().join('/'), metodoPagamento: modalRecibo.metodo, desconto: 0,
+                  valorTotal: valorLimpo, produto: modalRecibo.produto, dataRecibo: modalRecibo.data.split('-').reverse().join('/'), metodoPagamento: modalRecibo.metodo, desconto: 0,
                   itensCarrinho: [{ nome: modalRecibo.produto.toUpperCase(), preco: valorLimpo }]
                 }, 'recibo');
                 setModalRecibo(null);

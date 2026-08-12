@@ -1,4 +1,95 @@
 import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
+
+// ==========================================
+// FUNÇÃO AUXILIAR PARA IMAGENS
+// ==========================================
+const carregarImagem = (url) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous'; // Libera bloqueios de rede
+    img.src = url;
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+  });
+};
+
+// ==========================================
+// 🟢 MOTOR DE PIX (PADRÃO BANCO CENTRAL)
+// ==========================================
+const gerarPayloadPix = (chave, valor) => {
+  const nome = "OTICA ELOS";
+  const cidade = "FORTALEZA";
+  
+  let limpa = String(chave).trim();
+  let chavePronta = limpa;
+
+  // Identifica se é E-mail ou Chave Aleatória
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpa);
+  const isAleatoria = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(limpa);
+
+  if (!isEmail && !isAleatoria) {
+    const num = limpa.replace(/\D/g, ''); // Extrai apenas os números
+    
+    if (num.length === 11) {
+      // Diferenciar CPF de Celular:
+      // Se tiver um ponto (.), temos certeza que o usuário digitou um CPF (ex: 123.456.789-00)
+      if (limpa.includes('.')) {
+        chavePronta = num; 
+      } 
+      // Se não tem ponto, mas o 3º dígito é 9 (ex: 85988887777) ou tem parênteses, é Celular!
+      else if (num[2] === '9' || limpa.includes('(')) {
+        chavePronta = '+55' + num;
+      } 
+      // Se for 11 números diretos sem o 9 no começo, assumimos que é CPF digitado sem ponto.
+      else {
+        chavePronta = num;
+      }
+    } else if (num.length === 14) {
+      chavePronta = num; // CNPJ
+    } else if (num.length === 10) {
+      chavePronta = '+55' + num; // Telefone antigo sem o 9
+    } else if (num.length >= 12 && num.startsWith('55')) {
+      chavePronta = '+' + num; // Celular que já foi digitado com 55 na tela
+    } else {
+      chavePronta = num; // Fallback
+    }
+  }
+
+  let p = "000201"; // Payload Format Indicator
+  
+  // Monta a string da chave identificando o recebedor
+  const acc = `0014br.gov.bcb.pix01${String(chavePronta.length).padStart(2, '0')}${chavePronta}`;
+  p += `26${String(acc.length).padStart(2, '0')}${acc}`;
+  
+  p += "52040000"; // Merchant Category Code
+  p += "5303986";  // Moeda Real (BRL)
+  
+  // Adiciona o VALOR EXATO da parcela
+  if (valor > 0) {
+    const valStr = Number(valor).toFixed(2);
+    p += `54${String(valStr.length).padStart(2, '0')}${valStr}`; 
+  }
+  
+  p += "5802BR"; // Country Code
+  p += `59${String(nome.length).padStart(2, '0')}${nome}`; // Nome do Recebedor
+  p += `60${String(cidade.length).padStart(2, '0')}${cidade}`; // Cidade
+  p += "62070503***"; // Campo adicional obrigatório do Pix
+  p += "6304"; // Tag do cálculo de segurança CRC16
+
+  // Cálculo de integridade obrigatório do Banco Central (CRC16)
+  let crc = 0xFFFF;
+  for (let i = 0; i < p.length; i++) {
+    crc ^= p.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 0x8000) !== 0) crc = (crc << 1) ^ 0x1021;
+      else crc = crc << 1;
+    }
+  }
+  const crcHex = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  
+  return p + crcHex;
+};
 
 // ==========================================
 // 1. RECIBO E PEDIDO
@@ -9,18 +100,8 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const verdeElos = [74, 93, 78]; 
   let y = 20;
 
-  const carregarLogo = (url) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = url;
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-    });
-  };
+  const logoImg = await carregarImagem("/favicon.png");
 
-  const logoImg = await carregarLogo("/favicon.png");
-
-  // --- CABEÇALHO ---
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 15, 15, 15);
   }
@@ -50,7 +131,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.setDrawColor(200, 200, 200);
   doc.line(margemEsq, y, 190, y); 
 
-  // --- TÍTULO DO DOCUMENTO ---
   y += 10;
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 10, "F");
@@ -63,10 +143,8 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text(`${txtT} #${numeroExibicao}`, margemEsq + 5, y + 7);
   
   doc.setFontSize(10);
-  // Usa a data específica passada no Recibo, ou a data de hoje/da venda no Pedido
   doc.text(dados.dataRecibo || dados.data || new Date().toLocaleDateString('pt-BR'), 185, y + 7, { align: "right" });
 
-  // --- DADOS DO CLIENTE ---
   y += 18;
   doc.setTextColor(0, 0, 0);
   const nCli = (dados.cliente || "CLIENTE").toUpperCase();
@@ -89,13 +167,11 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   doc.text(enderecoTxt, margemEsq, y);
   y += (enderecoTxt.length * 5) + 5;
 
-  // --- TABELA DE PRODUTOS / CARRINHO ---
   doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
   doc.rect(margemEsq, y, 170, 8, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  // Se for recibo simples, muda o título da tabela para "Descrição do Pagamento"
   doc.text(tipo === "recibo" ? "Descrição do Recebimento" : "Produtos / Serviços", margemEsq + 2, y + 5);
   doc.text("Valor", 185, y + 5, { align: "right" });
 
@@ -124,7 +200,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     y += (nomeQuebrado.length * 5) + 3;
   });
 
-  // --- FECHAMENTO FINANCEIRO ---
   y += 5;
   doc.setDrawColor(200, 200, 200);
   doc.line(110, y, 190, y);
@@ -135,7 +210,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
   const subtotal = vTotalNum + vDescNum;
 
-  // Se for Pedido Completo, mostramos os detalhes das Entradas já pagas!
   if (tipo === "pedido") {
     doc.setFont("helvetica", "normal");
     doc.text("Subtotal:", 130, y);
@@ -153,7 +227,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text("TOTAL DO PEDIDO:", 130, y);
     doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
-    // 🟢 MAGIA: Puxa o total de tudo que já foi pago pelo cliente neste pedido
     const totalPago = (dados.listaParcelas || []).filter(p => p.paga).reduce((acc, p) => acc + Number(p.valor || 0), 0);
     const saldoDevedor = totalFinal - totalPago;
 
@@ -169,7 +242,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text(saldoDevedor > 0 ? "R$ " + saldoDevedor.toFixed(2).replace(".", ",") : "PAGO", 185, y, { align: "right" });
 
   } else {
-    // Se for só um RECIBO SIMPLES da parcela
     doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -177,7 +249,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text("R$ " + vTotalNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
   }
 
-  // --- PAGAMENTO ---
   y += 15;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
@@ -210,7 +281,6 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     desenharAssinaturas(245);
   }
 
-  // --- SEGUNDA PÁGINA: GARANTIA ---
   if (tipo === "pedido") {
     doc.addPage();
     doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
@@ -359,16 +429,7 @@ export const gerarPDFOrdemServico = async (dados) => {
   const margemEsq = 20;
   let y = 12; 
 
-  const carregarLogo = (url) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = url;
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-    });
-  };
-
-  const logoImg = await carregarLogo("/favicon.png");
+  const logoImg = await carregarImagem("/favicon.png");
 
   if (logoImg) {
     doc.addImage(logoImg, "PNG", margemEsq, 6, 12, 12);
@@ -562,6 +623,175 @@ export const gerarPDFOrdemServico = async (dados) => {
   doc.setFontSize(7);
   doc.setTextColor(150, 150, 150);
   doc.text("✂️ Linha de corte (Metade da folha A4)", 105, 147.5, { align: "center" });
+
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
+};
+
+// ==========================================
+// 4. CARNÊ DE PAGAMENTO (CREDIÁRIO)
+// ==========================================
+export const gerarPDFCarne = async (dados, chavePixDigitada) => {
+  const doc = new jsPDF();
+  const verdeElos = [74, 93, 78];
+  
+  const parcelas = (dados.listaParcelas || []).filter(p => p.numero > 0);
+  const totalParcelas = parcelas.length;
+
+  if (totalParcelas === 0) {
+    alert("Este pedido não possui parcelas futuras para gerar carnê.");
+    return;
+  }
+
+  let logoImg = null;
+  try {
+    logoImg = await carregarImagem("/favicon.png");
+  } catch (e) {
+    console.warn("Logo não carregada no carnê");
+  }
+  
+  const chavePix = chavePixDigitada || "Sem chave";
+
+  let y = 10;
+  let countImpressosNaPagina = 0;
+
+  for (let i = 0; i < totalParcelas; i++) {
+    const p = parcelas[i];
+
+    // 🟢 GERA O PAYLOAD PIX E O QR CODE NATIVO PARA CADA PARCELA INDIVIDUAL
+    let imgQrDataUrl = null;
+    if (chavePix !== "Sem chave") {
+      const payloadCopiaECola = gerarPayloadPix(chavePix, Number(p.valor));
+      try {
+        if (typeof QRCode !== 'undefined' && QRCode.toDataURL) {
+          // 🟢 FORÇA O AWAIT PRA ESPERAR A IMAGEM FICAR PRONTA!
+          imgQrDataUrl = await QRCode.toDataURL(payloadCopiaECola, { margin: 1, width: 150 });
+        } else {
+          throw new Error("Erro na biblioteca QRCode");
+        }
+      } catch (err) {
+        console.error("Erro na lib QRCode, usando fallback API:", err);
+        // Fallback seguro caso a biblioteca falhe localmente
+        const urlFallback = `https://quickchart.io/qr?text=${encodeURIComponent(payloadCopiaECola)}&size=150`;
+        imgQrDataUrl = await carregarImagem(urlFallback);
+      }
+    }
+
+    if (countImpressosNaPagina === 3) {
+      doc.addPage();
+      y = 10;
+      countImpressosNaPagina = 0;
+    }
+
+    doc.setDrawColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.setLineWidth(0.4);
+    doc.rect(10, y, 190, 85);
+
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(65, y, 65, y + 85);
+    doc.setLineDashPattern([], 0); 
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+
+    // LADO ESQUERDO: CANHOTO DA LOJA
+    doc.setFillColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.rect(10, y, 55, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("CANHOTO DA LOJA", 37.5, y + 5.5, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(8);
+    doc.text(`Pedido: #${dados.numeroPedido || 'S/N'}`, 12, y + 15);
+    doc.text(`Parcela: ${p.numero} de ${totalParcelas}`, 12, y + 20);
+    
+    doc.setFontSize(9);
+    doc.text(`Vencimento:`, 12, y + 30);
+    const dtVenc = p.vencimentoOriginal ? p.vencimentoOriginal.split('-').reverse().join('/') : '--/--/----';
+    doc.text(dtVenc, 12, y + 35);
+    
+    doc.text(`Valor:`, 12, y + 45);
+    doc.text(`R$ ${Number(p.valor).toFixed(2).replace('.', ',')}`, 12, y + 50);
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text("Recebido em: ____/____/____", 12, y + 65);
+    
+    doc.setDrawColor(0, 0, 0);
+    doc.line(12, y + 78, 62, y + 78);
+    doc.text("Assinatura do Recebedor", 37.5, y + 82, { align: "center" });
+
+
+    // LADO DIREITO: VIA DO CLIENTE
+    if (logoImg) {
+      doc.addImage(logoImg, "PNG", 68, y + 3, 10, 10);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("CARNÊ DE PAGAMENTO", 80, y + 10);
+    
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Ótica Elos - (85) 8550-6571", 80, y + 14);
+
+    doc.setDrawColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.setLineWidth(0.5);
+    doc.line(68, y + 18, 197, y + 18);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("DADOS DO CLIENTE", 68, y + 25);
+    doc.setFont("helvetica", "normal");
+    const nCli = (dados.cliente || "Não informado").toUpperCase();
+    doc.text(`Nome: ${nCli.substring(0, 35)}`, 68, y + 30);
+    doc.text(`CPF: ${dados.cpf || "Não informado"}`, 68, y + 35);
+
+    doc.setFillColor(245, 245, 245);
+    doc.rect(68, y + 45, 80, 25, "F");
+    
+    doc.setFont("helvetica", "bold");
+    doc.text(`Nº do Pedido: #${dados.numeroPedido || 'S/N'}`, 70, y + 52);
+    doc.text(`Parcela: ${p.numero} de ${totalParcelas}`, 70, y + 58);
+    
+    doc.setTextColor(198, 40, 40);
+    doc.text(`Vencimento: ${dtVenc}`, 70, y + 66);
+    doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
+    doc.setFontSize(11);
+    doc.text(`Valor: R$ ${Number(p.valor).toFixed(2).replace('.', ',')}`, 108, y + 66);
+
+    // ÁREA DO PIX COM O QR CODE NATIVO E PAYLOAD CORRETO
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("PAGUE VIA PIX", 168, y + 30, { align: "center" });
+
+    if (imgQrDataUrl) {
+      doc.addImage(imgQrDataUrl, "PNG", 155, y + 33, 26, 26);
+    } else {
+      doc.rect(155, y + 33, 26, 26);
+      doc.setFontSize(7);
+      doc.text("QR CODE", 168, y + 46, { align: "center" });
+    }
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text("Chave Pix:", 168, y + 64, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    
+    const chaveFormatada = doc.splitTextToSize(chavePix, 35);
+    doc.text(chaveFormatada, 168, y + 68, { align: "center" });
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.text("Evite multas e juros mantendo sua parcela em dia.", 133, y + 80, { align: "center" });
+
+    y += 90; 
+    countImpressosNaPagina++;
+  }
 
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
