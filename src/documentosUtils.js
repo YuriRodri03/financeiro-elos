@@ -736,7 +736,7 @@ export const gerarPDFCarne = async (dados, chavePixDigitada) => {
     
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text("Ótica Elos - (85) 8550-6571", 80, y + 14);
+    doc.text("Ótica Elos - (85) 98550-6571", 80, y + 14);
 
     doc.setDrawColor(verdeElos[0], verdeElos[1], verdeElos[2]);
     doc.setLineWidth(0.5);

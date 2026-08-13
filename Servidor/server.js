@@ -48,11 +48,13 @@ const Despesa = mongoose.model('Despesa', {
   descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
+// 🟢 A ÚNICA ALTERAÇÃO FOI AQUI ABAIXO (Adicionado o foto: String)
 const Produto = mongoose.model('Produto', {
   nome: String, 
   preco: Number, 
   categoria: String,
-  quantidade: Number
+  quantidade: Number,
+  foto: { type: String, default: "" }
 });
 
 const Configuracao = mongoose.model('Configuracao', {

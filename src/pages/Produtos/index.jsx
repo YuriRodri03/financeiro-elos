@@ -11,7 +11,8 @@ export default function Produtos() {
     nome: '',
     preco: '',
     categoria: 'ARMAÇÃO', // Padrão
-    quantidade: ''
+    quantidade: '',
+    foto: '' // 🟢 NOVO: Campo para armazenar a imagem base64
   });
 
   // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
@@ -55,6 +56,22 @@ export default function Produtos() {
     }
   };
 
+  // 🟢 NOVO: FUNÇÕES PARA LIDAR COM A IMAGEM DO PRODUTO
+  const converterParaBase64 = (file, callback) => {
+    const reader = new FileReader();
+    reader.onloadend = () => { callback(reader.result); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleMudarFotoProduto = (e) => {
+    const file = e.target.files[0];
+    if (file) { 
+      converterParaBase64(file, (base64Img) => {
+        setNovoProduto({ ...novoProduto, foto: base64Img });
+      });
+    }
+  };
+
   // --- ENTRAR NO MODO DE EDIÇÃO ---
   const handleIniciarEdicao = (p) => {
     setEditandoId(p._id || p.id);
@@ -62,7 +79,8 @@ export default function Produtos() {
       nome: p.nome,
       preco: aplicarMascaraMoeda((p.preco * 100).toString()),
       categoria: p.categoria,
-      quantidade: p.quantidade || ''
+      quantidade: p.quantidade || '',
+      foto: p.foto || '' // 🟢 Puxa a foto antiga caso tenha
     });
     setAbaAtiva(p.categoria); // Muda para a aba correta ao editar
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
@@ -70,7 +88,7 @@ export default function Produtos() {
 
   const handleCancelarEdicao = () => {
     setEditandoId(null);
-    setNovoProduto({ nome: '', preco: '', categoria: abaAtiva, quantidade: '' });
+    setNovoProduto({ nome: '', preco: '', categoria: abaAtiva, quantidade: '', foto: '' });
   };
 
   // --- ALTERAÇÃO RÁPIDA DE ESTOQUE (+ / -) ---
@@ -98,7 +116,8 @@ export default function Produtos() {
     const dadosProduto = {
       nome: novoProduto.nome.toUpperCase(),
       preco: precoLimpo,
-      categoria: novoProduto.categoria
+      categoria: novoProduto.categoria,
+      foto: novoProduto.foto // 🟢 Salva a imagem no banco
     };
 
     // Só envia quantidade se for armação
@@ -206,6 +225,31 @@ export default function Produtos() {
           </h3>
           
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-6">
+
+            {/* 🟢 SEÇÃO DE FOTO DO PRODUTO */}
+            <div className="md:col-span-12 flex flex-col sm:flex-row items-center gap-6 mb-2 bg-elos-fundo/50 p-5 rounded-[2rem] border border-elos-bege/20">
+              <div className="w-24 h-24 shrink-0 rounded-2xl border-4 border-white shadow-md flex items-center justify-center overflow-hidden bg-gray-100">
+                {novoProduto.foto ? (
+                  <img src={novoProduto.foto} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl opacity-20">📷</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 text-center sm:text-left">
+                <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Imagem do Produto / Catálogo</label>
+                <div className="relative">
+                  <button type="button" className="px-5 py-2.5 bg-elos-bege text-white rounded-xl text-xs font-bold hover:bg-elos-verde transition-colors shadow-sm">
+                    {novoProduto.foto ? 'Trocar Imagem 📸' : 'Escolher Imagem 📸'}
+                  </button>
+                  <input type="file" accept="image/*" onChange={handleMudarFotoProduto} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                </div>
+                {novoProduto.foto && (
+                  <button type="button" onClick={() => setNovoProduto({...novoProduto, foto: ''})} className="text-[10px] text-red-400 font-bold hover:text-red-600 transition-colors">
+                    🗑️ Remover imagem atual
+                  </button>
+                )}
+              </div>
+            </div>
             
             {/* SELETOR DE CATEGORIA */}
             <div className="md:col-span-3 space-y-2">
@@ -282,11 +326,22 @@ export default function Produtos() {
                 {produtosExibidos.map((p) => (
                   <div key={p._id || p.id} className="p-6 flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-elos-fundo/30 transition-colors">
                     
-                    <div className="text-center sm:text-left flex-1">
-                      <h4 className="text-lg font-bold text-elos-texto mt-1 font-tradicional">{p.nome}</h4>
+                    {/* 🟢 NOME DO PRODUTO + IMAGEM NA LISTAGEM */}
+                    <div className="flex items-center gap-4 flex-1 w-full sm:w-auto">
+                      <div className="w-16 h-16 shrink-0 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden bg-gray-50 shadow-sm">
+                        {p.foto ? (
+                          <img src={p.foto} alt={p.nome} className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" onClick={() => window.open(p.foto, '_blank')} />
+                        ) : (
+                          <span className="text-xl opacity-20">👓</span>
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <h4 className="text-lg font-bold text-elos-texto font-tradicional leading-tight">{p.nome}</h4>
+                        <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{p.categoria}</span>
+                      </div>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full sm:w-auto mt-4 sm:mt-0">
                       
                       {/* CONTROLE DE QUANTIDADE RÁPIDO (SÓ PARA ARMAÇÃO) */}
                       {abaAtiva === 'ARMAÇÃO' && (
