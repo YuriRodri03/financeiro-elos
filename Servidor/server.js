@@ -54,7 +54,8 @@ const Produto = mongoose.model('Produto', {
   preco: Number, 
   categoria: String,
   quantidade: Number,
-  foto: { type: String, default: "" }
+  foto: { type: String, default: "" },
+  referencia: { type: String, default: "" }
 });
 
 const Configuracao = mongoose.model('Configuracao', {
