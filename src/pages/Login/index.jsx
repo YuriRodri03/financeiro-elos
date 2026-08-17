@@ -50,7 +50,7 @@ export default function Login({ onLogin }) {
     return v;
   };
 
-  // 🟢 LÓGICA DE LOGIN
+  // 🟢 LÓGICA DE LOGIN (Usando VITE_API_URL)
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -66,7 +66,7 @@ export default function Login({ onLogin }) {
 
     // 2. Acesso do Cliente
     try {
-      const res = await fetch('http://localhost:5000/api/clientes');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
       if (!res.ok) throw new Error("Erro na resposta do servidor");
       const clientes = await res.json();
 
@@ -89,14 +89,14 @@ export default function Login({ onLogin }) {
     }
   };
 
-  // 🟢 NOVA LÓGICA: BUSCAR CLIENTE DA LOJA FÍSICA AO DIGITAR O CPF
+  // 🟢 NOVA LÓGICA: BUSCAR CLIENTE DA LOJA FÍSICA AO DIGITAR O CPF (Usando VITE_API_URL)
   const handleVerificarCpf = async (cpfDigitado) => {
     const cpfLimpo = cpfDigitado.replace(/\D/g, '');
     
     // Só pesquisa se o CPF estiver completo
     if (cpfLimpo.length === 11) {
       try {
-        const res = await fetch('http://localhost:5000/api/clientes');
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
         const clientes = await res.json();
         
         const clienteEncontrado = clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfLimpo);
@@ -130,7 +130,7 @@ export default function Login({ onLogin }) {
     }
   };
 
-  // 🟢 LÓGICA DE AUTO-CADASTRO (CRIAR NOVO OU ATUALIZAR ANTIGO)
+  // 🟢 LÓGICA DE AUTO-CADASTRO (Usando VITE_API_URL)
   const handleCadastroCompleto = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -170,14 +170,14 @@ export default function Login({ onLogin }) {
 
       // 🟢 Se já tinha o ID (cliente da loja física), nós ATUALIZAMOS (PUT)
       if (formCadastro._id) {
-        resCadastro = await fetch(`http://localhost:5000/api/clientes/${formCadastro._id}`, {
+        resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes/${formCadastro._id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payloadCliente)
         });
       } else {
         // 🟢 Se for cliente novo, primeiro checamos se o email já existe
-        const resClientes = await fetch('http://localhost:5000/api/clientes');
+        const resClientes = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
         const clientesExistentes = await resClientes.json();
         
         const jaExisteEmail = clientesExistentes.some(c => c.email && c.email.toLowerCase() === formCadastro.email.trim().toLowerCase());
@@ -188,7 +188,7 @@ export default function Login({ onLogin }) {
         }
 
         // Se estiver tudo OK, CRIAMOS o cliente (POST)
-        resCadastro = await fetch('http://localhost:5000/api/clientes', {
+        resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payloadCliente)

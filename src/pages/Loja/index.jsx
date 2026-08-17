@@ -34,12 +34,12 @@ export default function HomeLoja() {
     cpf: clienteLogado?.cpf || '' 
   });
 
-  // BUSCA OS PEDIDOS DO CLIENTE LOGADO
+  // BUSCA OS PEDIDOS DO CLIENTE LOGADO (Atualizado com VITE_API_URL)
   useEffect(() => {
     if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado?.cpf) {
       const buscarPedidos = async () => {
         try {
-          const res = await fetch('http://localhost:5000/api/pedidos_online');
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`);
           if (res.ok) {
             const todosPedidos = await res.json();
             const pedidosDoCliente = todosPedidos.filter(p => p.clienteCpf === clienteLogado.cpf);
@@ -106,7 +106,7 @@ export default function HomeLoja() {
 
   const valorTotalCarrinho = carrinho.reduce((total, item) => total + Number(item.preco), 0);
 
-  // INTEGRAÇÃO COM BACKEND: FINALIZAR PEDIDO
+  // INTEGRAÇÃO COM BACKEND: FINALIZAR PEDIDO (Atualizado com VITE_API_URL)
   const processarPedido = async (e) => {
     e.preventDefault();
     setProcessando(true);
@@ -122,7 +122,7 @@ export default function HomeLoja() {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/pedidos_online', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
