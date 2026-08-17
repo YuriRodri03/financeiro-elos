@@ -5,11 +5,12 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
   const [menuAberto, setMenuAberto] = useState(false);
   const location = useLocation();
 
-  // 🟢 ADICIONADO: 'ordens-servico' na lista de links de navegação
+  // 🟢 ATUALIZADO: Incluído o item 'Operações' na lista de navegação
   const linksNav = [
     { id: 'dashboard', nome: 'Dashboard', icone: '📊' },
     { id: 'vendas', nome: 'Nova Venda', icone: '👓' },
     { id: 'ordens-servico', nome: 'Painel de OS', icone: '📋' }, 
+    { id: 'operacoes', nome: 'Operações', icone: '⚙️' }, // Novo Item
     { id: 'clientes', nome: 'Clientes', icone: '👥' },
     { id: 'produtos', nome: 'Catálogo', icone: '📦' },
     { id: 'despesas', nome: 'Despesas', icone: '💸' },
