@@ -34,24 +34,26 @@ export default function HomeLoja() {
     cpf: clienteLogado?.cpf || '' 
   });
 
-  // BUSCA OS PEDIDOS DO CLIENTE LOGADO (Atualizado com VITE_API_URL)
+  // BUSCA OS PEDIDOS DO CLIENTE LOGADO 
+  const buscarPedidos = async () => {
+    if (!clienteLogado?.cpf) return; // Proteção extra
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`);
+      if (res.ok) {
+        const todosPedidos = await res.json();
+        const pedidosDoCliente = todosPedidos.filter(p => p.clienteCpf === clienteLogado.cpf);
+        setMeusPedidos(pedidosDoCliente);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar histórico de pedidos", err);
+    }
+  };
+
   useEffect(() => {
-    if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado?.cpf) {
-      const buscarPedidos = async () => {
-        try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`);
-          if (res.ok) {
-            const todosPedidos = await res.json();
-            const pedidosDoCliente = todosPedidos.filter(p => p.clienteCpf === clienteLogado.cpf);
-            setMeusPedidos(pedidosDoCliente);
-          }
-        } catch (err) {
-          console.error("Erro ao buscar histórico de pedidos", err);
-        }
-      };
+    if (abaAtiva === 'MEUS_PEDIDOS') {
       buscarPedidos();
     }
-  }, [abaAtiva, clienteLogado]);
+  }, [abaAtiva]); 
 
   // FUNÇÕES AUXILIARES E MÁSCARAS
   const handleMascaraTel = (v) => {
@@ -106,7 +108,7 @@ export default function HomeLoja() {
 
   const valorTotalCarrinho = carrinho.reduce((total, item) => total + Number(item.preco), 0);
 
-  // INTEGRAÇÃO COM BACKEND: FINALIZAR PEDIDO (Atualizado com VITE_API_URL)
+  // INTEGRAÇÃO COM BACKEND: FINALIZAR PEDIDO
   const processarPedido = async (e) => {
     e.preventDefault();
     setProcessando(true);
@@ -141,6 +143,28 @@ export default function HomeLoja() {
       alert("Erro ao conectar com o servidor. Verifique sua internet.");
     } finally {
       setProcessando(false);
+    }
+  };
+
+  // 🟢 NOVO: Função para o cliente cancelar seu próprio pedido
+  const cancelarPedido = async (pedidoId) => {
+    if (!window.confirm("Deseja realmente cancelar este pedido?")) return;
+    
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online/${pedidoId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CANCELADO' })
+      });
+      if (res.ok) {
+        alert("Pedido cancelado com sucesso!");
+        buscarPedidos(); // Atualiza a lista na hora
+      } else {
+        alert("Erro ao cancelar o pedido.");
+      }
+    } catch (error) {
+      console.error("Erro ao cancelar:", error);
+      alert("Erro de comunicação com o servidor.");
     }
   };
 
@@ -372,7 +396,7 @@ export default function HomeLoja() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col md:items-end gap-4 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6">
+                    <div className="flex flex-col md:items-end gap-3 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6">
                       <div>
                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest md:text-right mb-0.5">Total</p>
                         <p className="text-2xl font-black text-[#1d3026]">
@@ -380,12 +404,25 @@ export default function HomeLoja() {
                         </p>
                       </div>
 
-                      <button 
-                        onClick={() => avisarWhatsApp(pedido)} 
-                        className="w-full md:w-auto px-5 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border border-emerald-200 font-bold rounded-xl text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                      >
-                        <span>💬</span> Falar na Loja
-                      </button>
+                      <div className="flex w-full md:w-auto gap-2">
+                        {/* 🟢 BOTÃO DE CANCELAR PARA O CLIENTE */}
+                        {pedido.status === 'AGUARDANDO_PAGAMENTO' && (
+                          <button 
+                            onClick={() => cancelarPedido(pedido._id)} 
+                            className="w-1/3 md:w-auto px-4 py-2.5 bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center"
+                            title="Cancelar este pedido"
+                          >
+                            ❌
+                          </button>
+                        )}
+                        
+                        <button 
+                          onClick={() => avisarWhatsApp(pedido)} 
+                          className="flex-1 md:w-auto px-5 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border border-emerald-200 font-bold rounded-xl text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                        >
+                          <span>💬</span> Falar na Loja
+                        </button>
+                      </div>
                     </div>
 
                   </div>
