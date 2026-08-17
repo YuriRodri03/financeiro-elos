@@ -7,8 +7,8 @@ export default function Operacoes() {
   const [filtroStatus, setFiltroStatus] = useState('TODOS'); // TODOS, AGUARDANDO_PAGAMENTO, PAGO, CONCLUIDO, CANCELADO
   const navigate = useNavigate();
 
-  // 🟢 AJUSTE A URL AQUI SE PRECISAR QUANDO SUBIR PARA A NUVEM
-  const API_URL = 'http://localhost:5000/api';
+  // 🟢 UTILIZA A VARIÁVEL DE AMBIENTE CONFIGURADA (VITE_API_URL)
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const buscarPedidosOnline = async () => {
     try {
