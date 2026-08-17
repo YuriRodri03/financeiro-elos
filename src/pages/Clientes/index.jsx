@@ -383,6 +383,7 @@ export default function Clientes() {
 
       {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
+      <div className="w-full overflow-x-auto no-scrollbar">
         <table className="w-full text-left">
           <thead className="bg-elos-fundo/50 border-b border-gray-100">
             <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -411,6 +412,7 @@ export default function Clientes() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* MODAL DA FICHA DO CLIENTE */}
