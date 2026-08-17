@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys'); // ✅ Otimizado: sem useMultiFileAuthState
 const QRCode = require('qrcode');
-require('dotenv').config();
+
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 app.use(cors());
@@ -13,6 +15,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const MONGO_URI = process.env.MONGODB_URI; 
+
+// ==========================================
+// 🟢 INICIALIZAÇÃO DO SDK DA SUMUP
+// ==========================================
+let sumupClient;
+import('@sumup/sdk').then(module => {
+  sumupClient = new module.default({ apiKey: process.env.SUMUP_API_KEY || "" });
+  console.log("✅ SDK da SumUp iniciado com sucesso!");
+}).catch(err => console.error("❌ Erro ao carregar SumUp SDK:", err));
 
 // --- VARIÁVEIS DE CONTROLE DO ROBÔ ---
 let whatsappClient = null;
@@ -37,7 +48,8 @@ mongoose.connect(MONGO_URI)
 
 // --- MODELOS (SCHEMAS) ---
 const Cliente = mongoose.model('Cliente', {
-  nome: String, cpf: String, dataNascimento: String, telefone: String, email: String, endereco: String, observacoes: String, foto: String 
+  nome: String, cpf: String, dataNascimento: String, telefone: String, email: String, endereco: String, observacoes: String, foto: String,
+  senha: { type: String, default: "" } 
 });
 
 const Venda = mongoose.model('Venda', {
@@ -48,7 +60,6 @@ const Despesa = mongoose.model('Despesa', {
   descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
-// 🟢 A ÚNICA ALTERAÇÃO FOI AQUI ABAIXO (Adicionado o foto: String)
 const Produto = mongoose.model('Produto', {
   nome: String, 
   preco: Number, 
@@ -88,6 +99,20 @@ const OrdemServico = mongoose.model('OrdemServico', {
   observacoes: String,
   consultor: String
 });
+
+// 🟢 ATUALIZADO: MODELO PARA PEDIDOS DA LOJA ONLINE COM SUMUP
+const PedidoOnlineSchema = new mongoose.Schema({
+  numeroPedidoOnline: Number,
+  clienteNome: String,
+  clienteTelefone: String,
+  clienteCpf: String,
+  itens: Array, 
+  valorTotal: Number,
+  status: { type: String, default: 'AGUARDANDO_PAGAMENTO' }, 
+  dataPedido: { type: Date, default: Date.now },
+  sumupCheckoutId: String // 🟢 ID da sessão gerada pela SumUp
+});
+const PedidoOnline = mongoose.model('PedidoOnline', PedidoOnlineSchema);
 
 // --- SCRIPT DE ATUALIZAÇÃO PARA VENDAS ANTIGAS ---
 const atualizarVendasAntigas = async () => {
@@ -193,19 +218,14 @@ app.delete('/api/clientes/:cpf', async (req, res) => {
 });
 
 // --- ROTAS API: VENDAS E ORDENS DE SERVIÇO ---
-
-// ✅ ATUALIZADO: Buscar Vendas e Mesclar com suas Ordens de Serviço
 app.get('/api/vendas', async (req, res) => {
   try {
     const vendas = await Venda.find().lean();
     const ordensServico = await OrdemServico.find().lean();
 
     const vendasComOS = vendas.map(venda => {
-      // Usa o número do pedido ou o ID como âncora
       const identificadorVenda = venda.numeroPedido ? String(venda.numeroPedido) : venda._id.toString();
-      
       const osDestaVenda = ordensServico.filter(os => String(os.numeroPedido) === identificadorVenda);
-      
       return {
         ...venda,
         ordensServico: osDestaVenda.map(os => ({ ...os, idOS: os._id.toString() }))
@@ -239,7 +259,6 @@ app.delete('/api/vendas/:id', async (req, res) => {
 // ROTAS PARA ORDEM DE SERVIÇO
 app.get('/api/ordens_servico', async (req, res) => res.json(await OrdemServico.find()));
 
-// 🟢 ADICIONADO: Buscar uma única OS pelo ID (Necessário para a tela de Edição)
 app.get('/api/ordens_servico/:id', async (req, res) => {
   try {
     const os = await OrdemServico.findById(req.params.id);
@@ -248,7 +267,6 @@ app.get('/api/ordens_servico/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao buscar a OS" }); }
 });
 
-// 🟢 ADICIONADO: Buscar todas as OS atreladas a um número de pedido
 app.get('/api/ordens_servico/pedido/:numeroPedido', async (req, res) => {
   try {
     const ordens = await OrdemServico.find({ numeroPedido: req.params.numeroPedido });
@@ -266,7 +284,6 @@ app.post('/api/ordens_servico', async (req, res) => {
   }
 });
 
-// ✅ Rota de Edição mantida intacta
 app.put('/api/ordens_servico/:id', async (req, res) => {
   try {
     const osEditada = await OrdemServico.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -276,7 +293,6 @@ app.put('/api/ordens_servico/:id', async (req, res) => {
   }
 });
 
-// ✅ Rota de Exclusão mantida intacta
 app.delete('/api/ordens_servico/:id', async (req, res) => {
   try {
     await OrdemServico.findByIdAndDelete(req.params.id);
@@ -372,6 +388,73 @@ app.put('/api/produtos/:id', async (req, res) => {
 });
 app.delete('/api/produtos/:id', async (req, res) => {
   try { await Produto.findByIdAndDelete(req.params.id); res.json({ message: "Removido" }); } catch (err) { res.status(500).json({ error: "Erro" }); }
+});
+
+// ==========================================
+// 🟢 ROTAS DA LOJA VIRTUAL E INTEGRAÇÃO SUMUP
+// ==========================================
+
+// Rota para o seu painel ver os pedidos pendentes
+app.get('/api/pedidos_online', async (req, res) => {
+  try {
+    const pedidos = await PedidoOnline.find().sort({ dataPedido: -1 });
+    res.json(pedidos);
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar pedidos online" }); }
+});
+
+// 🟢 Rota para a loja online gerar o Checkout na SumUp e salvar no banco
+app.post('/api/pedidos_online', async (req, res) => {
+  try {
+    // Busca o último número de pedido online para gerar a sequência
+    const ultimoPedido = await PedidoOnline.findOne().sort({ numeroPedidoOnline: -1 });
+    const proximoNumeroOnline = ultimoPedido && ultimoPedido.numeroPedidoOnline ? ultimoPedido.numeroPedidoOnline + 1 : 1000;
+    
+    let checkoutId = null;
+
+    // Se a SumUp estiver configurada no .env, cria a sessão de pagamento
+    if (sumupClient) {
+      try {
+        const sumupCheckout = await sumupClient.checkouts.create({
+          amount: req.body.valorTotal,
+          checkout_reference: `ELOS-${proximoNumeroOnline}`,
+          currency: "BRL",
+          merchant_code: process.env.SUMUP_MERCHANT_CODE || "",
+          pay_to_email: process.env.SUMUP_PAY_TO_EMAIL || "",
+          description: `Pedido #${proximoNumeroOnline} - Ótica Elos`,
+        });
+        checkoutId = sumupCheckout.id;
+        console.log(`✅ Checkout SumUp gerado com ID: ${checkoutId}`);
+      } catch (sumupErr) {
+        console.error("❌ Erro ao gerar checkout na SumUp:", sumupErr);
+      }
+    }
+
+    const novoPedido = new PedidoOnline({ 
+      ...req.body, 
+      numeroPedidoOnline: proximoNumeroOnline,
+      sumupCheckoutId: checkoutId 
+    });
+    
+    await novoPedido.save();
+    res.json({ success: true, pedido: novoPedido });
+  } catch (err) { 
+    res.status(500).json({ error: "Erro ao registrar pedido online" }); 
+  }
+});
+
+// Rota para aprovar ou rejeitar pedido no painel
+app.patch('/api/pedidos_online/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const pedidoAtualizado = await PedidoOnline.findByIdAndUpdate(
+      req.params.id, 
+      { status }, 
+      { new: true }
+    );
+    res.json(pedidoAtualizado);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao atualizar status do pedido online" });
+  }
 });
 
 // ==========================================

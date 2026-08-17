@@ -3,7 +3,9 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
+import HomeLoja from './pages/Loja';
 import Dashboard from './pages/Dashboard';
+import Operacoes from './pages/Operacoes';
 import Vendas from './pages/Vendas';
 import Clientes from './pages/Clientes';
 import RelatorioInadimplencia from './pages/Relatorios';
@@ -15,13 +17,11 @@ import Navbar from './components/Navbar';
 
 import NovaOrdemServico from './pages/OrdemServico/index'; 
 import PainelOS from './pages/PainelOS'; 
-
-// 🟢 NOVO: Importando a página de Editar Venda
 import EditarVenda from './pages/EditarVenda/index'; 
 
 import './index.css'; 
 
-// --- COMPONENTE DO EFEITO DE FOLHAS (Mantido) ---
+// --- COMPONENTE DO EFEITO DE FOLHAS ---
 function FolhasCaindo() {
   const folhas = Array.from({ length: 25 }); 
   
@@ -92,22 +92,23 @@ function ConteudoAbasPersistentes() {
       <div style={{ display: currentPath === '/relatorios' ? 'block' : 'none' }}>
         <RelatorioInadimplencia />
       </div>
-      
       <div style={{ display: currentPath === '/ordens-servico' ? 'block' : 'none' }}>
         <PainelOS />
       </div>
+      <div style={{ display: currentPath === '/operacoes' ? 'block' : 'none' }}>
+        <Operacoes />
+      </div>
 
-      {/* ✅ ADICIONADO: Camada de Rotas Dinâmicas */}
+      {/* Camada de Rotas Dinâmicas Internas do Admin */}
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
-        
-        {/* 🟢 NOVO: Rota para a tela de Editar Venda */}
         <Route path="/vendas/editar/:id" element={<EditarVenda />} />
         
-        {/* "Rotas Fantasmas" para as abas persistentes */}
+        {/* "Rotas Fantasmas" para silenciar os warnings do Router nas abas */}
         <Route path="/" element={null} />
         <Route path="/dashboard" element={null} />
+        <Route path="/operacoes" element={null} />
         <Route path="/vendas" element={null} />
         <Route path="/despesas" element={null} />
         <Route path="/clientes" element={null} />
@@ -116,33 +117,27 @@ function ConteudoAbasPersistentes() {
         <Route path="/relatorios" element={null} />
         <Route path="/ordens-servico" element={null} />
 
-        {/* Se a URL for realmente inválida (ex: /batata), volta para o Dashboard */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );
 }
 
-// --- INTERFACE INTERNA DA NAVBAR INTEGRADA COM AS ROTAS DO ROUTER ---
+// --- INTERFACE INTERNA DA NAVBAR INTEGRADA ---
 function InterfaceSistema({ aoDeslogar }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [modalConfirmSair, setModalConfirmSair] = useState(false);
 
-  // Converte a rota atual do navegador para identificar qual ID da aba está ativo
   const obterAbaInversa = () => {
     const rota = location.pathname;
     if (rota === '/') return 'dashboard';
-    
-    // Ignora a marcação da navbar ao entrar em sub-rotas dinâmicas
     if (rota.startsWith('/nova-os')) return null; 
     if (rota.startsWith('/ordem-servico/editar')) return null; 
-    if (rota.startsWith('/vendas/editar')) return null; // 🟢 NOVO
-    
+    if (rota.startsWith('/vendas/editar')) return null; 
     return rota.replace('/', '');
   };
 
-  // Quando a Navbar manda alterar a aba, nós empurramos a nova rota na URL
   const lidarMudancaAba = (idAba) => {
     if (idAba === 'dashboard') navigate('/');
     else navigate(`/${idAba}`);
@@ -150,7 +145,6 @@ function InterfaceSistema({ aoDeslogar }) {
 
   return (
     <div className="min-h-screen bg-elos-fundo">
-      {/* RENDERIZA A NAVBAR PREMIUM CONTROLADA PELAS ROTAS */}
       <Navbar 
         abaAtual={obterAbaInversa()} 
         setAbaAtiva={lidarMudancaAba} 
@@ -158,7 +152,6 @@ function InterfaceSistema({ aoDeslogar }) {
         onLogout={() => setModalConfirmSair(true)} 
       />
 
-      {/* MODAL DE CONFIRMAÇÃO VISUAL PREMIUM PARA LOGOUT */}
       {modalConfirmSair && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
@@ -186,7 +179,6 @@ function InterfaceSistema({ aoDeslogar }) {
         </div>
       )}
 
-      {/* RENDERIZAÇÃO DAS TELAS PERSISTENTES E DINÂMICAS */}
       <main>
         <ConteudoAbasPersistentes />
       </main>
@@ -197,6 +189,7 @@ function InterfaceSistema({ aoDeslogar }) {
 function AppContent() {
   const [autenticado, setAutenticado] = useState(false);
   const { carregando } = useFinanceiro();
+  const location = useLocation(); // 🟢 AGORA FUNCIONA PORQUE O ROUTER ESTÁ POR FORA!
 
   useEffect(() => {
     const auth = localStorage.getItem('otica_elos_auth');
@@ -213,8 +206,6 @@ function AppContent() {
     localStorage.removeItem('otica_elos_auth');
   };
 
-  if (!autenticado) return <Login onLogin={realizarLogin} />;
-
   if (carregando) {
     return (
       <div className="fixed inset-0 flex flex-col justify-center items-center bg-elos-fundo text-elos-verde z-[9999] overflow-hidden">
@@ -228,17 +219,30 @@ function AppContent() {
     );
   }
 
-  return (
-    <Router>
-      <InterfaceSistema aoDeslogar={realizarLogout} />
-    </Router>
-  );
+  // 🟢 REGRA 1: ROTA PÚBLICA (LOJA VIRTUAL)
+  // Qualquer um (cliente ou não) pode tentar acessar a loja. 
+  // A segurança da loja é tratada dentro do próprio componente HomeLoja.
+  if (location.pathname.startsWith('/loja')) {
+    return <HomeLoja />;
+  }
+
+  // 🟢 REGRA 2: BARREIRA DO ADMIN
+  // Se não for a Loja e não estiver logado como Administrador, exibe o Login.
+  if (!autenticado) {
+    return <Login onLogin={realizarLogin} />;
+  }
+
+  // 🟢 REGRA 3: ACESSO PERMITIDO AO PAINEL INTERNO
+  return <InterfaceSistema aoDeslogar={realizarLogout} />;
 }
 
+// 🟢 O <Router> AGORA ABRAÇA A APLICAÇÃO INTEIRA
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <FinanceiroProvider>
-      <AppContent />
-    </FinanceiroProvider>
+    <Router> 
+      <FinanceiroProvider>
+        <AppContent />
+      </FinanceiroProvider>
+    </Router>
   </React.StrictMode>
 );
