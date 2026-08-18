@@ -368,6 +368,25 @@ app.get('/api/pedidos_online', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao buscar pedidos online" }); }
 });
 
+// 🟢 ROTA QUE ESTAVA FALTANDO! (Cria o pedido novo)
+app.post('/api/pedidos_online', async (req, res) => {
+  try {
+    const ultimoPedido = await PedidoOnline.findOne().sort({ numeroPedidoOnline: -1 });
+    const proximoNumeroOnline = ultimoPedido && ultimoPedido.numeroPedidoOnline ? ultimoPedido.numeroPedidoOnline + 1 : 1000;
+
+    const novoPedido = new PedidoOnline({ 
+      ...req.body, 
+      numeroPedidoOnline: proximoNumeroOnline 
+    });
+    
+    await novoPedido.save();
+    res.json({ success: true, pedido: novoPedido });
+  } catch (err) { 
+    console.error("Erro ao salvar pedido:", err);
+    res.status(500).json({ error: "Erro ao registrar pedido online" }); 
+  }
+});
+
 // 🟢 Rota de Status (Com Exclusão Definitiva para Cancelados e Integração ERP para Concluídos)
 app.patch('/api/pedidos_online/:id/status', async (req, res) => {
   try {
@@ -435,7 +454,6 @@ app.patch('/api/pedidos_online/:id/status', async (req, res) => {
     res.status(500).json({ error: "Erro ao atualizar status do pedido online" });
   }
 });
-
 // ==========================================
 // 🤖 MOTOR DO WHATSAPP
 // ==========================================
