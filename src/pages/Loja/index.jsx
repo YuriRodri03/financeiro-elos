@@ -7,10 +7,9 @@ export default function HomeLoja() {
   const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   
-  // 🟢 PUXA A TAG DA INFINITEPAY DO ARQUIVO .ENV DE FORMA SEGURA
+  // 🟢 TAG DA INFINITEPAY DO .ENV
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
   
-  // ESTADO: Filtros de Categoria
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
@@ -53,7 +52,6 @@ export default function HomeLoja() {
     if (abaAtiva === 'MEUS_PEDIDOS') buscarPedidos();
   }, [abaAtiva]); 
 
-  // MÁSCARAS
   const handleMascaraTel = (v) => {
     let valor = v.replace(/\D/g, '');
     if (valor.length > 11) valor = valor.substring(0, 11);
@@ -81,7 +79,6 @@ export default function HomeLoja() {
     }
   };
 
-  // FILTRAGEM INTELIGENTE
   const produtosLoja = useMemo(() => {
     let filtrados = produtos.filter(p => p.quantidade > 0 && p.categoria === 'ARMAÇÃO');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
@@ -250,7 +247,6 @@ export default function HomeLoja() {
 
       {abaAtiva === 'VITRINE' ? (
         <>
-          {/* HERO BANNER */}
           <div className="bg-[#1d3026] text-white pt-24 pb-16 px-4 relative overflow-hidden shadow-inner">
             <div className="absolute inset-0 pointer-events-none opacity-20">
                <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#c5a880] rounded-full blur-[100px]"></div>
@@ -268,7 +264,6 @@ export default function HomeLoja() {
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-20">
             <div className="flex flex-col lg:flex-row gap-8 items-start">
               
-              {/* MENU LATERAL DE CATEGORIAS */}
               <aside className="w-full lg:w-64 shrink-0 bg-white p-6 rounded-[2rem] shadow-lg border border-gray-100 lg:sticky lg:top-28">
                 <h3 className="font-tradicional text-xl text-[#1d3026] italic font-bold mb-6 border-b border-gray-100 pb-4">Categorias</h3>
                 <div className="flex flex-row lg:flex-col gap-3 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 no-scrollbar">
@@ -288,7 +283,6 @@ export default function HomeLoja() {
                 </div>
               </aside>
 
-              {/* GRID DE PRODUTOS */}
               <div className="flex-1 w-full">
                 <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4">
                   <div>
@@ -365,7 +359,6 @@ export default function HomeLoja() {
           </main>
         </>
       ) : (
-        /* ABA: HISTÓRICO DE PEDIDOS */
         <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 animate-in fade-in duration-300">
           <div className="flex flex-col items-center mb-10">
             <h2 className="text-3xl font-tradicional text-[#1d3026] italic">Seu Histórico</h2>
@@ -443,7 +436,6 @@ export default function HomeLoja() {
         </main>
       )}
 
-      {/* OVERLAY DO CARRINHO */}
       {mostrarCarrinho && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => { if(!processando) setMostrarCarrinho(false) }}></div>
@@ -532,66 +524,62 @@ export default function HomeLoja() {
                 </form>
               )}
 
-              {/* 🟢 TELA DE SUCESSO E PAGAMENTO INFINITEPAY COM VARIÁVEL OCULTA */}
+              {/* 🟢 TELA DE SUCESSO PREMIUM REFORMULADA */}
               {etapaCheckout === 2 && pedidoFinalizado && (
-                <div className="text-center py-6 flex flex-col h-full animate-in zoom-in-95 duration-500">
-                  <div className="w-16 h-16 bg-[#1d3026] text-[#c5a880] rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg shadow-[#1d3026]/20">✓</div>
-                  <h3 className="font-tradicional text-2xl italic text-[#1d3026] mb-1">Pedido Registrado!</h3>
-                  <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-6">Identificador: #{pedidoFinalizado.numeroPedidoOnline}</p>
+                <div className="text-center flex flex-col h-full animate-in zoom-in-95 duration-500 pt-4">
+                  
+                  {/* Ícone de Sucesso Clean */}
+                  <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm relative">
+                    <span className="text-4xl">✨</span>
+                  </div>
+                  
+                  <h3 className="font-tradicional text-3xl italic text-[#1d3026] mb-2">Pedido Criado!</h3>
+                  <p className="text-xs text-gray-500 mb-6 px-4">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi reservado com sucesso.</p>
 
-                  <div className="bg-[#f9f8f6] p-5 rounded-2xl border border-gray-200 mb-6 text-left">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-gray-400 mb-2 border-b border-gray-200 pb-2">Resumo da Seleção</p>
-                    <p className="font-bold text-gray-800 line-clamp-1 text-sm">{pedidoFinalizado.itens[0]?.nome} {pedidoFinalizado.itens.length > 1 && `+ ${pedidoFinalizado.itens.length - 1} itens`}</p>
-                    <p className="text-2xl font-black text-[#1d3026] mt-1 tracking-tight">{Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  {/* Resumo do Pedido Premium */}
+                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-8 text-left relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c5a880]"></div>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-[10px] uppercase font-black tracking-widest text-gray-400">Total a pagar</p>
+                    </div>
+                    <p className="text-3xl font-black text-[#1d3026] tracking-tight mb-2">
+                      {Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                    <p className="text-xs font-medium text-gray-500 line-clamp-1">
+                      Referente a: {pedidoFinalizado.itens[0]?.nome} {pedidoFinalizado.itens.length > 1 && `e mais ${pedidoFinalizado.itens.length - 1} item(ns)`}
+                    </p>
                   </div>
 
                   <div className="mt-auto space-y-4">
                     
-                    <div className="bg-gray-900 border border-gray-800 p-6 rounded-[2rem] relative overflow-hidden text-left shadow-2xl">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-green-500 rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+                      <div className="relative flex justify-center text-sm"><span className="px-4 bg-white text-[#c5a880] text-[10px] font-black uppercase tracking-widest">Finalize sua compra</span></div>
+                    </div>
 
-                      <p className="text-[10px] text-green-400 font-black uppercase tracking-widest mb-4 relative z-10">Pagamento Seguro via InfinitePay</p>
+                    {/* Botão de Pagamento Limpo e Direto */}
+                    <button 
+                      onClick={() => { 
+                        // 🟢 LINK CORRIGIDO PARA O FORMATO PADRÃO DA INFINITEPAY
+                        window.open(`https://pay.infinitepay.io/${infinitePayUser}`, "_blank"); 
+                      }} 
+                      className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-[0.98] text-xs uppercase tracking-widest flex items-center justify-center gap-3 border border-[#1d3026]"
+                    >
+                      <span className="text-lg">💳</span> Pagar via PIX ou Cartão
+                    </button>
 
-                      <div className="bg-black/50 p-4 rounded-2xl border border-gray-800 relative z-10 flex flex-col items-center justify-center mb-5">
-                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Tag da Loja</p>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl md:text-2xl text-white font-black tracking-wider">
-                            ${infinitePayUser}
-                          </span>
-                          <button 
-                            onClick={() => {
-                              navigator.clipboard.writeText(`$${infinitePayUser}`);
-                              alert("Tag copiada! Você pode colar no app da InfinitePay.");
-                            }}
-                            className="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-400 flex items-center justify-center transition-colors"
-                            title="Copiar Tag"
-                          >
-                            📋
-                          </button>
-                        </div>
-                      </div>
+                    <p className="text-[10px] text-gray-400 px-4 leading-relaxed">
+                      Você será redirecionado para o ambiente 100% seguro da InfinitePay.
+                    </p>
 
+                    <div className="pt-2">
                       <button 
-                        onClick={() => { 
-                          window.open(`https://infinitepay.io/@${infinitePayUser}`, "_blank"); 
-                        }} 
-                        className="w-full bg-green-500 hover:bg-green-400 text-gray-900 font-black py-4 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all active:scale-[0.98] text-xs uppercase tracking-widest flex items-center justify-center gap-2 relative z-10"
+                        onClick={() => avisarWhatsApp(pedidoFinalizado)} 
+                        className="w-full bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 font-bold py-3.5 rounded-xl border border-gray-200 hover:border-emerald-200 transition-colors active:scale-[0.98] text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
                       >
-                        <span className="text-lg">💳</span> Acessar Link de Pagamento
+                        <span>💬</span> Enviar Receita / Já Paguei
                       </button>
                     </div>
-
-                    <div className="relative pt-4">
-                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                      <div className="relative flex justify-center text-sm"><span className="px-2 bg-[#f9f8f6] text-gray-400 text-[10px] font-bold uppercase tracking-widest">Após o pagamento</span></div>
-                    </div>
-
-                    <button 
-                      onClick={() => avisarWhatsApp(pedidoFinalizado)} 
-                      className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-4 rounded-xl border border-emerald-200 transition-colors active:scale-[0.98] text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2"
-                    >
-                      <span className="text-base">💬</span> Enviar Receita / Comprovante
-                    </button>
                   </div>
                 </div>
               )}
