@@ -560,9 +560,9 @@ export default function HomeLoja() {
                     {/* Botão de Pagamento Limpo e Direto */}
                     <button 
                       onClick={() => { 
-                        // 🟢 LINK CORRIGIDO PARA O FORMATO PADRÃO DA INFINITEPAY
-                        window.open(`https://pay.infinitepay.io/${infinitePayUser}`, "_blank"); 
-                      }} 
+                      const valorFixo = Number(pedidoFinalizado.valorTotal).toFixed(2).replace('.', ',');
+                      window.open(`https://pay.infinitepay.io/${infinitePayUser}/${valorFixo}`, "_blank"); 
+                    }} 
                       className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-[0.98] text-xs uppercase tracking-widest flex items-center justify-center gap-3 border border-[#1d3026]"
                     >
                       <span className="text-lg">💳</span> Pagar via PIX ou Cartão
