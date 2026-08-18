@@ -2,23 +2,92 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useFinanceiro } from '../../FinanceiroContext';
 import { useNavigate } from 'react-router-dom';
 
+// =======================================================
+// 🟢 COMPONENTE: MODAL DE TERMOS DE SERVIÇO
+// =======================================================
+function ModalTermos({ onClose }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col animate-in zoom-in-95 duration-300">
+        
+        <div className="p-6 md:p-8 border-b border-gray-100 flex justify-between items-center bg-[#f9f8f6] rounded-t-[2rem]">
+          <div>
+            <h2 className="text-2xl font-tradicional italic font-bold text-[#1d3026]">Termos de Serviço</h2>
+            <p className="text-[10px] font-black text-[#c5a880] uppercase tracking-widest mt-1">Ótica Elos E-commerce</p>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shadow-sm text-xl">
+            &times;
+          </button>
+        </div>
+        
+        <div className="p-6 md:p-8 overflow-y-auto flex-1 text-sm text-gray-600 space-y-6 leading-relaxed custom-scrollbar">
+          <div>
+            <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-2">1. Introdução</h3>
+            <p>Bem-vindo ao e-commerce da Ótica Elos. Ao utilizar nossa loja virtual e finalizar uma compra, você concorda automaticamente com as diretrizes e regras estabelecidas neste documento.</p>
+          </div>
+          
+          <div>
+            <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-2">2. Lentes de Grau e Receituário</h3>
+            <p>A confecção de lentes oftálmicas com grau requer o envio de uma receita oftalmológica atualizada (emitida há no máximo 1 ano) através do nosso canal oficial de WhatsApp logo após a compra. A Ótica Elos garante a fidelidade da lente em relação à receita enviada, mas não se responsabiliza por eventuais erros médicos na prescrição.</p>
+          </div>
+          
+          <div>
+            <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-2">3. Prazos, Entregas e Frete</h3>
+            <p>O prazo de produção e entrega começa a ser contabilizado apenas após a confirmação do pagamento e o envio da receita médica (quando aplicável). <strong>Atenção ao Frete:</strong> O valor do frete (por motoboy ou outro meio de envio) <strong>não</strong> está incluso no valor final do pedido online. A taxa de entrega será calculada e cobrada no momento da entrega do seu produto.</p>
+          </div>
+          
+          <div>
+            <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-2">4. Trocas e Devoluções</h3>
+            <p>Aceitamos a devolução de armações (sem grau) no prazo de até 7 dias corridos após o recebimento, desde que o produto retorne na embalagem original e sem marcas de uso. <strong>Importante:</strong> Lentes de grau são produtos personalizados e fabricados sob medida, portanto, não possuem direito a devolução, exceto em casos de defeitos de fabricação comprovados.</p>
+          </div>
+          
+          <div>
+            <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-2">5. Privacidade e Segurança</h3>
+            <p>Seus dados pessoais (como CPF, telefone e endereço) são solicitados com o único propósito de processar seu pedido, emitir a documentação fiscal e realizar a entrega. Suas informações são confidenciais e não serão comercializadas com terceiros.</p>
+          </div>
+        </div>
+        
+        <div className="p-6 border-t border-gray-100 bg-white rounded-b-[2rem] flex justify-end">
+          <button onClick={onClose} className="px-8 py-3.5 bg-[#1d3026] text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#2a4537] active:scale-[0.98] transition-all shadow-md">
+            Estou de Acordo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =======================================================
+// 🟢 COMPONENTE PRINCIPAL: LOJA ONLINE
+// =======================================================
 export default function HomeLoja() {
   const { produtos, carregando } = useFinanceiro();
   const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   
-  // 🟢 TAG DA INFINITEPAY DO .ENV
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
   
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
 
-  useEffect(() => {
-    if (!clienteLogado) navigate('/login');
-  }, [clienteLogado, navigate]);
+  // Estado para controlar a exibição dos Termos de Serviço
+  const [mostrarTermos, setMostrarTermos] = useState(false);
 
-  const [carrinho, setCarrinho] = useState([]);
+  const [carrinho, setCarrinho] = useState(() => {
+    try {
+      const carrinhoSalvo = localStorage.getItem('carrinhoVirtualElos');
+      return carrinhoSalvo ? JSON.parse(carrinhoSalvo) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('carrinhoVirtualElos', JSON.stringify(carrinho));
+  }, [carrinho]);
+
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
   const [etapaCheckout, setEtapaCheckout] = useState(0); 
   const [processando, setProcessando] = useState(false);
@@ -49,9 +118,10 @@ export default function HomeLoja() {
   };
 
   useEffect(() => {
-    if (abaAtiva === 'MEUS_PEDIDOS') buscarPedidos();
-  }, [abaAtiva]); 
+    if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado) buscarPedidos();
+  }, [abaAtiva, clienteLogado]); 
 
+  // MÁSCARAS
   const handleMascaraTel = (v) => {
     let valor = v.replace(/\D/g, '');
     if (valor.length > 11) valor = valor.substring(0, 11);
@@ -158,9 +228,7 @@ export default function HomeLoja() {
         alert("Pedido cancelado!");
         buscarPedidos(); 
       }
-    } catch (error) {
-      alert("Erro de conexão.");
-    }
+    } catch (error) { alert("Erro de conexão."); }
   };
 
   const avisarWhatsApp = (pedidoEspecifico = null) => {
@@ -178,10 +246,21 @@ export default function HomeLoja() {
 
   const handleSair = () => {
     localStorage.removeItem('clienteLogadoElos');
-    navigate('/login');
+    window.location.reload(); 
   };
 
-  if (carregando || !clienteLogado) {
+  const verificarLoginEAvancar = (destino) => {
+    if (clienteLogado) {
+      if (destino === 'HISTORICO') setAbaAtiva('MEUS_PEDIDOS');
+      if (destino === 'CHECKOUT') setEtapaCheckout(1);
+    } else {
+      localStorage.setItem('redirect_pos_login', 'loja');
+      setMostrarCarrinho(false); 
+      navigate('/login'); 
+    }
+  };
+
+  if (carregando) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -195,6 +274,9 @@ export default function HomeLoja() {
   return (
     <div className="min-h-screen bg-[#f9f8f6] font-sans relative">
       
+      {/* Exibe o modal de termos caso o estado seja true */}
+      {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
+
       {/* NAVBAR */}
       <nav className="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-40 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -219,16 +301,30 @@ export default function HomeLoja() {
               </div>
             )}
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 md:gap-6">
+              
               <div className="hidden md:flex flex-col text-right">
-                <span className="text-xs text-gray-500 font-medium">Olá, {clienteLogado.nome.split(' ')[0]}</span>
-                <div className="flex items-center gap-2 mt-0.5 justify-end">
-                  <button onClick={() => setAbaAtiva('MEUS_PEDIDOS')} className="text-[10px] font-bold text-[#c5a880] hover:text-[#9d7d54] uppercase tracking-wider transition-colors">Histórico</button>
-                  <span className="text-gray-300 text-[10px]">|</span>
-                  <button onClick={handleSair} className="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase tracking-wider transition-colors">Sair</button>
-                </div>
+                {clienteLogado ? (
+                  <>
+                    <span className="text-xs text-gray-500 font-medium">Olá, {clienteLogado.nome.split(' ')[0]}</span>
+                    <div className="flex items-center gap-2 mt-0.5 justify-end">
+                      <button onClick={() => verificarLoginEAvancar('HISTORICO')} className="text-[10px] font-bold text-[#c5a880] hover:text-[#9d7d54] uppercase tracking-wider transition-colors">Histórico</button>
+                      <span className="text-gray-300 text-[10px]">|</span>
+                      <button onClick={handleSair} className="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase tracking-wider transition-colors">Sair</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-gray-400 font-medium">Bem-vindo(a) à Ótica Elos</span>
+                    <div className="flex items-center gap-2 mt-0.5 justify-end">
+                      <button onClick={() => verificarLoginEAvancar('VITRINE')} className="text-[10px] font-bold text-[#1d3026] hover:text-[#c5a880] uppercase tracking-wider transition-colors">Fazer Login / Cadastro</button>
+                    </div>
+                  </>
+                )}
               </div>
+
               <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+              
               <button 
                 onClick={() => { setMostrarCarrinho(true); if(etapaCheckout === 2) setEtapaCheckout(0); }} 
                 className="relative p-2 text-[#1d3026] hover:bg-gray-50 rounded-full transition-all"
@@ -299,10 +395,7 @@ export default function HomeLoja() {
                   <div className="text-center py-32 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
                     <span className="text-6xl opacity-20">👓</span>
                     <p className="text-gray-400 mt-6 font-medium text-lg">Nenhuma armação encontrada nesta categoria.</p>
-                    <button 
-                      onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} 
-                      className="mt-4 text-[#c5a880] font-bold uppercase tracking-widest text-xs underline"
-                    >
+                    <button onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} className="mt-4 text-[#c5a880] font-bold uppercase tracking-widest text-xs underline">
                       Limpar Filtros
                     </button>
                   </div>
@@ -369,10 +462,7 @@ export default function HomeLoja() {
             <div className="text-center py-20 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
               <span className="text-5xl opacity-20 block mb-4">📦</span>
               <p className="text-gray-400 italic">Você ainda não realizou nenhuma compra online.</p>
-              <button 
-                onClick={() => setAbaAtiva('VITRINE')} 
-                className="mt-6 px-6 py-3 bg-[#1d3026] text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#2a4537] transition-colors shadow-md"
-              >
+              <button onClick={() => setAbaAtiva('VITRINE')} className="mt-6 px-6 py-3 bg-[#1d3026] text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#2a4537] transition-colors shadow-md">
                 Ir para a Vitrine
               </button>
             </div>
@@ -382,13 +472,10 @@ export default function HomeLoja() {
                 const infoStatus = getTextoStatus(pedido.status);
                 return (
                   <div key={pedido._id} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center hover:shadow-md transition-shadow">
-                    
                     <div className="flex-1 space-y-2 w-full">
                       <div className="flex items-center gap-3 mb-3">
                         <span className="text-xl font-black text-[#1d3026]">#{pedido.numeroPedidoOnline}</span>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${infoStatus.cor}`}>
-                          {infoStatus.texto}
-                        </span>
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${infoStatus.cor}`}>{infoStatus.texto}</span>
                       </div>
                       <p className="text-xs text-gray-500 font-medium">
                         Realizado em: {new Date(pedido.dataPedido).toLocaleDateString('pt-BR')} às {new Date(pedido.dataPedido).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
@@ -406,24 +493,16 @@ export default function HomeLoja() {
                     <div className="flex flex-col md:items-end gap-4 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6">
                       <div>
                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest md:text-right mb-0.5">Total</p>
-                        <p className="text-2xl font-black text-[#1d3026]">
-                          {Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </p>
+                        <p className="text-2xl font-black text-[#1d3026]">{Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
 
                       <div className="flex flex-col sm:flex-row w-full gap-2">
                         {pedido.status === 'AGUARDANDO_PAGAMENTO' && (
-                          <button 
-                            onClick={() => cancelarPedido(pedido._id)} 
-                            className="w-full sm:w-auto px-5 py-3 bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold rounded-xl text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2" 
-                          >
+                          <button onClick={() => cancelarPedido(pedido._id)} className="w-full sm:w-auto px-5 py-3 bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold rounded-xl text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2">
                             <span>❌</span> Cancelar
                           </button>
                         )}
-                        <button 
-                          onClick={() => avisarWhatsApp(pedido)} 
-                          className="w-full sm:w-auto px-6 py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border border-emerald-200 font-bold rounded-xl text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                        >
+                        <button onClick={() => avisarWhatsApp(pedido)} className="w-full sm:w-auto px-6 py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border border-emerald-200 font-bold rounded-xl text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2">
                           <span>💬</span> Falar na Loja
                         </button>
                       </div>
@@ -449,12 +528,7 @@ export default function HomeLoja() {
                 {etapaCheckout === 2 && "Tudo Certo!"}
               </h2>
               {!processando && (
-                <button 
-                  onClick={() => setMostrarCarrinho(false)} 
-                  className="text-[#c5a880] hover:text-white text-3xl leading-none transition-colors"
-                >
-                  &times;
-                </button>
+                <button onClick={() => setMostrarCarrinho(false)} className="text-[#c5a880] hover:text-white text-3xl leading-none transition-colors">&times;</button>
               )}
             </div>
 
@@ -478,12 +552,7 @@ export default function HomeLoja() {
                           <p className="text-[10px] text-gray-400 mt-0.5">Ref: {item.referencia || 'N/A'}</p>
                           <p className="text-sm font-black text-[#1d3026] mt-1">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
-                        <button 
-                          onClick={() => removerDoCarrinho(item._id)} 
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xl"
-                        >
-                          &times;
-                        </button>
+                        <button onClick={() => removerDoCarrinho(item._id)} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xl">&times;</button>
                       </div>
                     ))
                   )}
@@ -509,9 +578,7 @@ export default function HomeLoja() {
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Endereço Completo de Entrega</label>
                     <textarea 
-                      required 
-                      rows="2"
-                      placeholder="Rua, Número, Bairro, CEP..."
+                      required rows="2" placeholder="Rua, Número, Bairro, CEP..."
                       value={dadosCliente.endereco || ''} 
                       onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} 
                       className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm text-gray-800 resize-none" 
@@ -524,59 +591,39 @@ export default function HomeLoja() {
                 </form>
               )}
 
-              {/* 🟢 TELA DE SUCESSO PREMIUM REFORMULADA */}
               {etapaCheckout === 2 && pedidoFinalizado && (
                 <div className="text-center flex flex-col h-full animate-in zoom-in-95 duration-500 pt-4">
-                  
-                  {/* Ícone de Sucesso Clean */}
-                  <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm relative">
-                    <span className="text-4xl">✨</span>
-                  </div>
-                  
+                  <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm relative"><span className="text-4xl">✨</span></div>
                   <h3 className="font-tradicional text-3xl italic text-[#1d3026] mb-2">Pedido Criado!</h3>
                   <p className="text-xs text-gray-500 mb-6 px-4">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi reservado com sucesso.</p>
 
-                  {/* Resumo do Pedido Premium */}
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-8 text-left relative overflow-hidden">
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c5a880]"></div>
-                    <div className="flex justify-between items-center mb-1">
-                      <p className="text-[10px] uppercase font-black tracking-widest text-gray-400">Total a pagar</p>
-                    </div>
-                    <p className="text-3xl font-black text-[#1d3026] tracking-tight mb-2">
-                      {Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                    <p className="text-xs font-medium text-gray-500 line-clamp-1">
-                      Referente a: {pedidoFinalizado.itens[0]?.nome} {pedidoFinalizado.itens.length > 1 && `e mais ${pedidoFinalizado.itens.length - 1} item(ns)`}
-                    </p>
+                    <div className="flex justify-between items-center mb-1"><p className="text-[10px] uppercase font-black tracking-widest text-gray-400">Total a pagar</p></div>
+                    <p className="text-3xl font-black text-[#1d3026] tracking-tight mb-2">{Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <p className="text-xs font-medium text-gray-500 line-clamp-1">Referente a: {pedidoFinalizado.itens[0]?.nome} {pedidoFinalizado.itens.length > 1 && `e mais ${pedidoFinalizado.itens.length - 1} item(ns)`}</p>
                   </div>
 
                   <div className="mt-auto space-y-4">
-                    
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
                       <div className="relative flex justify-center text-sm"><span className="px-4 bg-white text-[#c5a880] text-[10px] font-black uppercase tracking-widest">Finalize sua compra</span></div>
                     </div>
 
-                    {/* Botão de Pagamento Limpo e Direto */}
                     <button 
                       onClick={() => { 
-                      const valorFixo = Number(pedidoFinalizado.valorTotal).toFixed(2).replace('.', ',');
-                      window.open(`https://pay.infinitepay.io/${infinitePayUser}/${valorFixo}`, "_blank"); 
-                    }} 
+                        const valorFixo = Number(pedidoFinalizado.valorTotal).toFixed(2).replace('.', ',');
+                        window.open(`https://pay.infinitepay.io/${infinitePayUser}/${valorFixo}`, "_blank"); 
+                      }} 
                       className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-[0.98] text-xs uppercase tracking-widest flex items-center justify-center gap-3 border border-[#1d3026]"
                     >
                       <span className="text-lg">💳</span> Pagar via PIX ou Cartão
                     </button>
 
-                    <p className="text-[10px] text-gray-400 px-4 leading-relaxed">
-                      Você será redirecionado para o ambiente 100% seguro da InfinitePay.
-                    </p>
+                    <p className="text-[10px] text-gray-400 px-4 leading-relaxed">Você será redirecionado para o ambiente 100% seguro da InfinitePay.</p>
 
                     <div className="pt-2">
-                      <button 
-                        onClick={() => avisarWhatsApp(pedidoFinalizado)} 
-                        className="w-full bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 font-bold py-3.5 rounded-xl border border-gray-200 hover:border-emerald-200 transition-colors active:scale-[0.98] text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
-                      >
+                      <button onClick={() => avisarWhatsApp(pedidoFinalizado)} className="w-full bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 font-bold py-3.5 rounded-xl border border-gray-200 hover:border-emerald-200 transition-colors active:scale-[0.98] text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
                         <span>💬</span> Enviar Receita / Já Paguei
                       </button>
                     </div>
@@ -595,26 +642,15 @@ export default function HomeLoja() {
                 
                 {etapaCheckout === 0 ? (
                   <button 
-                    onClick={() => setEtapaCheckout(1)} 
+                    onClick={() => verificarLoginEAvancar('CHECKOUT')} 
                     className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-[#c5a880] font-bold py-4 rounded-xl shadow-lg shadow-[#1d3026]/20 transition-all active:scale-[0.98] text-xs uppercase tracking-widest border border-[#c5a880]/30"
                   >
                     Avançar para Pagamento
                   </button>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <button 
-                      onClick={() => setEtapaCheckout(0)} 
-                      disabled={processando} 
-                      className="w-full sm:w-1/3 bg-gray-100 text-gray-500 font-bold py-4 rounded-xl transition-all hover:bg-gray-200 text-[10px] uppercase tracking-widest"
-                    >
-                      Revisar
-                    </button>
-                    <button 
-                      type="submit" 
-                      form="formCheckout" 
-                      disabled={processando} 
-                      className="w-full sm:w-2/3 bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#1d3026]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest"
-                    >
+                    <button onClick={() => setEtapaCheckout(0)} disabled={processando} className="w-full sm:w-1/3 bg-gray-100 text-gray-500 font-bold py-4 rounded-xl transition-all hover:bg-gray-200 text-[10px] uppercase tracking-widest">Revisar</button>
+                    <button type="submit" form="formCheckout" disabled={processando} className="w-full sm:w-2/3 bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#1d3026]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest">
                       {processando ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirmar e Pagar'}
                     </button>
                   </div>
@@ -625,18 +661,37 @@ export default function HomeLoja() {
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* FOOTER DA LOJA - COM WHATSAPP E TERMOS LADO A LADO */}
       <footer className="bg-white border-t border-gray-100 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
             <h4 className="font-tradicional text-2xl text-[#1d3026] italic mb-1">Ótica Elos</h4>
             <p className="text-[10px] font-bold text-[#c5a880] uppercase tracking-widest mb-3">E-commerce Oficial</p>
             <p className="text-xs text-gray-500 font-medium">Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE</p>
             <p className="text-xs text-gray-400 mt-1">CNPJ: 52.294.947/0001-56</p>
           </div>
+          
           <div className="flex flex-col items-center md:items-end">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Atendimento ao Cliente</p>
-            <div className="px-5 py-3 bg-gray-50 rounded-xl border border-gray-100 font-bold text-[#1d3026] text-sm">(85) 98550-6571</div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Atendimento e Políticas</p>
+            
+            {/* LADO A LADO */}
+            <div className="flex items-center gap-5">
+              <button 
+                onClick={() => setMostrarTermos(true)} 
+                className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#c5a880] transition-colors underline decoration-gray-300 hover:decoration-[#c5a880] underline-offset-4"
+              >
+                Termos de Serviço
+              </button>
+
+              <a 
+                href="https://wa.me/5585985506571" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 font-bold text-emerald-800 text-xs transition-colors shadow-sm flex items-center gap-2 active:scale-95"
+              >
+                <span className="text-base">💬</span> (85) 98550-6571
+              </a>
+            </div>
           </div>
         </div>
       </footer>

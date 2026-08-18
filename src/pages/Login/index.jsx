@@ -5,16 +5,16 @@ export default function Login({ onLogin }) {
   const navigate = useNavigate();
 
   // CONTROLES DE INTERFACE
-  const [modo, setModo] = useState('LOGIN'); // 'LOGIN' ou 'CADASTRO'
+  const [modo, setModo] = useState('LOGIN'); // 'LOGIN', 'CADASTRO' ou 'ADMIN'
   const [carregando, setCarregando] = useState(false);
 
-  // CAMPOS DE LOGIN
+  // CAMPOS DE LOGIN (CLIENTE OU ADMIN)
   const [loginEmail, setLoginEmail] = useState('');
   const [loginSenha, setLoginSenha] = useState('');
 
   // 🟢 CAMPOS COMPLETOS COM IDENTIFICADOR DE CLIENTE EXISTENTE
   const [formCadastro, setFormCadastro] = useState({
-    _id: null, // null se for cliente 100% novo
+    _id: null,
     nome: '',
     cpf: '',
     dataNascimento: '',
@@ -32,7 +32,6 @@ export default function Login({ onLogin }) {
     setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'erro' }), 4500);
   };
 
-  // MÁSCARAS
   const aplicarMascaraCpf = (valor) => {
     let v = valor.replace(/\D/g, '');
     if (v.length > 11) v = v.substring(0, 11);
@@ -50,21 +49,28 @@ export default function Login({ onLogin }) {
     return v;
   };
 
-  // 🟢 LÓGICA DE LOGIN (Usando VITE_API_URL)
+  // 🟢 LÓGICA DE LOGIN UNIVERSAL
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
 
     const emailTratado = loginEmail.trim().toLowerCase();
 
-    // 1. Acesso do Administrador
-    if ((emailTratado === 'admin' || emailTratado === 'admin@oticaelos.com') && loginSenha === 'elos2026') {
-      onLogin();
-      setCarregando(false);
-      return;
+    // 1. Acesso do Administrador (Se ele estiver no modo ADMIN)
+    if (modo === 'ADMIN') {
+      if ((emailTratado === 'admin' || emailTratado === 'admin@oticaelos.com') && loginSenha === 'elos2026') {
+        onLogin(); // Avisa o main.jsx que o admin entrou
+        navigate('/admin'); // Força a ida para a rota do painel
+        setCarregando(false);
+        return;
+      } else {
+        mostrarToast("Credenciais de gestor inválidas.", "erro");
+        setCarregando(false);
+        return;
+      }
     }
 
-    // 2. Acesso do Cliente
+    // 2. Acesso do Cliente da Loja
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
       if (!res.ok) throw new Error("Erro na resposta do servidor");
@@ -77,8 +83,16 @@ export default function Login({ onLogin }) {
 
       if (clienteEncontrado && clienteEncontrado.senha === loginSenha) {
         localStorage.setItem('clienteLogadoElos', JSON.stringify(clienteEncontrado));
-        mostrarToast(`Bem-vindo(a) de volta, ${clienteEncontrado.nome.split(' ')[0]}!`, "sucesso");
-        setTimeout(() => navigate('/loja'), 1000);
+        
+        // Se ele estava tentando comprar, manda de volta pra loja e abre o checkout
+        const redirectPosLogin = localStorage.getItem('redirect_pos_login');
+        if (redirectPosLogin === 'loja') {
+          localStorage.removeItem('redirect_pos_login');
+          navigate('/');
+        } else {
+          mostrarToast(`Bem-vindo(a) de volta, ${clienteEncontrado.nome.split(' ')[0]}!`, "sucesso");
+          setTimeout(() => navigate('/'), 1000);
+        }
       } else {
         mostrarToast("Credenciais inválidas. Verifique seu e-mail/CPF e senha.", "erro");
       }
@@ -89,30 +103,24 @@ export default function Login({ onLogin }) {
     }
   };
 
-  // 🟢 NOVA LÓGICA: BUSCAR CLIENTE DA LOJA FÍSICA AO DIGITAR O CPF (Usando VITE_API_URL)
   const handleVerificarCpf = async (cpfDigitado) => {
     const cpfLimpo = cpfDigitado.replace(/\D/g, '');
-    
-    // Só pesquisa se o CPF estiver completo
     if (cpfLimpo.length === 11) {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
         const clientes = await res.json();
-        
         const clienteEncontrado = clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfLimpo);
 
         if (clienteEncontrado) {
-          // Se já tem senha, manda fazer login
           if (clienteEncontrado.senha && clienteEncontrado.senha.trim() !== '') {
             mostrarToast("Você já possui uma conta online! Por favor, faça login.", "erro");
             setModo('LOGIN');
             setLoginEmail(clienteEncontrado.email || clienteEncontrado.cpf);
           } else {
-            // Se NÃO tem senha, preenche os dados do banco para ele completar!
             mostrarToast("Encontramos seu cadastro da loja física! Crie uma senha para acessar online.", "sucesso");
             setFormCadastro(prev => ({
               ...prev,
-              _id: clienteEncontrado._id, // Guarda o ID para atualizar depois
+              _id: clienteEncontrado._id,
               nome: clienteEncontrado.nome || '',
               dataNascimento: clienteEncontrado.dataNascimento || '',
               telefone: clienteEncontrado.telefone || '',
@@ -121,16 +129,12 @@ export default function Login({ onLogin }) {
             }));
           }
         } else {
-          // É um cliente 100% novo, limpa o _id caso ele tenha apagado um CPF que existia
           setFormCadastro(prev => ({ ...prev, _id: null }));
         }
-      } catch (error) {
-        console.log("Erro ao verificar CPF existente:", error);
-      }
+      } catch (error) { console.log("Erro ao verificar CPF existente:", error); }
     }
   };
 
-  // 🟢 LÓGICA DE AUTO-CADASTRO (Usando VITE_API_URL)
   const handleCadastroCompleto = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -138,20 +142,17 @@ export default function Login({ onLogin }) {
     const cpfLimpo = formCadastro.cpf.replace(/\D/g, '');
     if (cpfLimpo.length !== 11) {
       mostrarToast("Informe um CPF válido com 11 dígitos.", "erro");
-      setCarregando(false);
-      return;
+      setCarregando(false); return;
     }
 
     if (formCadastro.senha.length < 6) {
       mostrarToast("A senha precisa conter no mínimo 6 caracteres.", "erro");
-      setCarregando(false);
-      return;
+      setCarregando(false); return;
     }
 
     if (formCadastro.senha !== formCadastro.confirmarSenha) {
       mostrarToast("As senhas digitadas não coincidem.", "erro");
-      setCarregando(false);
-      return;
+      setCarregando(false); return;
     }
 
     try {
@@ -168,38 +169,38 @@ export default function Login({ onLogin }) {
 
       let resCadastro;
 
-      // 🟢 Se já tinha o ID (cliente da loja física), nós ATUALIZAMOS (PUT)
       if (formCadastro._id) {
         resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes/${formCadastro._id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payloadCliente)
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadCliente)
         });
       } else {
-        // 🟢 Se for cliente novo, primeiro checamos se o email já existe
         const resClientes = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
         const clientesExistentes = await resClientes.json();
         
         const jaExisteEmail = clientesExistentes.some(c => c.email && c.email.toLowerCase() === formCadastro.email.trim().toLowerCase());
         if (jaExisteEmail) {
           mostrarToast("Este e-mail já está em uso. Tente outro ou acerte sua senha.", "erro");
-          setCarregando(false);
-          return;
+          setCarregando(false); return;
         }
 
-        // Se estiver tudo OK, CRIAMOS o cliente (POST)
         resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payloadCliente)
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadCliente)
         });
       }
 
       if (resCadastro.ok) {
         const clienteSalvo = await resCadastro.json();
         localStorage.setItem('clienteLogadoElos', JSON.stringify(clienteSalvo));
-        mostrarToast(formCadastro._id ? "Cadastro atualizado com sucesso! Acessando vitrine..." : "Conta criada com sucesso! Acessando vitrine...", "sucesso");
-        setTimeout(() => navigate('/loja'), 1200);
+        
+        // Verifica de onde veio
+        const redirectPosLogin = localStorage.getItem('redirect_pos_login');
+        if (redirectPosLogin === 'loja') {
+          localStorage.removeItem('redirect_pos_login');
+          navigate('/');
+        } else {
+          mostrarToast("Conta configurada! Redirecionando...", "sucesso");
+          setTimeout(() => navigate('/'), 1200);
+        }
       } else {
         mostrarToast("Falha ao registrar cadastro. Tente novamente.", "erro");
       }
@@ -211,22 +212,17 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    // 🟢 FUNDO VERDE PROFISSIONAL (Gradiente Escuro Elegante)
     <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans overflow-hidden bg-gradient-to-br from-[#2a4537] via-[#1d3026] to-[#0a140f]">
       
-      {/* Elementos decorativos sutis no fundo */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#3a5a48] rounded-full blur-[120px] opacity-30"></div>
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#15241c] rounded-full blur-[100px] opacity-80"></div>
       </div>
 
-      {/* TOAST FLUTUANTE */}
       {toast.visivel && (
         <div className="fixed top-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${
-            toast.tipo === 'erro' 
-              ? 'bg-red-50 border-red-200 text-red-700' 
-              : 'bg-green-50 border-green-200 text-green-700'
+            toast.tipo === 'erro' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
           }`}>
             <span className="text-xl">{toast.tipo === 'erro' ? '⚠️' : '✨'}</span>
             <p className="text-xs font-bold tracking-wide">{toast.mensagem}</p>
@@ -234,61 +230,56 @@ export default function Login({ onLogin }) {
         </div>
       )}
 
-      {/* 🟢 CARD PRINCIPAL */}
       <div className={`relative z-10 w-full ${modo === 'CADASTRO' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-3xl shadow-2xl overflow-hidden transition-all duration-500`}>
         
-        {/* CABEÇALHO DO CARD */}
-        <div className="pt-10 pb-6 px-8 flex flex-col items-center bg-white border-b border-gray-100">
+        <div className="pt-10 pb-6 px-8 flex flex-col items-center bg-white border-b border-gray-100 relative">
           
-          {/* FAVICON */}
           <img src="/favicon.png" alt="Ótica Elos" className="w-16 h-16 mb-4 object-contain drop-shadow-sm" />
 
           <h1 className="font-tradicional text-3xl sm:text-4xl text-[#1d3026] italic font-bold tracking-tight text-center">
-            Ótica Elos
+            {modo === 'ADMIN' ? 'Painel Gerencial' : 'Ótica Elos'}
           </h1>
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mt-2 text-center">
-            Acesso ao Sistema
+            {modo === 'ADMIN' ? 'Acesso Restrito' : 'Acesso ao Cliente'}
           </p>
 
-          {/* CHAVEADOR DE ABAS */}
-          <div className="flex w-full p-1 bg-gray-50 rounded-xl mt-6 border border-gray-100">
-            <button
-              type="button"
-              onClick={() => setModo('LOGIN')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${
-                modo === 'LOGIN'
-                  ? 'bg-white text-[#1d3026] shadow-sm border border-gray-200/50'
-                  : 'text-gray-400 hover:text-[#1d3026]'
-              }`}
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo('CADASTRO')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${
-                modo === 'CADASTRO'
-                  ? 'bg-white text-[#1d3026] shadow-sm border border-gray-200/50'
-                  : 'text-gray-400 hover:text-[#1d3026]'
-              }`}
-            >
-              Cadastrar
-            </button>
-          </div>
+          {/* CHAVEADOR DE ABAS (SOME SE TIVER NO MODO ADMIN) */}
+          {modo !== 'ADMIN' && (
+            <div className="flex w-full p-1 bg-gray-50 rounded-xl mt-6 border border-gray-100">
+              <button
+                type="button"
+                onClick={() => setModo('LOGIN')}
+                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${
+                  modo === 'LOGIN' ? 'bg-white text-[#1d3026] shadow-sm border border-gray-200/50' : 'text-gray-400 hover:text-[#1d3026]'
+                }`}
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setModo('CADASTRO')}
+                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${
+                  modo === 'CADASTRO' ? 'bg-white text-[#1d3026] shadow-sm border border-gray-200/50' : 'text-gray-400 hover:text-[#1d3026]'
+                }`}
+              >
+                Cadastrar
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* 🟢 FORMULÁRIO 1: LOGIN */}
-        {modo === 'LOGIN' && (
+        {/* 🟢 FORMULÁRIO 1: LOGIN (CLIENTE OU ADMIN) */}
+        {(modo === 'LOGIN' || modo === 'ADMIN') && (
           <form onSubmit={handleLogin} className="p-8 sm:p-10 space-y-5 animate-in fade-in duration-300">
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">
-                E-mail ou CPF
+                {modo === 'ADMIN' ? 'Usuário Gerencial' : 'E-mail ou CPF'}
               </label>
               <input
                 type="text"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="nome@email.com ou 000.000.000-00"
+                placeholder={modo === 'ADMIN' ? "admin" : "nome@email.com ou 000.000.000-00"}
                 required
                 className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400"
               />
@@ -311,14 +302,16 @@ export default function Login({ onLogin }) {
             <button
               type="submit"
               disabled={carregando}
-              className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#1d3026]/20 transition-all duration-300 active:scale-[0.98] mt-4 text-xs uppercase tracking-widest"
+              className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] mt-4 text-xs uppercase tracking-widest ${
+                modo === 'ADMIN' ? 'bg-[#c5a880] hover:bg-[#b0946d] shadow-[#c5a880]/30' : 'bg-[#1d3026] hover:bg-[#2a4537] shadow-[#1d3026]/20'
+              }`}
             >
               {carregando ? 'Processando...' : 'Acessar Conta'}
             </button>
           </form>
         )}
 
-        {/* 🟢 FORMULÁRIO 2: CADASTRO COMPLETO */}
+        {/* 🟢 FORMULÁRIO 2: CADASTRO */}
         {modo === 'CADASTRO' && (
           <form onSubmit={handleCadastroCompleto} className="p-8 sm:p-10 space-y-5 animate-in slide-in-from-right duration-300 max-h-[75vh] overflow-y-auto">
             
@@ -329,7 +322,6 @@ export default function Login({ onLogin }) {
             </div>
 
             <div className="space-y-4">
-              {/* CPF FICA EM CIMA PARA PESQUISAR PRIMEIRO */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">CPF *</label>
@@ -339,7 +331,7 @@ export default function Login({ onLogin }) {
                     onChange={(e) => {
                       const novoCpf = aplicarMascaraCpf(e.target.value);
                       setFormCadastro({ ...formCadastro, cpf: novoCpf });
-                      handleVerificarCpf(novoCpf); // 🟢 Pesquisa automática aqui
+                      handleVerificarCpf(novoCpf);
                     }}
                     placeholder="000.000.000-00"
                     required
@@ -348,7 +340,7 @@ export default function Login({ onLogin }) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Data de Nascimento *</label>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Data Nascimento *</label>
                   <input
                     type="date"
                     value={formCadastro.dataNascimento}
@@ -374,7 +366,7 @@ export default function Login({ onLogin }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">WhatsApp / Celular *</label>
+                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Celular *</label>
                 <input
                   type="tel"
                   value={formCadastro.telefone}
@@ -404,12 +396,11 @@ export default function Login({ onLogin }) {
                 type="text"
                 value={formCadastro.endereco}
                 onChange={(e) => setFormCadastro({ ...formCadastro, endereco: e.target.value })}
-                placeholder="Ex: Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE"
+                placeholder="Rua, Número, Bairro - Cidade"
                 className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm"
               />
             </div>
 
-            {/* SEÇÃO 3: SEGURANÇA */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Criar Senha *</label>
@@ -439,12 +430,27 @@ export default function Login({ onLogin }) {
             <button
               type="submit"
               disabled={carregando}
-              className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md shadow-[#1d3026]/10 transition-all duration-300 active:scale-[0.98] mt-4 text-xs uppercase tracking-widest"
+              className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md transition-all duration-300 active:scale-[0.98] mt-4 text-xs uppercase tracking-widest"
             >
               {carregando ? 'Salvando...' : (formCadastro._id ? 'Atualizar Cadastro e Entrar' : 'Finalizar Cadastro')}
             </button>
           </form>
         )}
+
+        {/* 🟢 BOTÃO SECRETO PARA ADMIN OU VOLTAR */}
+        <div className="py-4 border-t border-gray-100 flex justify-center bg-gray-50">
+          <button 
+            onClick={() => {
+              if (modo === 'ADMIN') setModo('LOGIN');
+              else setModo('ADMIN');
+              setLoginEmail(''); setLoginSenha('');
+            }}
+            className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-[#c5a880] transition-colors"
+          >
+            {modo === 'ADMIN' ? '⬅ Voltar para Login de Clientes' : 'Acesso Restrito'}
+          </button>
+        </div>
+
       </div>
     </div>
   );
