@@ -11,7 +11,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@sumup/sdk": "^0.1.8",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys'); // ✅ Otimizado: sem useMultiFileAuthState
+const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys'); 
 const QRCode = require('qrcode');
 
 const path = require('path');
@@ -17,18 +17,13 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const MONGO_URI = process.env.MONGODB_URI; 
 
 // ==========================================
-// 🟢 INICIALIZAÇÃO DO SDK DA SUMUP
+// 🟢 SUMUP REMOVIDA - PREPARANDO INFINITEPAY
 // ==========================================
-let sumupClient;
-import('@sumup/sdk').then(module => {
-  sumupClient = new module.default({ apiKey: process.env.SUMUP_API_KEY || "" });
-  console.log("✅ SDK da SumUp iniciado com sucesso!");
-}).catch(err => console.error("❌ Erro ao carregar SumUp SDK:", err));
+// O SDK da SumUp foi totalmente retirado. A integração da InfinitePay 
+// será feita via fetch direto na API deles, usando o token do .env.
 
 // --- VARIÁVEIS DE CONTROLE DO ROBÔ ---
 let whatsappClient = null;
-let ultimaDataEnvio = null; 
-let ultimaDataPosVenda = null;
 let statusConexao = 'Iniciando...';
 let qrCodeBase64 = null;
 let idsAniversariantesEnviadosHoje = []; 
@@ -40,8 +35,6 @@ mongoose.connect(MONGO_URI)
     console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
     atualizarVendasAntigas(); 
     inicializarMensagensPadrao(); 
-    
-    // ✅ Inicializa o Baileys automaticamente após a conexão segura com o MongoDB
     inicializarWhatsApp();
   })
   .catch(err => console.error("❌ Erro na conexão:", err));
@@ -61,56 +54,38 @@ const Despesa = mongoose.model('Despesa', {
 });
 
 const Produto = mongoose.model('Produto', {
-  nome: String, 
-  preco: Number, 
-  categoria: String,
-  quantidade: Number,
-  foto: { type: String, default: "" },
-  referencia: { type: String, default: "" }
+  nome: String, preco: Number, categoria: String, quantidade: Number, foto: { type: String, default: "" }, referencia: { type: String, default: "" }
 });
 
 const Configuracao = mongoose.model('Configuracao', {
   chave: String, valor: String
 });
 
-// ✅ NOVO: MODELO DE ORDEM DE SERVIÇO
 const OrdemServico = mongoose.model('OrdemServico', {
-  numeroPedido: String,
-  dataCriacao: String,
-  
-  lente: String,
-  tratamento: String,
-  armacao: String,
-  
+  numeroPedido: String, dataCriacao: String, lente: String, tratamento: String, armacao: String, 
   longe_od_esf: String, longe_od_cil: String, longe_od_eixo: String, longe_od_dnp: String,
   longe_oe_esf: String, longe_oe_cil: String, longe_oe_eixo: String, longe_oe_dnp: String,
-  
   adicao: String,
-  
   co_od_esf: String, co_od_cil: String, co_od_eixo: String, co_od_dnp: String,
   co_oe_esf: String, co_oe_cil: String, co_oe_eixo: String, co_oe_dnp: String,
-  
   perto_od_esf: String, perto_od_cil: String, perto_od_eixo: String, perto_od_dnp: String,
   perto_oe_esf: String, perto_oe_cil: String, perto_oe_eixo: String, perto_oe_dnp: String,
-  
-  medidas_vertical: String, medidas_horizontal: String,
-  medidas_ponte: String, medidas_diag: String,
-  
-  observacoes: String,
-  consultor: String
+  medidas_vertical: String, medidas_horizontal: String, medidas_ponte: String, medidas_diag: String,
+  observacoes: String, consultor: String
 });
 
-// 🟢 ATUALIZADO: MODELO PARA PEDIDOS DA LOJA ONLINE COM SUMUP
+// 🟢 ATUALIZADO: MODELO PARA PEDIDOS DA LOJA ONLINE
 const PedidoOnlineSchema = new mongoose.Schema({
   numeroPedidoOnline: Number,
   clienteNome: String,
   clienteTelefone: String,
   clienteCpf: String,
+  clienteEndereco: String, // Adicionado recentemente
   itens: Array, 
   valorTotal: Number,
   status: { type: String, default: 'AGUARDANDO_PAGAMENTO' }, 
   dataPedido: { type: Date, default: Date.now },
-  sumupCheckoutId: String // 🟢 ID da sessão gerada pela SumUp
+  infinitePayId: String // 🟢 Novo campo para o link da InfinitePay
 });
 const PedidoOnline = mongoose.model('PedidoOnline', PedidoOnlineSchema);
 
@@ -124,7 +99,6 @@ const atualizarVendasAntigas = async () => {
         vendasSemNumero[i].numeroPedido = 2000 + i;
         await vendasSemNumero[i].save();
       }
-      console.log("✅ Vendas antigas updated com sucesso!");
     }
   } catch (err) { console.error("Erro ao atualizar vendas antigas:", err); }
 };
@@ -150,7 +124,7 @@ const inicializarMensagensPadrao = async () => {
 };
 
 // ==========================================
-// 🛠️ ROTAS DE CONTROLE DO WHATSAPP (MIGRADAS PARA BAILEYS)
+// 🛠️ ROTAS DE CONTROLE DO WHATSAPP
 // ==========================================
 app.get('/api/whatsapp/status', (req, res) => {
   res.json({ status: statusConexao, qr: qrCodeBase64 });
@@ -167,7 +141,6 @@ app.post('/api/whatsapp/desconectar', async (req, res) => {
     res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
 
     setTimeout(() => {
-      console.log('🔄 Reiniciando motor pós-logout para disponibilizar novo QR Code...');
       inicializarWhatsApp();
     }, 3000);
   } catch (error) {
@@ -231,7 +204,6 @@ app.get('/api/vendas', async (req, res) => {
         ordensServico: osDestaVenda.map(os => ({ ...os, idOS: os._id.toString() }))
       };
     });
-
     res.json(vendasComOS);
   } catch (err) { 
     res.status(500).json({ error: "Erro ao buscar vendas e OS" }); 
@@ -258,7 +230,6 @@ app.delete('/api/vendas/:id', async (req, res) => {
 
 // ROTAS PARA ORDEM DE SERVIÇO
 app.get('/api/ordens_servico', async (req, res) => res.json(await OrdemServico.find()));
-
 app.get('/api/ordens_servico/:id', async (req, res) => {
   try {
     const os = await OrdemServico.findById(req.params.id);
@@ -266,14 +237,12 @@ app.get('/api/ordens_servico/:id', async (req, res) => {
     res.json(os);
   } catch (err) { res.status(500).json({ error: "Erro ao buscar a OS" }); }
 });
-
 app.get('/api/ordens_servico/pedido/:numeroPedido', async (req, res) => {
   try {
     const ordens = await OrdemServico.find({ numeroPedido: req.params.numeroPedido });
     res.json(ordens);
   } catch (err) { res.status(500).json({ error: "Erro ao buscar OS do pedido" }); }
 });
-
 app.post('/api/ordens_servico', async (req, res) => {
   try {
     const novaOS = new OrdemServico(req.body);
@@ -283,7 +252,6 @@ app.post('/api/ordens_servico', async (req, res) => {
     res.status(500).json({ error: "Erro ao salvar OS" });
   }
 });
-
 app.put('/api/ordens_servico/:id', async (req, res) => {
   try {
     const osEditada = await OrdemServico.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -292,7 +260,6 @@ app.put('/api/ordens_servico/:id', async (req, res) => {
     res.status(500).json({ error: "Erro ao atualizar OS" });
   }
 });
-
 app.delete('/api/ordens_servico/:id', async (req, res) => {
   try {
     await OrdemServico.findByIdAndDelete(req.params.id);
@@ -391,10 +358,9 @@ app.delete('/api/produtos/:id', async (req, res) => {
 });
 
 // ==========================================
-// 🟢 ROTAS DA LOJA VIRTUAL E INTEGRAÇÃO SUMUP
+// 🟢 ROTAS DA LOJA VIRTUAL E INTEGRAÇÃO INFINITEPAY
 // ==========================================
 
-// Rota para o seu painel ver os pedidos pendentes
 app.get('/api/pedidos_online', async (req, res) => {
   try {
     const pedidos = await PedidoOnline.find().sort({ dataPedido: -1 });
@@ -402,73 +368,84 @@ app.get('/api/pedidos_online', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao buscar pedidos online" }); }
 });
 
-// 🟢 Rota para a loja online gerar o Checkout na SumUp e salvar no banco
-app.post('/api/pedidos_online', async (req, res) => {
-  try {
-    // Busca o último número de pedido online para gerar a sequência
-    const ultimoPedido = await PedidoOnline.findOne().sort({ numeroPedidoOnline: -1 });
-    const proximoNumeroOnline = ultimoPedido && ultimoPedido.numeroPedidoOnline ? ultimoPedido.numeroPedidoOnline + 1 : 1000;
-    
-    let checkoutId = null;
-
-    // Se a SumUp estiver configurada no .env, cria a sessão de pagamento
-    if (sumupClient) {
-      try {
-        const sumupCheckout = await sumupClient.checkouts.create({
-          amount: req.body.valorTotal,
-          checkout_reference: `ELOS-${proximoNumeroOnline}`,
-          currency: "BRL",
-          merchant_code: process.env.SUMUP_MERCHANT_CODE || "",
-          pay_to_email: process.env.SUMUP_PAY_TO_EMAIL || "",
-          description: `Pedido #${proximoNumeroOnline} - Ótica Elos`,
-        });
-        checkoutId = sumupCheckout.id;
-        console.log(`✅ Checkout SumUp gerado com ID: ${checkoutId}`);
-      } catch (sumupErr) {
-        console.error("❌ Erro ao gerar checkout na SumUp:", sumupErr);
-      }
-    }
-
-    const novoPedido = new PedidoOnline({ 
-      ...req.body, 
-      numeroPedidoOnline: proximoNumeroOnline,
-      sumupCheckoutId: checkoutId 
-    });
-    
-    await novoPedido.save();
-    res.json({ success: true, pedido: novoPedido });
-  } catch (err) { 
-    res.status(500).json({ error: "Erro ao registrar pedido online" }); 
-  }
-});
-
-// Rota para aprovar ou rejeitar pedido no painel
+// 🟢 Rota de Status (Com Exclusão Definitiva para Cancelados e Integração ERP para Concluídos)
 app.patch('/api/pedidos_online/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
+    const pedidoAnterior = await PedidoOnline.findById(req.params.id);
+    
+    // 💥 MÁGICA: Se o pedido for cancelado, ele é DELETADO do banco de dados na hora.
+    if (status === 'CANCELADO') {
+      await PedidoOnline.findByIdAndDelete(req.params.id);
+      console.log(`🗑️ Pedido Online #${pedidoAnterior.numeroPedidoOnline} excluído permanentemente.`);
+      return res.json({ message: "Pedido excluído com sucesso." });
+    }
+
     const pedidoAtualizado = await PedidoOnline.findByIdAndUpdate(
-      req.params.id, 
-      { status }, 
-      { new: true }
+      req.params.id, { status }, { new: true }
     );
+
+    // Se a venda foi concluída, joga pro histórico do ERP oficial
+    if (status === 'CONCLUIDO' && pedidoAnterior.status !== 'CONCLUIDO') {
+      let clienteExiste = await Cliente.findOne({ cpf: pedidoAtualizado.clienteCpf });
+      if (!clienteExiste) {
+        clienteExiste = new Cliente({
+          nome: pedidoAtualizado.clienteNome,
+          cpf: pedidoAtualizado.clienteCpf,
+          telefone: pedidoAtualizado.clienteTelefone,
+          endereco: pedidoAtualizado.clienteEndereco || '',
+          observacoes: 'Cliente cadastrado automaticamente via Loja Virtual.'
+        });
+        await clienteExiste.save();
+      }
+
+      const ultimaVenda = await Venda.findOne().sort({ numeroPedido: -1 });
+      const proximoNumero = ultimaVenda && ultimaVenda.numeroPedido ? ultimaVenda.numeroPedido + 1 : 2000;
+
+      const novaVendaOficial = new Venda({
+        numeroPedido: proximoNumero,
+        cliente: pedidoAtualizado.clienteNome,
+        cpf: pedidoAtualizado.clienteCpf,
+        produto: "Compra Online - " + pedidoAtualizado.itens.map(i => i.nome).join(', '),
+        itensCarrinho: pedidoAtualizado.itens,
+        valorTotal: pedidoAtualizado.valorTotal,
+        valorEntrada: pedidoAtualizado.valorTotal, 
+        desconto: 0,
+        parcelas: 1,
+        listaParcelas: [{ 
+          numero: 1, 
+          valor: pedidoAtualizado.valorTotal, 
+          dataVencimento: new Date().toISOString().split('T')[0], 
+          paga: true, 
+          dataPagamento: new Date().toISOString().split('T')[0], 
+          observacao: "Pago via Site" 
+        }],
+        dataVenda: new Date().toISOString().split('T')[0],
+        metodoPagamento: 'Pagamento Digital (Site)',
+        observacoes: `Origem: Pedido Online #${pedidoAtualizado.numeroPedidoOnline}\nEndereço de Entrega: ${pedidoAtualizado.clienteEndereco || 'Não informado'}`
+      });
+
+      await novaVendaOficial.save();
+      console.log(`✅ Pedido Online #${pedidoAtualizado.numeroPedidoOnline} convertido em Venda Oficial #${proximoNumero}!`);
+    }
+
     res.json(pedidoAtualizado);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Erro ao atualizar status do pedido online" });
   }
 });
 
 // ==========================================
-// 🤖 MOTOR DO WHATSAPP (MIGRAÇÃO DE STORAGE MONGODB + KEEP ALIVE)
+// 🤖 MOTOR DO WHATSAPP
 // ==========================================
 async function inicializarWhatsApp() {
   try {
-    // 1. Carrega as credenciais puras direto da coleção do MongoDB
     const registroSessao = await Configuracao.findOne({ chave: 'whatsapp_session_creds' });
     
     let credsCarregadas = null;
     if (registroSessao && registroSessao.valor) {
       try {
-        // 🔥 RECONSTRUTOR BINÁRIO: O JSON.parse reconverte textão em Buffers para evitar erro de Handshake
         credsCarregadas = JSON.parse(registroSessao.valor, (key, value) => {
           if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
             return Buffer.from(value.data);
@@ -476,27 +453,17 @@ async function inicializarWhatsApp() {
           return value;
         });
       } catch (e) {
-        console.log("⚠️ Erro ao decodificar chaves antigas do MongoDB, iniciando limpo...");
+        console.log("⚠️ Erro ao decodificar chaves antigas, iniciando limpo...");
       }
     }
 
-    // Importação dinâmica para compatibilidade com o Baileys estruturado
     const { initAuthCreds } = require('@whiskeysockets/baileys');
 
     const state = {
       creds: credsCarregadas || initAuthCreds(),
-      keys: {
-        get: (type, ids) => {
-          const data = {};
-          return data;
-        },
-        set: (data) => {
-          // Processado de forma transparente via creds.update
-        }
-      }
+      keys: { get: () => ({}), set: () => {} }
     };
 
-    // Função interna que salva o estado estruturado de login no MongoDB
     const guardarSessaoNoMongo = async () => {
       try {
         const textoSessao = JSON.stringify(state.creds);
@@ -505,22 +472,15 @@ async function inicializarWhatsApp() {
           { valor: textoSessao },
           { upsert: true }
         );
-        console.log("💾 [MongoDB] Chaves de pareamento atualizadas na nuvem com sucesso!");
-      } catch (err) {
-        console.error("❌ [Erro Persistência] Falha ao injetar chaves no MongoDB:", err.message);
-      }
+      } catch (err) { console.error("❌ Falha ao injetar chaves no MongoDB:", err.message); }
     };
 
     whatsappClient = makeWASocket({
       auth: state,
       printQRInTerminal: false,
       defaultQueryTimeoutMs: undefined,
-      keepAliveIntervalMs: 30000, // 🔥 Canal de batimento cardíaco ativo de 30s contra quedas abruptas
-      options: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      }
+      keepAliveIntervalMs: 30000, 
+      options: { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }
     });
 
     whatsappClient.ev.on('connection.update', async (update) => {
@@ -528,37 +488,26 @@ async function inicializarWhatsApp() {
 
       if (qr) {
         statusConexao = 'Aguardando Leitura do QR Code';
-        try {
-          qrCodeBase64 = await QRCode.toDataURL(qr);
-        } catch (err) { console.error('Erro ao gerar string do QR Code:', err); }
+        try { qrCodeBase64 = await QRCode.toDataURL(qr); } catch (err) {}
       }
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const foiDeslogado = statusCode === DisconnectReason.loggedOut || statusCode === 401;
         
-        console.log(`Conexão fechada. Código: ${statusCode}. Foi deslogado? ${foiDeslogado}`);
         statusConexao = 'Desconectado';
         qrCodeBase64 = null;
 
         if (foiDeslogado) {
-          console.log('🧹 Limpando registro de chaves obsoletas do MongoDB...');
-          try {
-            await Configuracao.deleteOne({ chave: 'whatsapp_session_creds' });
-            console.log('✅ Base limpa para nova sincronização!');
-          } catch (e) { console.log('Erro ao limpar chave do MongoDB:', e.message); }
-          
+          try { await Configuracao.deleteOne({ chave: 'whatsapp_session_creds' }); } catch (e) {}
           setTimeout(() => inicializarWhatsApp(), 2000);
         } else {
-          // Se caiu apenas por oscilação normal da nuvem Render, reata usando o token salvo
           inicializarWhatsApp(); 
         }
-        
       } else if (connection === 'open') {
         statusConexao = 'Conectado';
         qrCodeBase64 = null;
-        console.log('✅ WhatsApp conectado com sucesso via Baileys na Ótica Elos!');
-
+        console.log('✅ WhatsApp conectado com sucesso!');
         setTimeout(() => {
           verificarAniversariantesDoDia();
           verificarPosVendaTrintaDias();
@@ -566,7 +515,6 @@ async function inicializarWhatsApp() {
       }
     });
 
-    // Registra a chave sempre que o WhatsApp renovar os tokens internos
     whatsappClient.ev.on('creds.update', async () => {
       await guardarSessaoNoMongo();
     });
@@ -598,27 +546,18 @@ async function verificarAniversariantesDoDia() {
   const diaHoje = String(hoje.getDate()).padStart(2, '0');
   const hojeDataCompleta = `${hoje.getFullYear()}-${mesHoje}-${diaHoje}`;
 
-  // Se virou o dia, limpa a lista de quem já recebeu para o novo dia
   if (dataUltimaVerificacaoJanela !== hojeDataCompleta) {
     idsAniversariantesEnviadosHoje = [];
     idsPosVendaEnviadosHoje = [];
     dataUltimaVerificacaoJanela = hojeDataCompleta;
   }
 
-  console.log(`🔄 [Baileys] Checando aniversariantes ativos (Atualizando a cada hora)...`);
-
   try {
     const regexAniversario = new RegExp(`^\\d{4}-${mesHoje}-${diaHoje}$`);
-    // Busca todos os aniversariantes do dia
     const aniversariantes = await Cliente.find({ dataNascimento: regexAniversario });
-
-    // Filtra apenas os que AINDA NÃO receberam a mensagem hoje
     const pendentes = aniversariantes.filter(c => !idsAniversariantesEnviadosHoje.includes(String(c._id)));
 
-    if (pendentes.length === 0) {
-      console.log('📭 Nenhum aniversariante novo pendente nesta hora.');
-      return;
-    }
+    if (pendentes.length === 0) return;
 
     const configMsg = await Configuracao.findOne({ chave: 'msg_aniversario' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! 🎉 Feliz Aniversário da Ótica Elos!";
@@ -633,35 +572,26 @@ async function verificarAniversariantesDoDia() {
 
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        // Usando a variável mensagem correta (tinha um bug no original chamando "message")
         await enviarMensagemTexto(jidValido, mensagem);
-        console.log(`✅ [Baileys Aniversário] Entregue para: ${cliente.nome}`);
         envioSucesso = true;
-      } catch (err) { console.log(`⚠️ Falha primária no envio para ${cliente.nome}`); }
+      } catch (err) {}
 
       if (!envioSucesso && numeroPuro.length === 13) {
         try {
-          const numeroSemNonoDigito = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
-          const jidFallback = await validarNumeroWhatsApp(numeroSemNonoDigito);
-          await enviarMensagemTexto(jidFallback, mensagem);
-          console.log(`✅ [Baileys Fallback] Entregue para: ${cliente.nome}`);
-          envioSucesso = true;
-        } catch (errFallback) { console.error(`❌ Erro total na entrega para ${cliente.nome}`); }
+          const numSND = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
+          const jidFB = await validarNumeroWhatsApp(numSND);
+          await enviarMensagemTexto(jidFB, mensagem);
+        } catch (errFallback) {}
       }
 
-      // Se enviou com sucesso (ou falhou totalmente para não travar o loop), adiciona na lista de ignorados do dia
       idsAniversariantesEnviadosHoje.push(String(cliente._id));
-      
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-  } catch (error) { console.error('❌ Erro na rotina de aniversariantes:', error); }
+  } catch (error) { console.error(error); }
 }
 
 async function verificarPosVendaTrintaDias() {
   if (!whatsappClient || statusConexao !== 'Conectado') return;
-
-  const hoje = new Date();
-  const hojeDataCompleta = hoje.toISOString().split('T')[0];
 
   const dataTrintaDiasAtras = new Date();
   dataTrintaDiasAtras.setDate(dataTrintaDiasAtras.getDate() - 30);
@@ -669,13 +599,9 @@ async function verificarPosVendaTrintaDias() {
 
   try {
     const vendasTrintaDias = await Venda.find({ dataVenda: dataAlvoStr });
-    // Filtra apenas as vendas que ainda não tiveram pós-venda disparado hoje
     const pendentes = vendasTrintaDias.filter(v => !idsPosVendaEnviadosHoje.includes(String(v._id)));
 
-    if (pendentes.length === 0) {
-      console.log('📭 Nenhuma venda pendente de pós-venda nesta hora.');
-      return;
-    }
+    if (pendentes.length === 0) return;
 
     const configMsg = await Configuracao.findOne({ chave: 'msg_pos_venda' });
     const templateBase = configMsg ? configMsg.valor : "Olá, {nome}! Como está seu produto {produto}?";
@@ -687,37 +613,29 @@ async function verificarPosVendaTrintaDias() {
       let numeroPuro = cadastroCliente.telefone.replace(/\D/g, '');
       if (!numeroPuro.startsWith('55')) numeroPuro = `55${numeroPuro}`;
 
-      const mensagem = templateBase
-                        .replace(/{nome}/g, venda.cliente)
-                        .replace(/{produto}/g, venda.produto);
+      const mensagem = templateBase.replace(/{nome}/g, venda.cliente).replace(/{produto}/g, venda.produto);
 
       let envioSucesso = false;
       try {
         const jidValido = await validarNumeroWhatsApp(numeroPuro);
-        // Correção aplicada: estava chamando "message" no código original
         await enviarMensagemTexto(jidValido, mensagem);
-        console.log(`✅ [Baileys Pós-Venda] Entregue para: ${venda.cliente}`);
         envioSucesso = true;
-      } catch (err) { console.log(`⚠️ Falha primária no pós-venda de ${venda.cliente}`); }
+      } catch (err) {}
 
       if (!envioSucesso && numeroPuro.length === 13) {
         try {
-          const numeroSemNonoDigito = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
-          const jidFallback = await validarNumeroWhatsApp(numeroSemNonoDigito);
-          await enviarMensagemTexto(jidFallback, mensagem);
-          console.log(`✅ [Baileys Pós-Venda Fallback] Entregue para: ${venda.cliente}`);
-        } catch (errFallback) { console.error(`❌ Falha crítica no pós-venda de ${venda.cliente}`); }
+          const numSND = numeroPuro.substring(0, 4) + numeroPuro.substring(5);
+          const jidFB = await validarNumeroWhatsApp(numSND);
+          await enviarMensagemTexto(jidFB, mensagem);
+        } catch (errFallback) {}
       }
 
-      // Registra que essa venda específica já foi processada hoje
       idsPosVendaEnviadosHoje.push(String(venda._id));
-
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-  } catch (error) { console.error('❌ Erro na rotina de pós-venda:', error); }
+  } catch (error) { console.error(error); }
 }
 
-// Ciclo de verificação em background de 1 hora
 setInterval(() => {
   verificarAniversariantesDoDia();
   verificarPosVendaTrintaDias();
@@ -725,20 +643,10 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 5000;
 
-// ==========================================
-// 🚀 ROTINA CRÍTICA ANTI-SLEEP LOCAL (EXCLUSIVA PARA RENDER)
-// ==========================================
-// Envia uma requisição HTTP para si mesmo localmente a cada 10 minutos para impedir 
-// que a nuvem gratuita do Render congele o processo Node.js e derrube o chip.
 setInterval(async () => {
   try {
-    const urlAutoPingLocal = `http://localhost:${PORT}/`;
-    console.log('💓 [Anti-Sleep] Enviando pulso de atividade interna para manter o robô da Ótica Elos acordado...');
-    // Realiza a chamada utilizando o fetch nativo estável do Node.js
-    await fetch(urlAutoPingLocal);
-  } catch (e) {
-    console.log('⚠️ [Anti-Sleep] Falha temporária no auto-ping, mas o motor continua rodando.');
-  }
-}, 1000 * 60 * 10); // Executa a cada 10 minutos cravados
+    await fetch(`http://localhost:${PORT}/`);
+  } catch (e) {}
+}, 1000 * 60 * 10); 
 
-app.listen(PORT, () => console.log(`🚀 Servidor da Ótica Elos rodando na porta ${PORT} com motor Baileys estável e persistente!`));
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
