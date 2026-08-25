@@ -67,12 +67,13 @@ export default function HomeLoja() {
   const [busca, setBusca] = useState('');
   
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
+  // 🟢 URL DO SERVIDOR PARA BUSCAR FOTOS
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
   
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
 
-  // Estado para controlar a exibição dos Termos de Serviço
   const [mostrarTermos, setMostrarTermos] = useState(false);
 
   const [carrinho, setCarrinho] = useState(() => {
@@ -106,7 +107,7 @@ export default function HomeLoja() {
   const buscarPedidos = async () => {
     if (!clienteLogado?.cpf) return; 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`);
+      const res = await fetch(`${apiUrl}/pedidos_online`);
       if (res.ok) {
         const todosPedidos = await res.json();
         const pedidosDoCliente = todosPedidos.filter(p => p.clienteCpf === clienteLogado.cpf);
@@ -150,7 +151,7 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    let filtrados = produtos.filter(p => p.quantidade > 0 && p.categoria === 'ARMAÇÃO');
+    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria === 'ARMAÇÃO');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(categoriaAtiva.toLowerCase()));
     return filtrados;
@@ -196,7 +197,7 @@ export default function HomeLoja() {
     };
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online`, {
+      const res = await fetch(`${apiUrl}/pedidos_online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -219,7 +220,7 @@ export default function HomeLoja() {
   const cancelarPedido = async (pedidoId) => {
     if (!window.confirm("Deseja cancelar este pedido?")) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/pedidos_online/${pedidoId}/status`, {
+      const res = await fetch(`${apiUrl}/pedidos_online/${pedidoId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'CANCELADO' })
@@ -403,8 +404,11 @@ export default function HomeLoja() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                     {produtosLoja.map((produto) => {
                       const noCarrinho = carrinho.some(item => item._id === (produto._id || produto.id));
+                      const productId = produto._id || produto.id;
+                      
+                      // 🟢 MÁGICA DA IMAGEM: A loja agora busca a foto na rota otimizada!
                       return (
-                        <div key={produto._id || produto.id} className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 group hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
+                        <div key={productId} className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 group hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
                           
                           {produto.referencia && (
                             <div className="absolute top-4 left-4 z-10 bg-[#c5a880] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-md">
@@ -413,11 +417,18 @@ export default function HomeLoja() {
                           )}
                           
                           <div className="aspect-[4/3] bg-gradient-to-b from-[#f9f8f6] to-white relative overflow-hidden flex items-center justify-center p-8">
-                            {produto.foto ? (
-                              <img src={produto.foto} alt={produto.nome} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 ease-out drop-shadow-xl"/>
-                            ) : (
-                              <span className="text-7xl opacity-10">👓</span>
-                            )}
+                            <img 
+                              src={`${apiUrl}/produtos/${productId}/foto`} 
+                              alt={produto.nome} 
+                              onError={(e) => {
+                                e.target.onerror = null; 
+                                e.target.style.display = 'none'; // Se não tiver foto, esconde a img quebrada
+                                e.target.nextSibling.style.display = 'block'; // Mostra o emoji de óculos
+                              }}
+                              className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 ease-out drop-shadow-xl"
+                            />
+                            {/* Emoji de óculos que só aparece se a imagem falhar */}
+                            <span className="text-7xl opacity-10 hidden absolute">👓</span>
                           </div>
                           
                           <div className="p-6 flex flex-col flex-1">
@@ -545,7 +556,11 @@ export default function HomeLoja() {
                     carrinho.map(item => (
                       <div key={item._id} className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 hover:border-gray-200 transition-colors">
                         <div className="w-16 h-16 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100 p-2">
-                          {item.foto ? <img src={item.foto} className="w-full h-full object-contain" /> : <span className="opacity-20">👓</span>}
+                          <img 
+                            src={`${apiUrl}/produtos/${item._id || item.id}/foto`} 
+                            className="w-full h-full object-contain"
+                            onError={(e) => { e.target.style.display='none'; }}
+                          />
                         </div>
                         <div className="flex-1">
                           <h4 className="text-xs font-bold text-gray-800 line-clamp-1">{item.nome}</h4>

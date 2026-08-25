@@ -352,19 +352,34 @@ app.delete('/api/despesas/:id', async (req, res) => {
 });
 
 // --- ROTAS API: PRODUTOS ---
-// --- ROTAS API: PRODUTOS ---
+
+// 1. Rota Geral (Traz a lista rápida, sem a foto pesada)
 app.get('/api/produtos', async (req, res) => {
   try {
-    // 🟢 Busca os produtos, mas pede ao MongoDB para entregar apenas os campos essenciais.
-    // O .select() ignora dados extras e o .lean() diz pro Mongo não perder tempo formatando o dado.
-    const listaProdutos = await Produto.find({}).select('nome preco categoria quantidade foto referencia').lean();
-    
+    const listaProdutos = await Produto.find({})
+      .select('nome preco categoria quantidade referencia') // Removemos a 'foto' daqui
+      .lean();
     res.json(listaProdutos);
   } catch (err) {
-    console.error("❌ ERRO GRAVE NA ROTA DE PRODUTOS:", err);
+    console.error("❌ ERRO NA ROTA DE PRODUTOS:", err);
     res.status(500).json({ error: "Falha ao buscar", detalhes: err.message });
   }
 });
+
+// 2. 🟢 NOVA ROTA: Traz apenas a foto de 1 produto específico
+app.get('/api/produtos/:id/foto', async (req, res) => {
+  try {
+    const produto = await Produto.findById(req.params.id).select('foto').lean();
+    if (!produto || !produto.foto) {
+      return res.status(404).json({ error: "Foto não encontrada" });
+    }
+    // Envia o texto Base64 bruto para quem pediu
+    res.send(produto.foto);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao carregar foto" });
+  }
+});
+
 app.post('/api/produtos', async (req, res) => res.json(await new Produto(req.body).save()));
 app.put('/api/produtos/:id', async (req, res) => {
   try { res.json(await Produto.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }

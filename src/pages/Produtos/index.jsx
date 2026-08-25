@@ -4,11 +4,13 @@ import { useFinanceiro } from '../../FinanceiroContext';
 export default function Produtos() {
   const { produtos, adicionarProduto, editarProduto, excluirProduto, carregando } = useFinanceiro();
 
+  // 🟢 URL da API para puxar as fotos dinamicamente
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+
   const [abaAtiva, setAbaAtiva] = useState('ARMAÇÃO');
   const [editandoId, setEditandoId] = useState(null);
   const [buscaEstoque, setBuscaEstoque] = useState('');
   
-  // 🟢 NOVO ESTADO: Controla a visibilidade do formulário de cadastro/edição
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
   
   const [novoProduto, setNovoProduto] = useState({
@@ -71,25 +73,41 @@ export default function Produtos() {
     }
   };
 
-  const handleIniciarEdicao = (p) => {
+  // 🟢 NOVO: Função para puxar a foto apenas quando formos editar
+  const handleIniciarEdicao = async (p) => {
     setEditandoId(p._id || p.id);
+    setAbaAtiva(p.categoria); 
+    setMostrarFormCadastro(true); 
+    
+    // Configura os dados básicos que já vieram da lista
     setNovoProduto({
       nome: p.nome,
       referencia: p.referencia || '', 
       preco: aplicarMascaraMoeda((p.preco * 100).toString()),
       categoria: p.categoria,
       quantidade: p.quantidade || '',
-      foto: p.foto || '' 
+      foto: '' // Inicia sem foto
     });
-    setAbaAtiva(p.categoria); 
-    setMostrarFormCadastro(true); // 🟢 Abre o form automaticamente ao clicar em editar
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
+
+    // Vai no servidor e puxa apenas a foto desse óculos para carregar no preview
+    if (p.categoria === 'ARMAÇÃO') {
+      try {
+        const res = await fetch(`${apiUrl}/produtos/${p._id || p.id}/foto`);
+        if (res.ok) {
+          const fotoBase64 = await res.text();
+          setNovoProduto(prev => ({ ...prev, foto: fotoBase64 }));
+        }
+      } catch (err) {
+        console.error("Erro ao puxar foto para edição:", err);
+      }
+    }
   };
 
   const handleCancelarEdicao = () => {
     setEditandoId(null);
     setNovoProduto({ nome: '', referencia: '', preco: '', categoria: abaAtiva, quantidade: '', foto: '' });
-    setMostrarFormCadastro(false); // 🟢 Esconde o form ao cancelar ou concluir a edição
+    setMostrarFormCadastro(false);
   };
 
   const handleAjusteEstoqueRápido = async (produto, delta) => {
@@ -144,7 +162,7 @@ export default function Produtos() {
   if (carregando) return null;
 
   const termoBuscado = buscaEstoque.toLowerCase();
-  const produtosExibidos = produtos.filter(p => {
+  const produtosExibidos = (produtos || []).filter(p => {
     const deFatoNaAba = p.categoria === abaAtiva;
     const nomeBate = (p.nome || '').toLowerCase().includes(termoBuscado);
     const refBate = (p.referencia || '').toLowerCase().includes(termoBuscado);
@@ -186,7 +204,6 @@ export default function Produtos() {
           </div>
           
           <div className="flex flex-col md:flex-row gap-4 w-full lg:w-auto items-center">
-            {/* 🟢 BOTÃO DE ESCONDER/MOSTRAR FORMULÁRIO */}
             <button 
               type="button" 
               onClick={() => {
@@ -215,7 +232,6 @@ export default function Produtos() {
           </div>
         </header>
 
-        {/* 🟢 O FORMULÁRIO AGORA FICA CONDICIONADO A ESTA VARIÁVEL */}
         {mostrarFormCadastro && (
           <div className={`bg-white rounded-[2.5rem] shadow-soft p-8 md:p-12 mb-12 border transition-colors duration-300 ${editandoId ? 'border-elos-bege/40 bg-elos-bege/5' : 'border-elos-bege/10'}`}>
             <h3 className="text-lg font-bold text-elos-verde mb-8 flex items-center gap-3 font-tradicional italic">
@@ -339,60 +355,74 @@ export default function Produtos() {
               </p>
             ) : (
               <div className="divide-y divide-gray-50">
-                {produtosExibidos.map((p) => (
-                  <div key={p._id || p.id} className="p-6 flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-elos-fundo/30 transition-colors">
-                    
-                    <div className="flex items-center gap-4 flex-1 w-full sm:w-auto">
-                      <div className="w-16 h-16 shrink-0 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden bg-gray-50 shadow-sm">
-                        {p.foto ? (
-                          <img src={p.foto} alt={p.nome} className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" onClick={() => window.open(p.foto, '_blank')} />
-                        ) : (
-                          <span className="text-xl opacity-20">{p.categoria === 'LENTE' ? '🔍' : '👓'}</span>
-                        )}
-                      </div>
-                      <div className="text-left">
-                        <div className="flex items-center gap-2 mb-1">
-                          {p.categoria === 'ARMAÇÃO' && p.referencia && (
-                            <span className="bg-elos-bege/10 border border-elos-bege/30 text-elos-bege px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
-                              REF: {p.referencia}
-                            </span>
+                {produtosExibidos.map((p) => {
+                  const productId = p._id || p.id;
+                  
+                  return (
+                    <div key={productId} className="p-6 flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-elos-fundo/30 transition-colors">
+                      
+                      <div className="flex items-center gap-4 flex-1 w-full sm:w-auto">
+                        <div className="w-16 h-16 shrink-0 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden bg-gray-50 shadow-sm relative">
+                          {p.categoria === 'ARMAÇÃO' ? (
+                            <>
+                              <img 
+                                src={`${apiUrl}/produtos/${productId}/foto`} 
+                                alt={p.nome} 
+                                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                                className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 
+                                onClick={(e) => window.open(e.target.src, '_blank')} 
+                              />
+                              <span className="text-xl opacity-20 hidden absolute">👓</span>
+                            </>
+                          ) : (
+                            <span className="text-xl opacity-20">🔍</span>
                           )}
                         </div>
-                        <h4 className="text-lg font-bold text-elos-texto font-tradicional leading-tight">{p.nome}</h4>
-                        <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{p.categoria}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full sm:w-auto mt-4 sm:mt-0">
-                      
-                      {abaAtiva === 'ARMAÇÃO' && (
-                        <div className="flex items-center gap-3 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                          <button onClick={() => handleAjusteEstoqueRápido(p, -1)} className="w-8 h-8 flex items-center justify-center bg-white text-gray-500 rounded-lg shadow-sm font-bold hover:text-red-500 hover:bg-red-50">-</button>
-                          <div className="flex flex-col items-center min-w-[3rem]">
-                            <span className="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">QTD</span>
-                            <span className={`text-lg font-black leading-none ${p.quantidade > 0 ? 'text-elos-verde' : 'text-red-500'}`}>
-                              {p.quantidade || 0}
-                            </span>
+                        
+                        <div className="text-left">
+                          <div className="flex items-center gap-2 mb-1">
+                            {p.categoria === 'ARMAÇÃO' && p.referencia && (
+                              <span className="bg-elos-bege/10 border border-elos-bege/30 text-elos-bege px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
+                                REF: {p.referencia}
+                              </span>
+                            )}
                           </div>
-                          <button onClick={() => handleAjusteEstoqueRápido(p, 1)} className="w-8 h-8 flex items-center justify-center bg-white text-gray-500 rounded-lg shadow-sm font-bold hover:text-elos-verde hover:bg-green-50">+</button>
+                          <h4 className="text-lg font-bold text-elos-texto font-tradicional leading-tight">{p.nome}</h4>
+                          <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{p.categoria}</span>
                         </div>
-                      )}
-
-                      <span className="text-xl font-black text-elos-verde whitespace-nowrap">
-                        {Number(p.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </span>
+                      </div>
                       
-                      <div className="flex items-center gap-2 border-l border-gray-100 pl-4 sm:pl-0 sm:border-none">
-                        <button onClick={() => handleIniciarEdicao(p)} className="bg-elos-fundo hover:bg-elos-bege hover:text-white text-elos-bege px-4 py-2.5 rounded-xl text-xs font-bold transition-all" title="Editar">
-                          ✏️
-                        </button>
-                        <button onClick={() => { abrirConfirmacao(`Deseja realmente remover "${p.nome}" do sistema?`, () => { excluirProduto(p._id || p.id); mostrarToast("Item removido com sucesso!", "sucesso"); }); }} className="bg-red-50 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors" title="Excluir">
-                          🗑️
-                        </button>
+                      <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full sm:w-auto mt-4 sm:mt-0">
+                        
+                        {abaAtiva === 'ARMAÇÃO' && (
+                          <div className="flex items-center gap-3 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                            <button onClick={() => handleAjusteEstoqueRápido(p, -1)} className="w-8 h-8 flex items-center justify-center bg-white text-gray-500 rounded-lg shadow-sm font-bold hover:text-red-500 hover:bg-red-50">-</button>
+                            <div className="flex flex-col items-center min-w-[3rem]">
+                              <span className="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">QTD</span>
+                              <span className={`text-lg font-black leading-none ${p.quantidade > 0 ? 'text-elos-verde' : 'text-red-500'}`}>
+                                {p.quantidade || 0}
+                              </span>
+                            </div>
+                            <button onClick={() => handleAjusteEstoqueRápido(p, 1)} className="w-8 h-8 flex items-center justify-center bg-white text-gray-500 rounded-lg shadow-sm font-bold hover:text-elos-verde hover:bg-green-50">+</button>
+                          </div>
+                        )}
+
+                        <span className="text-xl font-black text-elos-verde whitespace-nowrap">
+                          {Number(p.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                        
+                        <div className="flex items-center gap-2 border-l border-gray-100 pl-4 sm:pl-0 sm:border-none">
+                          <button onClick={() => handleIniciarEdicao(p)} className="bg-elos-fundo hover:bg-elos-bege hover:text-white text-elos-bege px-4 py-2.5 rounded-xl text-xs font-bold transition-all" title="Editar">
+                            ✏️
+                          </button>
+                          <button onClick={() => { abrirConfirmacao(`Deseja realmente remover "${p.nome}" do sistema?`, () => { excluirProduto(productId); mostrarToast("Item removido com sucesso!", "sucesso"); }); }} className="bg-red-50 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors" title="Excluir">
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
