@@ -717,35 +717,37 @@ setInterval(async () => {
 }, 1000 * 60 * 10); 
 
 // =========================================================
-// 🤖 ROTA SECRETA TEMPORÁRIA: MIGRAÇÃO DE FOTOS PARA A NUVEM
+// 🤖 ROTA DE MIGRAÇÃO COM CURSOR (PROTEGIDA CONTRA ERRO 502 / MEMÓRIA)
 // =========================================================
 app.get('/api/migrar-fotos', async (req, res) => {
+  // ⚠️ SUA CHAVE DO IMGBB AQUI:
+  const CHAVE_IMGBB = "COLE_SUA_CHAVE_AQUI";
+
+  // Responde imediatamente ao navegador para a conexão não cair com 502
+  res.send(`
+    <div style="font-family: sans-serif; padding: 30px; text-align: center;">
+      <h1 style="color: #1d3026;">🚀 Migração Iniciada com Sucesso!</h1>
+      <p>O processo agora está rodando em segundo plano de forma segura (1 por vez).</p>
+      <p>Acompanhe o progresso em tempo real na aba de <b>Logs do Render</b>.</p>
+    </div>
+  `);
+
+  console.log("\n🚀 INICIANDO MIGRAÇÃO ULTRA-LEVE DE FOTOS...\n");
+
   try {
-    // COLOQUE SUA CHAVE DO IMGBB AQUI DENTRO DAS ASPAS:
-    const CHAVE_IMGBB = "COLE_SUA_CHAVE_AQUI"; 
-    
-    // Busca todos os produtos que possuem foto cadastrada
-    const produtos = await Produto.find({ foto: { $exists: true, $ne: '' } });
-    
-    let atualizados = 0;
-    
-    // Responde ao navegador na hora para não dar timeout, o robô continua rodando no fundo
-    res.send(`<h1>🚀 Migração Iniciada!</h1> <p>Encontramos ${produtos.length} produtos com fotos.</p> <p>Por favor, abra a aba de <b>Logs do seu servidor no Render</b> para acompanhar o progresso em tempo real.</p>`);
+    // Usa .cursor() para não sobrecarregar a memória RAM do Render
+    const cursor = Produto.find({ foto: { $exists: true, $ne: '' } }).cursor();
+    let contador = 0;
 
-    console.log(`\n🚀 INICIANDO MIGRAÇÃO DE ${produtos.length} FOTOS PARA A NUVEM...\n`);
-
-    for (let p of produtos) {
-      // Se a foto não começar com "http", significa que é o texto Base64 antigo
+    for (let p = await cursor.next(); p != null; p = await cursor.next()) {
       if (p.foto && !p.foto.startsWith('http')) {
-        console.log(`⏳ Migrando foto do produto: ${p.nome}...`);
-        
+        console.log(`⏳ [Item ${contador + 1}] Migrando: ${p.nome}...`);
+
         let base64Data = p.foto;
-        // O ImgBB precisa apenas do texto puro, sem o cabeçalho "data:image/png;base64,"
         if (base64Data.includes(',')) {
           base64Data = base64Data.split(',')[1];
         }
 
-        // Prepara o pacote para enviar à API do ImgBB
         const formData = new URLSearchParams();
         formData.append('image', base64Data);
 
@@ -754,33 +756,29 @@ app.get('/api/migrar-fotos', async (req, res) => {
             method: 'POST',
             body: formData
           });
-          
           const dados = await resposta.json();
 
           if (dados.success) {
-            // Se a nuvem aceitou, atualizamos o produto com o novo Link!
             p.foto = dados.data.url;
             await p.save();
-            atualizados++;
-            console.log(`✅ Sucesso: ${p.nome} -> ${dados.data.url}`);
+            contador++;
+            console.log(`✅ [OK] ${p.nome} -> ${dados.data.url}`);
           } else {
-            console.error(`❌ Falha na nuvem para ${p.nome}`);
+            console.error(`❌ Erro ImgBB para ${p.nome}:`, dados.error?.message || 'Falha no upload');
           }
         } catch (e) {
-           console.error(`❌ Falha de conexão ao migrar ${p.nome}`);
+          console.error(`❌ Falha de conexão ao migrar ${p.nome}`);
         }
-        
-        // Dá uma pausa de 1.5 segundos entre cada foto para o ImgBB não bloquear o servidor
+
+        // Intervalo de 1.5s entre uploads
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
     }
-    
-    console.log(`\n🎉 MIGRAÇÃO CONCLUÍDA! ${atualizados} fotos transformadas em links de nuvem e o MongoDB está super leve de novo!\n`);
 
+    console.log(`\n🎉 MIGRAÇÃO CONCLUÍDA! Total de ${contador} produtos atualizados na nuvem!\n`);
   } catch (err) {
-    console.error("Erro fatal no robô de migração:", err);
+    console.error("❌ Erro fatal durante a migração:", err);
   }
 });
-// =========================================================
 
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
