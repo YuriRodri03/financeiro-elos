@@ -4,8 +4,11 @@ import { useFinanceiro } from '../../FinanceiroContext';
 export default function Produtos() {
   const { produtos, adicionarProduto, editarProduto, excluirProduto, carregando } = useFinanceiro();
 
-  // 🟢 URL da API para puxar as fotos dinamicamente
+  // 🟢 URL da API local (caso ainda exista algum produto muito antigo no formato Base64)
   const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  
+  // 🟢 CHAVE DA NUVEM IMGBB PUXADA DO .ENV
+  const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
 
   const [abaAtiva, setAbaAtiva] = useState('ARMAÇÃO');
   const [editandoId, setEditandoId] = useState(null);
@@ -58,50 +61,56 @@ export default function Produtos() {
     }
   };
 
-  const converterParaBase64 = (file, callback) => {
-    const reader = new FileReader();
-    reader.onloadend = () => { callback(reader.result); };
-    reader.readAsDataURL(file);
-  };
-
-  const handleMudarFotoProduto = (e) => {
+  // 🟢 NOVA LÓGICA DE UPLOAD: ENVIA DIRETO PARA O IMGBB E SALVA APENAS O LINK NO BANCO
+  const handleMudarFotoProduto = async (e) => {
     const file = e.target.files[0];
-    if (file) { 
-      converterParaBase64(file, (base64Img) => {
-        setNovoProduto({ ...novoProduto, foto: base64Img });
+    if (!file) return;
+
+    if (!imgBBKey) {
+      mostrarToast("A chave VITE_IMGBB_API_KEY não foi encontrada no .env!", "erro");
+      return;
+    }
+
+    mostrarToast("Enviando foto para a nuvem... ☁️", "sucesso");
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
+        method: "POST",
+        body: formData,
       });
+
+      const data = await res.json();
+
+      if (data.success) {
+        const linkDaNuvem = data.data.url;
+        setNovoProduto({ ...novoProduto, foto: linkDaNuvem });
+        mostrarToast("Foto carregada com sucesso! ✅", "sucesso");
+      } else {
+        mostrarToast("Erro ao processar imagem na nuvem.", "erro");
+      }
+    } catch (error) {
+      console.error("Erro no upload da imagem:", error);
+      mostrarToast("Falha de conexão com a nuvem de imagens.", "erro");
     }
   };
 
-  // 🟢 NOVO: Função para puxar a foto apenas quando formos editar
-  const handleIniciarEdicao = async (p) => {
+  const handleIniciarEdicao = (p) => {
     setEditandoId(p._id || p.id);
     setAbaAtiva(p.categoria); 
     setMostrarFormCadastro(true); 
     
-    // Configura os dados básicos que já vieram da lista
     setNovoProduto({
       nome: p.nome,
       referencia: p.referencia || '', 
       preco: aplicarMascaraMoeda((p.preco * 100).toString()),
       categoria: p.categoria,
       quantidade: p.quantidade || '',
-      foto: '' // Inicia sem foto
+      foto: p.foto || '' // Como agora é apenas um link, podemos jogar direto no estado!
     });
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
-
-    // Vai no servidor e puxa apenas a foto desse óculos para carregar no preview
-    if (p.categoria === 'ARMAÇÃO') {
-      try {
-        const res = await fetch(`${apiUrl}/produtos/${p._id || p.id}/foto`);
-        if (res.ok) {
-          const fotoBase64 = await res.text();
-          setNovoProduto(prev => ({ ...prev, foto: fotoBase64 }));
-        }
-      } catch (err) {
-        console.error("Erro ao puxar foto para edição:", err);
-      }
-    }
   };
 
   const handleCancelarEdicao = () => {
@@ -244,6 +253,7 @@ export default function Produtos() {
               <div className="md:col-span-12 flex flex-col sm:flex-row items-center gap-6 mb-2 bg-elos-fundo/50 p-5 rounded-[2rem] border border-elos-bege/20">
                 <div className="w-24 h-24 shrink-0 rounded-2xl border-4 border-white shadow-md flex items-center justify-center overflow-hidden bg-gray-100">
                   {novoProduto.foto ? (
+                    // 🟢 PREVIEW DA IMAGEM AGORA LÊ O LINK DO IMGBB DIRETAMENTE
                     <img src={novoProduto.foto} alt="Preview" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-4xl opacity-20">📷</span>
@@ -366,7 +376,8 @@ export default function Produtos() {
                           {p.categoria === 'ARMAÇÃO' ? (
                             <>
                               <img 
-                                src={`${apiUrl}/produtos/${productId}/foto`} 
+                                // 🟢 SUPORTE HÍBRIDO: Aceita imagens novas da nuvem ou puxa imagens antigas do backend!
+                                src={p.foto && p.foto.startsWith('http') ? p.foto : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
                                 alt={p.nome} 
                                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
                                 className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 

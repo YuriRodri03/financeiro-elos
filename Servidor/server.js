@@ -716,4 +716,71 @@ setInterval(async () => {
   } catch (e) {}
 }, 1000 * 60 * 10); 
 
+// =========================================================
+// 🤖 ROTA SECRETA TEMPORÁRIA: MIGRAÇÃO DE FOTOS PARA A NUVEM
+// =========================================================
+app.get('/api/migrar-fotos', async (req, res) => {
+  try {
+    // COLOQUE SUA CHAVE DO IMGBB AQUI DENTRO DAS ASPAS:
+    const CHAVE_IMGBB = "COLE_SUA_CHAVE_AQUI"; 
+    
+    // Busca todos os produtos que possuem foto cadastrada
+    const produtos = await Produto.find({ foto: { $exists: true, $ne: '' } });
+    
+    let atualizados = 0;
+    
+    // Responde ao navegador na hora para não dar timeout, o robô continua rodando no fundo
+    res.send(`<h1>🚀 Migração Iniciada!</h1> <p>Encontramos ${produtos.length} produtos com fotos.</p> <p>Por favor, abra a aba de <b>Logs do seu servidor no Render</b> para acompanhar o progresso em tempo real.</p>`);
+
+    console.log(`\n🚀 INICIANDO MIGRAÇÃO DE ${produtos.length} FOTOS PARA A NUVEM...\n`);
+
+    for (let p of produtos) {
+      // Se a foto não começar com "http", significa que é o texto Base64 antigo
+      if (p.foto && !p.foto.startsWith('http')) {
+        console.log(`⏳ Migrando foto do produto: ${p.nome}...`);
+        
+        let base64Data = p.foto;
+        // O ImgBB precisa apenas do texto puro, sem o cabeçalho "data:image/png;base64,"
+        if (base64Data.includes(',')) {
+          base64Data = base64Data.split(',')[1];
+        }
+
+        // Prepara o pacote para enviar à API do ImgBB
+        const formData = new URLSearchParams();
+        formData.append('image', base64Data);
+
+        try {
+          const resposta = await fetch(`https://api.imgbb.com/1/upload?key=${CHAVE_IMGBB}`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          const dados = await resposta.json();
+
+          if (dados.success) {
+            // Se a nuvem aceitou, atualizamos o produto com o novo Link!
+            p.foto = dados.data.url;
+            await p.save();
+            atualizados++;
+            console.log(`✅ Sucesso: ${p.nome} -> ${dados.data.url}`);
+          } else {
+            console.error(`❌ Falha na nuvem para ${p.nome}`);
+          }
+        } catch (e) {
+           console.error(`❌ Falha de conexão ao migrar ${p.nome}`);
+        }
+        
+        // Dá uma pausa de 1.5 segundos entre cada foto para o ImgBB não bloquear o servidor
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    }
+    
+    console.log(`\n🎉 MIGRAÇÃO CONCLUÍDA! ${atualizados} fotos transformadas em links de nuvem e o MongoDB está super leve de novo!\n`);
+
+  } catch (err) {
+    console.error("Erro fatal no robô de migração:", err);
+  }
+});
+// =========================================================
+
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
