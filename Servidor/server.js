@@ -8,7 +8,11 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*', // Permite que a Vercel acesse o servidor sem restrições
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // --- AJUSTE DE LIMITE PARA FOTOS ---
 app.use(express.json({ limit: '50mb' }));
@@ -351,8 +355,10 @@ app.delete('/api/despesas/:id', async (req, res) => {
 // --- ROTAS API: PRODUTOS ---
 app.get('/api/produtos', async (req, res) => {
   try {
-    // 🟢 CORREÇÃO: Tiramos o .sort() para não estourar a memória de 32MB do MongoDB
-    const listaProdutos = await Produto.find();
+    // 🟢 Busca os produtos, mas pede ao MongoDB para entregar apenas os campos essenciais.
+    // O .select() ignora dados extras e o .lean() diz pro Mongo não perder tempo formatando o dado.
+    const listaProdutos = await Produto.find({}).select('nome preco categoria quantidade foto referencia').lean();
+    
     res.json(listaProdutos);
   } catch (err) {
     console.error("❌ ERRO GRAVE NA ROTA DE PRODUTOS:", err);
