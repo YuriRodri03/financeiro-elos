@@ -348,7 +348,15 @@ app.delete('/api/despesas/:id', async (req, res) => {
 });
 
 // --- ROTAS API: PRODUTOS ---
-app.get('/api/produtos', async (req, res) => res.json(await Produto.find().sort({ nome: 1 })));
+app.get('/api/produtos', async (req, res) => {
+  try {
+    const listaProdutos = await Produto.find().sort({ nome: 1 });
+    res.json(listaProdutos);
+  } catch (err) {
+    console.error("❌ ERRO GRAVE NA ROTA DE PRODUTOS:", err);
+    res.status(500).json({ error: "Falha ao buscar", detalhes: err.message });
+  }
+});
 app.post('/api/produtos', async (req, res) => res.json(await new Produto(req.body).save()));
 app.put('/api/produtos/:id', async (req, res) => {
   try { res.json(await Produto.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch (err) { res.status(500).json({ error: "Erro" }); }
