@@ -53,9 +53,9 @@ const Despesa = mongoose.model('Despesa', {
   descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean
 });
 
-const Produto = mongoose.model('Produto', {
+const Produto = mongoose.model('Produto', new mongoose.Schema({
   nome: String, preco: Number, categoria: String, quantidade: Number, foto: { type: String, default: "" }, referencia: { type: String, default: "" }
-});
+}), 'produtos');
 
 const Configuracao = mongoose.model('Configuracao', {
   chave: String, valor: String
