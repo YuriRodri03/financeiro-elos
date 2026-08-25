@@ -348,9 +348,11 @@ app.delete('/api/despesas/:id', async (req, res) => {
 });
 
 // --- ROTAS API: PRODUTOS ---
+// --- ROTAS API: PRODUTOS ---
 app.get('/api/produtos', async (req, res) => {
   try {
-    const listaProdutos = await Produto.find().sort({ nome: 1 });
+    // 🟢 CORREÇÃO: Tiramos o .sort() para não estourar a memória de 32MB do MongoDB
+    const listaProdutos = await Produto.find();
     res.json(listaProdutos);
   } catch (err) {
     console.error("❌ ERRO GRAVE NA ROTA DE PRODUTOS:", err);
