@@ -721,7 +721,7 @@ setInterval(async () => {
 // =========================================================
 app.get('/api/migrar-fotos', async (req, res) => {
   // ⚠️ SUA CHAVE DO IMGBB AQUI:
-  const CHAVE_IMGBB = "COLE_SUA_CHAVE_AQUI";
+  const CHAVE_IMGBB = "3c462fa1b5015e66e5325f3aef4b8d9b";
 
   // Responde imediatamente ao navegador para a conexão não cair com 502
   res.send(`
