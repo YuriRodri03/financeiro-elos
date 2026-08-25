@@ -366,19 +366,37 @@ app.get('/api/produtos', async (req, res) => {
   }
 });
 
-// 2. 🟢 NOVA ROTA: Traz apenas a foto de 1 produto específico
+// 2. 🟢 NOVA ROTA: Traz apenas a foto e converte para Imagem Real
 app.get('/api/produtos/:id/foto', async (req, res) => {
   try {
     const produto = await Produto.findById(req.params.id).select('foto').lean();
+    
     if (!produto || !produto.foto) {
-      return res.status(404).json({ error: "Foto não encontrada" });
+      return res.status(404).send("Foto não encontrada");
     }
-    // Envia o texto Base64 bruto para quem pediu
-    res.send(produto.foto);
+
+    // Como salvamos as fotos via FileReader no React, elas vêm no formato "data:image/png;base64,iVBORw0KGgo..."
+    // Precisamos separar o tipo da imagem (image/png) do resto dos dados.
+    const partesBase64 = produto.foto.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    
+    if (partesBase64 && partesBase64.length === 3) {
+      const tipoMime = partesBase64[1]; // Pega o formato exato (image/jpeg, image/png)
+      const dadosBinarios = Buffer.from(partesBase64[2], 'base64'); // Converte o texto para imagem real
+      
+      res.set('Content-Type', tipoMime);
+      return res.send(dadosBinarios);
+    } else {
+      // Fallback: se por acaso o dado estiver salvo apenas como texto base64 puro
+      const dadosBinarios = Buffer.from(produto.foto, 'base64');
+      res.set('Content-Type', 'image/jpeg');
+      return res.send(dadosBinarios);
+    }
+    
   } catch (err) {
-    res.status(500).json({ error: "Erro ao carregar foto" });
+    res.status(500).send("Erro ao carregar foto");
   }
 });
+
 
 app.post('/api/produtos', async (req, res) => res.json(await new Produto(req.body).save()));
 app.put('/api/produtos/:id', async (req, res) => {
