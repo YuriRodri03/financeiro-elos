@@ -58,7 +58,13 @@ const Despesa = mongoose.model('Despesa', {
 });
 
 const Produto = mongoose.model('Produto', new mongoose.Schema({
-  nome: String, preco: Number, categoria: String, quantidade: Number, foto: { type: String, default: "" }, referencia: { type: String, default: "" }
+  nome: String, 
+  preco: Number, 
+  categoria: String, 
+  quantidade: Number, 
+  foto: { type: String, default: "" }, 
+  fotos: { type: [String], default: [] },
+  referencia: { type: String, default: "" }
 }), 'produtos');
 
 const Configuracao = mongoose.model('Configuracao', {

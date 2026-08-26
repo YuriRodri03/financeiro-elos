@@ -4,10 +4,7 @@ import { useFinanceiro } from '../../FinanceiroContext';
 export default function Produtos() {
   const { produtos, adicionarProduto, editarProduto, excluirProduto, carregando } = useFinanceiro();
 
-  // 🟢 URL da API local (caso ainda exista algum produto muito antigo no formato Base64)
   const apiUrl = import.meta.env.VITE_API_URL;
-  
-  // 🟢 CHAVE DA NUVEM IMGBB PUXADA DO .ENV
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
 
   const [abaAtiva, setAbaAtiva] = useState('ARMAÇÃO');
@@ -16,14 +13,17 @@ export default function Produtos() {
   
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
   
+  // 🟢 ESTADO ATUALIZADO: 'fotos' agora é um array
   const [novoProduto, setNovoProduto] = useState({
     nome: '',
     referencia: '', 
     preco: '',
     categoria: 'ARMAÇÃO',
     quantidade: '',
-    foto: '' 
+    fotos: [] // Agora suporta galeria
   });
+
+  const [uploadingMultiplo, setUploadingMultiplo] = useState(false);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
@@ -61,40 +61,58 @@ export default function Produtos() {
     }
   };
 
-  // 🟢 NOVA LÓGICA DE UPLOAD: ENVIA DIRETO PARA O IMGBB E SALVA APENAS O LINK NO BANCO
-  const handleMudarFotoProduto = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // 🟢 NOVO UPLOAD MÚLTIPLO DE IMAGENS
+  const handleAdicionarFotoGaleria = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
 
     if (!imgBBKey) {
-      mostrarToast("A chave VITE_IMGBB_API_KEY não foi encontrada no .env!", "erro");
+      mostrarToast("Chave VITE_IMGBB_API_KEY não encontrada!", "erro");
       return;
     }
 
-    mostrarToast("Enviando foto para a nuvem... ☁️", "sucesso");
+    setUploadingMultiplo(true);
+    mostrarToast(`Enviando ${files.length} foto(s) para a nuvem... ☁️`, "sucesso");
 
-    const formData = new FormData();
-    formData.append("image", file);
+    let novosLinks = [];
 
-    try {
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
-        method: "POST",
-        body: formData,
-      });
+    for (let file of files) {
+      const formData = new FormData();
+      formData.append("image", file);
 
-      const data = await res.json();
+      try {
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
+          method: "POST",
+          body: formData,
+        });
 
-      if (data.success) {
-        const linkDaNuvem = data.data.url;
-        setNovoProduto({ ...novoProduto, foto: linkDaNuvem });
-        mostrarToast("Foto carregada com sucesso! ✅", "sucesso");
-      } else {
-        mostrarToast("Erro ao processar imagem na nuvem.", "erro");
+        const data = await res.json();
+        if (data.success) {
+          novosLinks.push(data.data.url);
+        } else {
+          console.error("Erro no ImgBB:", data);
+        }
+      } catch (error) {
+        console.error("Erro na requisição:", error);
       }
-    } catch (error) {
-      console.error("Erro no upload da imagem:", error);
-      mostrarToast("Falha de conexão com a nuvem de imagens.", "erro");
     }
+
+    if (novosLinks.length > 0) {
+      setNovoProduto(prev => ({ ...prev, fotos: [...prev.fotos, ...novosLinks] }));
+      mostrarToast(`${novosLinks.length} foto(s) carregada(s)! ✅`, "sucesso");
+    } else {
+      mostrarToast("Falha no upload das fotos.", "erro");
+    }
+
+    setUploadingMultiplo(false);
+  };
+
+  // Remove uma foto específica da galeria
+  const handleRemoverFoto = (indexRemover) => {
+    setNovoProduto(prev => ({
+      ...prev,
+      fotos: prev.fotos.filter((_, index) => index !== indexRemover)
+    }));
   };
 
   const handleIniciarEdicao = (p) => {
@@ -102,20 +120,26 @@ export default function Produtos() {
     setAbaAtiva(p.categoria); 
     setMostrarFormCadastro(true); 
     
+    // Tratamento híbrido: Se o produto antigo tem só 'foto' (string), colocamos no array 'fotos'
+    let fotosCarregadas = p.fotos || [];
+    if (fotosCarregadas.length === 0 && p.foto) {
+      fotosCarregadas = [p.foto];
+    }
+
     setNovoProduto({
       nome: p.nome,
       referencia: p.referencia || '', 
       preco: aplicarMascaraMoeda((p.preco * 100).toString()),
       categoria: p.categoria,
       quantidade: p.quantidade || '',
-      foto: p.foto || ''
+      fotos: fotosCarregadas
     });
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
 
   const handleCancelarEdicao = () => {
     setEditandoId(null);
-    setNovoProduto({ nome: '', referencia: '', preco: '', categoria: abaAtiva, quantidade: '', foto: '' });
+    setNovoProduto({ nome: '', referencia: '', preco: '', categoria: abaAtiva, quantidade: '', fotos: [] });
     setMostrarFormCadastro(false);
   };
 
@@ -125,7 +149,7 @@ export default function Produtos() {
     
     try {
       await editarProduto(produto._id || produto.id, { ...produto, quantidade: novaQuantidade });
-      mostrarToast(`Estoque de ${produto.nome} atualizado!`, "sucesso");
+      mostrarToast(`Estoque atualizado!`, "sucesso");
     } catch (err) {
       mostrarToast("Erro ao atualizar o estoque.", "erro");
     }
@@ -144,10 +168,11 @@ export default function Produtos() {
       nome: novoProduto.nome.toUpperCase(),
       preco: precoLimpo,
       categoria: novoProduto.categoria,
-      foto: novoProduto.foto 
+      fotos: novoProduto.fotos, // Salva o array de fotos
+      foto: novoProduto.fotos[0] || '' // Mantém compatibilidade antiga (a primeira foto é a capa)
     };
 
-    if (novoProduto.categoria === 'ARMAÇÃO') {
+    if (novoProduto.categoria !== 'LENTE') {
       dadosProduto.quantidade = parseInt(novoProduto.quantidade) || 0;
       dadosProduto.referencia = (novoProduto.referencia || '').toUpperCase();
     } else {
@@ -167,6 +192,22 @@ export default function Produtos() {
       mostrarToast("Erro ao salvar produto.", "erro");
     }
   };
+
+  const getIconeCategoria = (cat) => {
+    switch (cat) {
+      case 'ÓCULOS DE SOL': return '☀️';
+      case 'ACESSÓRIOS': return '👜';
+      case 'LENTE': return '🔍';
+      default: return '👓';
+    }
+  };
+
+  const abasCategorias = [
+    { id: 'ARMAÇÃO', label: '👓 Armações' },
+    { id: 'LENTE', label: '🔍 Lentes' },
+    { id: 'ÓCULOS DE SOL', label: '☀️ Óculos de Sol' },
+    { id: 'ACESSÓRIOS', label: '👜 Acessórios' }
+  ];
 
   if (carregando) return null;
 
@@ -209,7 +250,7 @@ export default function Produtos() {
         <header className="mb-10 text-center md:text-left border-b border-elos-bege/20 pb-6 flex flex-col lg:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="font-tradicional text-4xl text-elos-verde italic">Estoque & Catálogo</h1>
-            <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black">Gerenciamento de Armações e Lentes</p>
+            <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black">Gerenciamento de Produtos</p>
           </div>
           
           <div className="flex flex-col md:flex-row gap-4 w-full lg:w-auto items-center">
@@ -223,23 +264,28 @@ export default function Produtos() {
             >
               {mostrarFormCadastro ? '📁 Ocultar Cadastro' : '➕ Novo Produto'}
             </button>
-
-            <div className="flex bg-white p-1 rounded-2xl border border-elos-bege/20 shadow-sm w-full md:w-auto justify-center">
-              <button 
-                onClick={() => { setAbaAtiva('ARMAÇÃO'); setNovoProduto(prev => ({...prev, categoria: 'ARMAÇÃO'})); }}
-                className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${abaAtiva === 'ARMAÇÃO' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'}`}
-              >
-                👓 Armações
-              </button>
-              <button 
-                onClick={() => { setAbaAtiva('LENTE'); setNovoProduto(prev => ({...prev, categoria: 'LENTE', quantidade: '', referencia: ''})); }}
-                className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${abaAtiva === 'LENTE' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'}`}
-              >
-                🔍 Lentes
-              </button>
-            </div>
           </div>
         </header>
+
+        <div className="flex bg-white p-1.5 rounded-3xl border border-elos-bege/20 shadow-sm mb-8 overflow-x-auto no-scrollbar">
+          {abasCategorias.map(aba => (
+            <button 
+              key={aba.id}
+              onClick={() => { 
+                setAbaAtiva(aba.id); 
+                setNovoProduto(prev => ({
+                  ...prev, 
+                  categoria: aba.id, 
+                  quantidade: aba.id === 'LENTE' ? '' : prev.quantidade, 
+                  referencia: aba.id === 'LENTE' ? '' : prev.referencia
+                })); 
+              }}
+              className={`flex-1 min-w-[140px] px-6 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${abaAtiva === aba.id ? 'bg-elos-verde text-white shadow-md scale-[1.02]' : 'text-gray-400 hover:text-elos-verde hover:bg-elos-fundo'}`}
+            >
+              {aba.label}
+            </button>
+          ))}
+        </div>
 
         {mostrarFormCadastro && (
           <div className={`bg-white rounded-[2.5rem] shadow-soft p-8 md:p-12 mb-12 border transition-colors duration-300 ${editandoId ? 'border-elos-bege/40 bg-elos-bege/5' : 'border-elos-bege/10'}`}>
@@ -250,27 +296,42 @@ export default function Produtos() {
             
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
-              <div className="md:col-span-12 flex flex-col sm:flex-row items-center gap-6 mb-2 bg-elos-fundo/50 p-5 rounded-[2rem] border border-elos-bege/20">
-                <div className="w-24 h-24 shrink-0 rounded-2xl border-4 border-white shadow-md flex items-center justify-center overflow-hidden bg-gray-100">
-                  {novoProduto.foto ? (
-                    // 🟢 PREVIEW DA IMAGEM AGORA LÊ O LINK DO IMGBB DIRETAMENTE
-                    <img src={novoProduto.foto} alt="Preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-4xl opacity-20">📷</span>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 text-center sm:text-left">
-                  <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Imagem do Produto / Catálogo</label>
-                  <div className="relative">
-                    <button type="button" className="px-5 py-2.5 bg-elos-bege text-white rounded-xl text-xs font-bold hover:bg-elos-verde transition-colors shadow-sm">
-                      {novoProduto.foto ? 'Trocar Imagem 📸' : 'Escolher Imagem 📸'}
-                    </button>
-                    <input type="file" accept="image/*" onChange={handleMudarFotoProduto} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+              {/* 🟢 GALERIA DE FOTOS */}
+              <div className="md:col-span-12 flex flex-col gap-4 mb-2 bg-elos-fundo/50 p-6 rounded-[2rem] border border-elos-bege/20">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-elos-bege/20 pb-4">
+                  <div>
+                    <label className="text-xs font-black text-elos-verde uppercase tracking-tighter">Galeria do Produto</label>
+                    <p className="text-[10px] text-gray-500 mt-1">Adicione fotos de vários ângulos (A primeira será a capa).</p>
                   </div>
-                  {novoProduto.foto && (
-                    <button type="button" onClick={() => setNovoProduto({...novoProduto, foto: ''})} className="text-[10px] text-red-400 font-bold hover:text-red-600 transition-colors">
-                      🗑️ Remover imagem atual
+                  
+                  <div className="relative">
+                    <button type="button" disabled={uploadingMultiplo} className="px-6 py-3 bg-elos-bege text-white rounded-xl text-xs font-bold hover:bg-elos-verde transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                      {uploadingMultiplo ? 'Enviando... ⏳' : '➕ Adicionar Fotos'}
                     </button>
+                    <input type="file" multiple accept="image/*" onChange={handleAdicionarFotoGaleria} disabled={uploadingMultiplo} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed" />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 pt-2">
+                  {novoProduto.fotos.length === 0 ? (
+                    <div className="w-full text-center py-8">
+                      <span className="text-4xl opacity-20 block mb-2">📸</span>
+                      <p className="text-xs text-gray-400 font-medium">Nenhuma foto adicionada ainda.</p>
+                    </div>
+                  ) : (
+                    novoProduto.fotos.map((linkFoto, idx) => (
+                      <div key={idx} className={`relative w-28 h-28 rounded-2xl border-4 shadow-sm flex items-center justify-center overflow-hidden bg-white group ${idx === 0 ? 'border-elos-verde' : 'border-white'}`}>
+                        {idx === 0 && <span className="absolute top-1 left-1 bg-elos-verde text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full z-10">Capa</span>}
+                        <img src={linkFoto} alt={`Vista ${idx+1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoverFoto(idx)}
+                          className="absolute inset-0 bg-red-600/80 text-white text-xl font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
@@ -284,26 +345,28 @@ export default function Produtos() {
                   className="w-full px-5 py-4 bg-white border border-gray-100 rounded-2xl outline-none uppercase font-bold text-elos-texto shadow-sm focus:ring-2 focus:ring-elos-bege/50 appearance-none"
                 >
                   <option value="ARMAÇÃO">ARMAÇÃO</option>
+                  <option value="ÓCULOS DE SOL">ÓCULOS DE SOL</option>
+                  <option value="ACESSÓRIOS">ACESSÓRIOS</option>
                   <option value="LENTE">LENTE</option>
                 </select>
               </div>
 
-              {novoProduto.categoria === 'ARMAÇÃO' && (
+              {novoProduto.categoria !== 'LENTE' && (
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Código / Ref.</label>
                   <input 
                     type="text" name="referencia" value={novoProduto.referencia} onChange={handleChange} 
-                    placeholder="Ex: RB4171" 
+                    placeholder="Opcional" 
                     className="w-full px-5 py-4 bg-white border border-gray-100 rounded-2xl outline-none shadow-sm focus:ring-2 focus:ring-elos-bege/50 uppercase"
                   />
                 </div>
               )}
 
-              <div className={`space-y-2 ${novoProduto.categoria === 'ARMAÇÃO' ? 'md:col-span-3' : 'md:col-span-7'}`}>
-                <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Modelo / Descrição</label>
+              <div className={`space-y-2 ${novoProduto.categoria !== 'LENTE' ? 'md:col-span-3' : 'md:col-span-7'}`}>
+                <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Nome / Descrição</label>
                 <input 
                   type="text" name="nome" value={novoProduto.nome} onChange={handleChange} 
-                  placeholder={novoProduto.categoria === 'ARMAÇÃO' ? "Ex: RAY-BAN ERICA PRETO" : "Ex: VISÃO SIMPLES RESINA INCOLOR"} 
+                  placeholder={novoProduto.categoria !== 'LENTE' ? "Ex: RAY-BAN ERICA PRETO" : "Ex: VISÃO SIMPLES RESINA INCOLOR"} 
                   required 
                   className="w-full px-5 py-4 bg-white border border-gray-100 rounded-2xl outline-none shadow-sm focus:ring-2 focus:ring-elos-bege/50"
                 />
@@ -318,7 +381,7 @@ export default function Produtos() {
                 />
               </div>
 
-              {novoProduto.categoria === 'ARMAÇÃO' && (
+              {novoProduto.categoria !== 'LENTE' && (
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Estoque</label>
                   <input 
@@ -335,7 +398,7 @@ export default function Produtos() {
                     Cancelar
                   </button>
                 )}
-                <button type="submit" className={`${editandoId ? 'bg-elos-bege hover:bg-elos-verde' : 'bg-elos-verde hover:bg-[#3a4a3e]'} text-white font-bold px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest`}>
+                <button type="submit" disabled={uploadingMultiplo} className={`${editandoId ? 'bg-elos-bege hover:bg-elos-verde' : 'bg-elos-verde hover:bg-[#3a4a3e]'} text-white font-bold px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest disabled:opacity-50`}>
                   {editandoId ? 'Salvar Alterações' : 'Salvar no Sistema'}
                 </button>
               </div>
@@ -345,8 +408,8 @@ export default function Produtos() {
 
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 ml-2">
-            <h3 className="text-2xl font-tradicional text-elos-verde italic">
-              {abaAtiva === 'ARMAÇÃO' ? 'Armações em Estoque' : 'Catálogo de Lentes'}
+            <h3 className="text-2xl font-tradicional text-elos-verde italic capitalize">
+              {abaAtiva.toLowerCase()} em Estoque
             </h3>
             
             <input 
@@ -368,41 +431,48 @@ export default function Produtos() {
                 {produtosExibidos.map((p) => {
                   const productId = p._id || p.id;
                   
+                  // Identifica a foto de capa (a primeira do array 'fotos' ou a antiga 'foto')
+                  const fotoCapa = (p.fotos && p.fotos.length > 0) ? p.fotos[0] : p.foto;
+                  
                   return (
                     <div key={productId} className="p-6 flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-elos-fundo/30 transition-colors">
                       
                       <div className="flex items-center gap-4 flex-1 w-full sm:w-auto">
                         <div className="w-16 h-16 shrink-0 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden bg-gray-50 shadow-sm relative">
-  {p.categoria === 'ARMAÇÃO' ? (
-    <>
-      {p.foto ? (
-        <img 
-          // 🟢 Identifica se é link da nuvem ou se ainda é foto velha puxada da rota antiga
-          src={p.foto.startsWith('http') ? p.foto : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
-          alt={p.nome} 
-          onError={(e) => { 
-            e.target.onerror = null; 
-            e.target.style.display = 'none'; 
-            e.target.nextSibling.style.display = 'block'; 
-          }}
-          className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 
-          onClick={(e) => window.open(e.target.src, '_blank')} 
-        />
-      ) : null}
-      
-      {/* 🟢 Emoji que só aparece se a foto não existir ou falhar */}
-      <span className={`text-xl opacity-20 absolute ${p.foto ? 'hidden' : 'block'}`}>👓</span>
-    </>
-  ) : (
-    <span className="text-xl opacity-20">🔍</span>
-  )}
-</div>
+                          {p.categoria !== 'LENTE' ? (
+                            <>
+                              {fotoCapa ? (
+                                <img 
+                                  src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
+                                  alt={p.nome} 
+                                  onError={(e) => { 
+                                    e.target.onerror = null; 
+                                    e.target.style.display = 'none'; 
+                                    e.target.nextSibling.style.display = 'block'; 
+                                  }}
+                                  className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 
+                                  onClick={(e) => window.open(e.target.src, '_blank')} 
+                                />
+                              ) : null}
+                              <span className={`text-xl opacity-20 absolute ${fotoCapa ? 'hidden' : 'block'}`}>
+                                {getIconeCategoria(p.categoria)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xl opacity-20">🔍</span>
+                          )}
+                        </div>
                         
                         <div className="text-left">
                           <div className="flex items-center gap-2 mb-1">
-                            {p.categoria === 'ARMAÇÃO' && p.referencia && (
+                            {p.categoria !== 'LENTE' && p.referencia && (
                               <span className="bg-elos-bege/10 border border-elos-bege/30 text-elos-bege px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
                                 REF: {p.referencia}
+                              </span>
+                            )}
+                            {p.fotos && p.fotos.length > 1 && (
+                              <span className="bg-gray-100 text-gray-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
+                                📸 {p.fotos.length}
                               </span>
                             )}
                           </div>
@@ -413,7 +483,7 @@ export default function Produtos() {
                       
                       <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full sm:w-auto mt-4 sm:mt-0">
                         
-                        {abaAtiva === 'ARMAÇÃO' && (
+                        {p.categoria !== 'LENTE' && (
                           <div className="flex items-center gap-3 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                             <button onClick={() => handleAjusteEstoqueRápido(p, -1)} className="w-8 h-8 flex items-center justify-center bg-white text-gray-500 rounded-lg shadow-sm font-bold hover:text-red-500 hover:bg-red-50">-</button>
                             <div className="flex flex-col items-center min-w-[3rem]">
