@@ -5,12 +5,22 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ótica Elos | E-commerce e Gestão</title>
-    
-    <!-- 🟢 SCRIPT OFICIAL DA SUMUP PARA O CHECKOUT TRANSPARENTE -->
-    <script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"></script>
   </head>
   <body>
     <div id="root"></div> 
     <script type="module" src="/src/main.jsx"></script> 
+
+    <!-- 🟢 INÍCIO VLIBRAS (TRADUTOR PARA LIBRAS) -->
+    <div vw class="enabled">
+      <div vw-access-button class="active"></div>
+      <div vw-plugin-wrapper>
+        <div class="vw-plugin-top-wrapper"></div>
+      </div>
+    </div>
+    <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+    <script>
+      new window.VLibras.Widget('https://vlibras.gov.br/app');
+    </script>
+    <!-- FIM VLIBRAS -->
   </body>
 </html>
