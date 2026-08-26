@@ -231,7 +231,8 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    let filtrados = (produtos || []).filter(p => p.quantidade > 0 || p.categoria === 'LENTE');
+    // 🟢 ESCONDE LENTES DA VITRINE ONLINE
+    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.referencia || '').toLowerCase().includes(busca.toLowerCase()));
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.categoria === categoriaAtiva);
     return filtrados;
@@ -241,8 +242,8 @@ export default function HomeLoja() {
     { id: 'TODAS', label: 'Tudo', icone: '✨' },
     { id: 'ARMAÇÃO', label: 'Armações', icone: '👓' },
     { id: 'ÓCULOS DE SOL', label: 'Solar', icone: '☀️' },
-    { id: 'ACESSÓRIOS', label: 'Acessórios', icone: '👜' },
-    { id: 'LENTE', label: 'Lentes', icone: '🔍' },
+    { id: 'ACESSÓRIOS', label: 'Acessórios', icone: '👜' }
+    // 🟢 Categoria Lentes removida do Menu também
   ];
 
   const adicionarAoCarrinho = (produto) => {
@@ -330,7 +331,7 @@ export default function HomeLoja() {
       
       {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
 
-      {/* 🟢 NAVBAR GLASSMORPHISM MÁGICA CORRIGIDA PARA MOBILE */}
+      {/* NAVBAR */}
       <nav className={`fixed w-full top-0 z-50 transition-all duration-500 ease-in-out ${isScrolled ? 'bg-white/80 backdrop-blur-xl shadow-sm border-b border-gray-100 py-2' : 'bg-transparent py-5'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -343,7 +344,6 @@ export default function HomeLoja() {
 
             <div className="flex items-center gap-3 md:gap-6">
               
-              {/* Menu Desktop */}
               <div className="hidden md:flex flex-col text-right">
                 {clienteLogado ? (
                   <>
@@ -361,7 +361,6 @@ export default function HomeLoja() {
                 )}
               </div>
 
-              {/* 🟢 Menu Mobile (Perfil Mágico) */}
               <div className="md:hidden flex items-center">
                 <button 
                   onClick={() => verificarLoginEAvancar(clienteLogado ? 'HISTORICO' : 'VITRINE')} 
@@ -373,7 +372,6 @@ export default function HomeLoja() {
 
               <div className={`hidden md:block h-8 w-px transition-colors ${isScrolled ? 'bg-gray-200' : 'bg-white/20'}`}></div>
               
-              {/* Botão Carrinho */}
               <button 
                 onClick={() => { setMostrarCarrinho(true); if(etapaCheckout === 2) setEtapaCheckout(0); }} 
                 className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:scale-105 ${isScrolled ? 'bg-gray-50 text-[#1d3026] hover:bg-gray-100 border border-gray-200 md:border-none' : 'bg-white/10 text-white backdrop-blur-md hover:bg-white/20 border border-white/20 md:border-white/10'}`}
@@ -398,9 +396,12 @@ export default function HomeLoja() {
             <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at center, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
             <div className="max-w-4xl mx-auto px-4 relative z-10 w-full flex flex-col items-center text-center">
-              <span className="px-5 py-2 rounded-full border border-white/20 text-[#e6d0a7] text-[10px] font-black uppercase tracking-[0.3em] mb-8 backdrop-blur-md bg-white/5 shadow-lg">
-                Coleção Exclusiva 2026
+              
+              {/* 🟢 SELO DE ACESSIBILIDADE */}
+              <span className="px-5 py-2 rounded-full border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase tracking-[0.2em] mb-8 backdrop-blur-md bg-emerald-900/40 shadow-lg flex items-center gap-2">
+                <span className="text-sm">🤟</span> Loja Acessível em Libras
               </span>
+
               <h1 className="font-tradicional text-5xl md:text-7xl lg:text-[5.5rem] italic leading-[1.1] font-light drop-shadow-2xl">
                 O seu novo olhar <br/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c5a880] to-[#e6d0a7] font-bold">
@@ -484,7 +485,6 @@ export default function HomeLoja() {
           <div className="flex flex-col items-center mb-12 text-center">
             <h2 className="text-4xl font-tradicional text-[#1d3026] italic">Seus Pedidos</h2>
             <p className="text-xs text-gray-400 uppercase tracking-[0.2em] font-black mt-3 mb-6">Histórico de Compras e Entregas</p>
-            {/* 🟢 BOTÃO DE SAIR NO CELULAR E NO COMPUTADOR */}
             <button onClick={handleSair} className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-6 py-2.5 rounded-full transition-colors border border-red-100">
                Desconectar Minha Conta
             </button>
@@ -537,7 +537,8 @@ export default function HomeLoja() {
                           </button>
                         )}
                         <button onClick={() => avisarWhatsApp(pedido)} className="w-full px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] shadow-md hover:shadow-[#c5a880]/30 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                          <span>💬</span> Atendimento
+                          {/* 🟢 COMUNICAÇÃO AJUSTADA NO HISTÓRICO */}
+                          <span>💬</span> Atendimento em Vídeo ou Texto
                         </button>
                       </div>
                     </div>
@@ -631,7 +632,7 @@ export default function HomeLoja() {
                 <div className="text-center flex flex-col h-full animate-in zoom-in-95 duration-500 pt-4">
                   <div className="w-24 h-24 bg-[#1d3026] text-[#c5a880] rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl relative"><span className="text-4xl">✨</span></div>
                   <h3 className="font-tradicional text-4xl italic font-bold text-[#1d3026] mb-2">Perfeito!</h3>
-                  <p className="text-sm text-gray-500 mb-8 px-4 leading-relaxed">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi gerado com sucesso e os itens foram reservados.</p>
+                  <p className="text-sm text-gray-500 mb-8 px-4 leading-relaxed">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi gerado com sucesso.</p>
 
                   <div className="bg-[#f9f8f6] p-6 rounded-3xl border border-gray-100 shadow-inner mb-8 text-center">
                     <p className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2">Total a pagar</p>
@@ -675,7 +676,7 @@ export default function HomeLoja() {
       )}
 
       {/* FOOTER DA LOJA */}
-      <footer className="bg-white py-16 mt-auto">
+      <footer className="bg-white py-16 mt-auto border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-10">
           <div className="text-center md:text-left">
             <h4 className="font-tradicional text-3xl text-[#1d3026] italic font-bold mb-2">Ótica Elos</h4>
@@ -691,7 +692,8 @@ export default function HomeLoja() {
                 Termos & Políticas
               </button>
               <a href="https://wa.me/5585985506571" target="_blank" rel="noopener noreferrer" className="px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg hover:shadow-[#c5a880]/30 active:scale-95 flex items-center gap-3">
-                <span className="text-lg">💬</span> Fale Conosco
+                {/* 🟢 COMUNICAÇÃO AJUSTADA NO RODAPÉ */}
+                <span className="text-lg">💬</span> Atendimento Vídeo/Texto
               </a>
             </div>
           </div>
