@@ -418,15 +418,16 @@ export default function HomeLoja() {
                           
                           <div className="aspect-[4/3] bg-gradient-to-b from-[#f9f8f6] to-white relative overflow-hidden flex items-center justify-center p-8">
                             <img 
-                              src={`${apiUrl}/produtos/${productId}/foto`} 
-                              alt={produto.nome} 
-                              onError={(e) => {
-                                e.target.onerror = null; 
-                                e.target.style.display = 'none'; // Se não tiver foto, esconde a img quebrada
-                                e.target.nextSibling.style.display = 'block'; // Mostra o emoji de óculos
-                              }}
-                              className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 ease-out drop-shadow-xl"
-                            />
+      // 🟢 Verifica se a foto é um link da nuvem (ImgBB) ou um formato antigo
+      src={produto.foto.startsWith('http') ? produto.foto : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
+      alt={produto.nome} 
+      onError={(e) => { 
+        e.target.onerror = null; 
+        e.target.style.display = 'none'; 
+        e.target.nextSibling.style.display = 'block'; 
+      }}
+      className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 ease-out drop-shadow-xl"
+    />
                             {/* Emoji de óculos que só aparece se a imagem falhar */}
                             <span className="text-7xl opacity-10 hidden absolute">👓</span>
                           </div>

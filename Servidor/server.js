@@ -352,48 +352,14 @@ app.delete('/api/despesas/:id', async (req, res) => {
 });
 
 // --- ROTAS API: PRODUTOS ---
-
-// 1. Rota Geral (Traz a lista rápida, sem a foto pesada)
 app.get('/api/produtos', async (req, res) => {
   try {
-    const listaProdutos = await Produto.find({})
-      .select('nome preco categoria quantidade referencia') // Removemos a 'foto' daqui
-      .lean();
+    // 🟢 Colocamos a 'foto' de volta aqui dentro, já que agora são links levinhos da nuvem!
+    const listaProdutos = await Produto.find({}).select('nome preco categoria quantidade referencia foto').lean();
     res.json(listaProdutos);
   } catch (err) {
-    console.error("❌ ERRO NA ROTA DE PRODUTOS:", err);
+    console.error("❌ ERRO GRAVE NA ROTA DE PRODUTOS:", err);
     res.status(500).json({ error: "Falha ao buscar", detalhes: err.message });
-  }
-});
-
-// 2. 🟢 NOVA ROTA: Traz apenas a foto e converte para Imagem Real
-app.get('/api/produtos/:id/foto', async (req, res) => {
-  try {
-    const produto = await Produto.findById(req.params.id).select('foto').lean();
-    
-    if (!produto || !produto.foto) {
-      return res.status(404).send("Foto não encontrada");
-    }
-
-    // Como salvamos as fotos via FileReader no React, elas vêm no formato "data:image/png;base64,iVBORw0KGgo..."
-    // Precisamos separar o tipo da imagem (image/png) do resto dos dados.
-    const partesBase64 = produto.foto.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    
-    if (partesBase64 && partesBase64.length === 3) {
-      const tipoMime = partesBase64[1]; // Pega o formato exato (image/jpeg, image/png)
-      const dadosBinarios = Buffer.from(partesBase64[2], 'base64'); // Converte o texto para imagem real
-      
-      res.set('Content-Type', tipoMime);
-      return res.send(dadosBinarios);
-    } else {
-      // Fallback: se por acaso o dado estiver salvo apenas como texto base64 puro
-      const dadosBinarios = Buffer.from(produto.foto, 'base64');
-      res.set('Content-Type', 'image/jpeg');
-      return res.send(dadosBinarios);
-    }
-    
-  } catch (err) {
-    res.status(500).send("Erro ao carregar foto");
   }
 });
 
@@ -715,70 +681,5 @@ setInterval(async () => {
     await fetch(`http://localhost:${PORT}/`);
   } catch (e) {}
 }, 1000 * 60 * 10); 
-
-// =========================================================
-// 🤖 ROTA DE MIGRAÇÃO COM CURSOR (PROTEGIDA CONTRA ERRO 502 / MEMÓRIA)
-// =========================================================
-app.get('/api/migrar-fotos', async (req, res) => {
-  // ⚠️ SUA CHAVE DO IMGBB AQUI:
-  const CHAVE_IMGBB = "3c462fa1b5015e66e5325f3aef4b8d9b";
-
-  // Responde imediatamente ao navegador para a conexão não cair com 502
-  res.send(`
-    <div style="font-family: sans-serif; padding: 30px; text-align: center;">
-      <h1 style="color: #1d3026;">🚀 Migração Iniciada com Sucesso!</h1>
-      <p>O processo agora está rodando em segundo plano de forma segura (1 por vez).</p>
-      <p>Acompanhe o progresso em tempo real na aba de <b>Logs do Render</b>.</p>
-    </div>
-  `);
-
-  console.log("\n🚀 INICIANDO MIGRAÇÃO ULTRA-LEVE DE FOTOS...\n");
-
-  try {
-    // Usa .cursor() para não sobrecarregar a memória RAM do Render
-    const cursor = Produto.find({ foto: { $exists: true, $ne: '' } }).cursor();
-    let contador = 0;
-
-    for (let p = await cursor.next(); p != null; p = await cursor.next()) {
-      if (p.foto && !p.foto.startsWith('http')) {
-        console.log(`⏳ [Item ${contador + 1}] Migrando: ${p.nome}...`);
-
-        let base64Data = p.foto;
-        if (base64Data.includes(',')) {
-          base64Data = base64Data.split(',')[1];
-        }
-
-        const formData = new URLSearchParams();
-        formData.append('image', base64Data);
-
-        try {
-          const resposta = await fetch(`https://api.imgbb.com/1/upload?key=${CHAVE_IMGBB}`, {
-            method: 'POST',
-            body: formData
-          });
-          const dados = await resposta.json();
-
-          if (dados.success) {
-            p.foto = dados.data.url;
-            await p.save();
-            contador++;
-            console.log(`✅ [OK] ${p.nome} -> ${dados.data.url}`);
-          } else {
-            console.error(`❌ Erro ImgBB para ${p.nome}:`, dados.error?.message || 'Falha no upload');
-          }
-        } catch (e) {
-          console.error(`❌ Falha de conexão ao migrar ${p.nome}`);
-        }
-
-        // Intervalo de 1.5s entre uploads
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-    }
-
-    console.log(`\n🎉 MIGRAÇÃO CONCLUÍDA! Total de ${contador} produtos atualizados na nuvem!\n`);
-  } catch (err) {
-    console.error("❌ Erro fatal durante a migração:", err);
-  }
-});
 
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));

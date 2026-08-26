@@ -5,7 +5,7 @@ export default function Produtos() {
   const { produtos, adicionarProduto, editarProduto, excluirProduto, carregando } = useFinanceiro();
 
   // 🟢 URL da API local (caso ainda exista algum produto muito antigo no formato Base64)
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const apiUrl = import.meta.env.VITE_API_URL;
   
   // 🟢 CHAVE DA NUVEM IMGBB PUXADA DO .ENV
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
@@ -108,7 +108,7 @@ export default function Produtos() {
       preco: aplicarMascaraMoeda((p.preco * 100).toString()),
       categoria: p.categoria,
       quantidade: p.quantidade || '',
-      foto: p.foto || '' // Como agora é apenas um link, podemos jogar direto no estado!
+      foto: p.foto || ''
     });
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
@@ -373,22 +373,30 @@ export default function Produtos() {
                       
                       <div className="flex items-center gap-4 flex-1 w-full sm:w-auto">
                         <div className="w-16 h-16 shrink-0 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden bg-gray-50 shadow-sm relative">
-                          {p.categoria === 'ARMAÇÃO' ? (
-                            <>
-                              <img 
-                                // 🟢 SUPORTE HÍBRIDO: Aceita imagens novas da nuvem ou puxa imagens antigas do backend!
-                                src={p.foto && p.foto.startsWith('http') ? p.foto : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
-                                alt={p.nome} 
-                                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-                                className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 
-                                onClick={(e) => window.open(e.target.src, '_blank')} 
-                              />
-                              <span className="text-xl opacity-20 hidden absolute">👓</span>
-                            </>
-                          ) : (
-                            <span className="text-xl opacity-20">🔍</span>
-                          )}
-                        </div>
+  {p.categoria === 'ARMAÇÃO' ? (
+    <>
+      {p.foto ? (
+        <img 
+          // 🟢 Identifica se é link da nuvem ou se ainda é foto velha puxada da rota antiga
+          src={p.foto.startsWith('http') ? p.foto : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
+          alt={p.nome} 
+          onError={(e) => { 
+            e.target.onerror = null; 
+            e.target.style.display = 'none'; 
+            e.target.nextSibling.style.display = 'block'; 
+          }}
+          className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform duration-300" 
+          onClick={(e) => window.open(e.target.src, '_blank')} 
+        />
+      ) : null}
+      
+      {/* 🟢 Emoji que só aparece se a foto não existir ou falhar */}
+      <span className={`text-xl opacity-20 absolute ${p.foto ? 'hidden' : 'block'}`}>👓</span>
+    </>
+  ) : (
+    <span className="text-xl opacity-20">🔍</span>
+  )}
+</div>
                         
                         <div className="text-left">
                           <div className="flex items-center gap-2 mb-1">
