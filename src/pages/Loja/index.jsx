@@ -155,7 +155,7 @@ export default function HomeLoja() {
   
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   const [isScrolled, setIsScrolled] = useState(false);
-  const [gerandoLink, setGerandoLink] = useState(false);
+  const [gerandoLink, setGerandoLink] = useState(false); // 🟢 Controle de botão InfinitePay
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
   const [mostrarTermos, setMostrarTermos] = useState(false);
@@ -635,7 +635,9 @@ export default function HomeLoja() {
                   </div>
 
                   <div className="mt-auto space-y-4">
+                    {/* 🟢 INTEGRAÇÃO INFINITEPAY API OFICIAL CORRIGIDA */}
                     <button 
+                      disabled={gerandoLink}
                       onClick={async () => { 
                         setGerandoLink(true);
                         try {
@@ -664,7 +666,7 @@ export default function HomeLoja() {
                           if (data.url) {
                             window.open(data.url, "_blank"); 
                           } else {
-                            alert("Ops! Falha ao gerar o link de pagamento.");
+                            alert("Ops! Falha ao gerar o link de pagamento na InfinitePay.");
                           }
                         } catch (e) {
                           alert("Erro ao conectar com a InfinitePay.");
@@ -672,12 +674,11 @@ export default function HomeLoja() {
                           setGerandoLink(false);
                         }
                       }} 
-                      disabled={gerandoLink}
                       className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-white font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-50"
                     >
                       {gerandoLink ? <span className="animate-spin text-lg">⏳</span> : <><span className="text-xl">💳</span> Pagar na InfinitePay</>}
                     </button>
-                    <p className="text-[10px] text-gray-400 px-4">Pagamento via PIX ou Cartão.</p>
+                    <p className="text-[10px] text-gray-400 px-4">Pagamento Seguro via PIX ou Cartão.</p>
                   </div>
                 </div>
               )}
