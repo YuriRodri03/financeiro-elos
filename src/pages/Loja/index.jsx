@@ -155,6 +155,7 @@ export default function HomeLoja() {
   
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   const [isScrolled, setIsScrolled] = useState(false);
+  const [gerandoLink, setGerandoLink] = useState(false);
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
   const [mostrarTermos, setMostrarTermos] = useState(false);
@@ -231,7 +232,6 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    // 🟢 ESCONDE LENTES DA VITRINE ONLINE
     let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.referencia || '').toLowerCase().includes(busca.toLowerCase()));
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.categoria === categoriaAtiva);
@@ -342,7 +342,6 @@ export default function HomeLoja() {
             </div>
 
             <div className="flex items-center gap-3 md:gap-6">
-              
               <div className="hidden md:flex flex-col text-right">
                 {clienteLogado ? (
                   <>
@@ -395,8 +394,6 @@ export default function HomeLoja() {
             <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at center, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
             <div className="max-w-4xl mx-auto px-4 relative z-10 w-full flex flex-col items-center text-center">
-              
-              {/* 🟢 SELO DE ACESSIBILIDADE */}
               <span className="px-5 py-2 rounded-full border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase tracking-[0.2em] mb-8 backdrop-blur-md bg-emerald-900/40 shadow-lg flex items-center gap-2">
                 <span className="text-sm">🤟</span> Loja Acessível em Libras
               </span>
@@ -536,7 +533,6 @@ export default function HomeLoja() {
                           </button>
                         )}
                         <button onClick={() => avisarWhatsApp(pedido)} className="w-full px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] shadow-md hover:shadow-[#c5a880]/30 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                          {/* 🟢 COMUNICAÇÃO AJUSTADA NO HISTÓRICO */}
                           <span>💬</span> Atendimento em Vídeo ou Texto
                         </button>
                       </div>
@@ -631,7 +627,7 @@ export default function HomeLoja() {
                 <div className="text-center flex flex-col h-full animate-in zoom-in-95 duration-500 pt-4">
                   <div className="w-24 h-24 bg-[#1d3026] text-[#c5a880] rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl relative"><span className="text-4xl">✨</span></div>
                   <h3 className="font-tradicional text-4xl italic font-bold text-[#1d3026] mb-2">Perfeito!</h3>
-                  <p className="text-sm text-gray-500 mb-8 px-4 leading-relaxed">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi gerado com sucesso.</p>
+                  <p className="text-sm text-gray-500 mb-8 px-4 leading-relaxed">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi gerado com sucesso e os itens foram reservados.</p>
 
                   <div className="bg-[#f9f8f6] p-6 rounded-3xl border border-gray-100 shadow-inner mb-8 text-center">
                     <p className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2">Total a pagar</p>
@@ -639,10 +635,49 @@ export default function HomeLoja() {
                   </div>
 
                   <div className="mt-auto space-y-4">
-                    <button onClick={() => { const valorFixo = Number(pedidoFinalizado.valorTotal).toFixed(2).replace('.', ','); window.open(`https://pay.infinitepay.io/${infinitePayUser}/${valorFixo}`, "_blank"); }} className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-white font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3">
-                      <span className="text-lg">💳</span> Pagar de Forma Segura
+                    <button 
+                      onClick={async () => { 
+                        setGerandoLink(true);
+                        try {
+                          const payload = {
+                            handle: infinitePayUser, 
+                            order_nsu: String(pedidoFinalizado.numeroPedidoOnline),
+                            redirect_url: window.location.href, 
+                            customer: {
+                              name: pedidoFinalizado.clienteNome,
+                              phone_number: "+55" + pedidoFinalizado.clienteTelefone.replace(/\D/g, '')
+                            },
+                            items: pedidoFinalizado.itens.map(item => ({
+                              quantity: 1,
+                              price: Math.round(Number(item.preco) * 100), 
+                              description: item.nome
+                            }))
+                          };
+
+                          const res = await fetch("https://api.checkout.infinitepay.io/links", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                          });
+                          
+                          const data = await res.json();
+                          if (data.url) {
+                            window.open(data.url, "_blank"); 
+                          } else {
+                            alert("Ops! Falha ao gerar o link de pagamento.");
+                          }
+                        } catch (e) {
+                          alert("Erro ao conectar com a InfinitePay.");
+                        } finally {
+                          setGerandoLink(false);
+                        }
+                      }} 
+                      disabled={gerandoLink}
+                      className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-white font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      {gerandoLink ? <span className="animate-spin text-lg">⏳</span> : <><span className="text-xl">💳</span> Pagar na InfinitePay</>}
                     </button>
-                    <p className="text-[10px] text-gray-400 px-4">Pagamento via PIX ou Cartão (InfinitePay).</p>
+                    <p className="text-[10px] text-gray-400 px-4">Pagamento via PIX ou Cartão.</p>
                   </div>
                 </div>
               )}
@@ -691,7 +726,6 @@ export default function HomeLoja() {
                 Termos & Políticas
               </button>
               <a href="https://wa.me/5585985506571" target="_blank" rel="noopener noreferrer" className="px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg hover:shadow-[#c5a880]/30 active:scale-95 flex items-center gap-3">
-                {/* 🟢 COMUNICAÇÃO AJUSTADA NO RODAPÉ */}
                 <span className="text-lg">💬</span> Atendimento Vídeo/Texto
               </a>
             </div>
