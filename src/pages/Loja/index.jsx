@@ -240,7 +240,7 @@ export default function HomeLoja() {
 
   const categorias = [
     { id: 'TODAS', label: 'Tudo', icone: '✨' },
-    { id: 'ARMAÇÃO', label: 'Armações', icone: '👓' },
+    { id: 'ÓCULOS', label: 'Armações', icone: '👓' },
     { id: 'ÓCULOS DE SOL', label: 'Solar', icone: '☀️' },
     { id: 'ACESSÓRIOS', label: 'Acessórios', icone: '👜' }
     // 🟢 Categoria Lentes removida do Menu também
