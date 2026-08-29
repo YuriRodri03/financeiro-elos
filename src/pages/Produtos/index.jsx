@@ -198,6 +198,7 @@ export default function Produtos() {
       case 'ÓCULOS DE SOL': return '☀️';
       case 'ACESSÓRIOS': return '👜';
       case 'LENTE': return '🔍';
+      case 'UPSELL': return '🚀'; // 🟢 Novo ícone
       default: return '👓';
     }
   };
@@ -206,7 +207,8 @@ export default function Produtos() {
     { id: 'ARMAÇÃO', label: '👓 Armações' },
     { id: 'LENTE', label: '🔍 Lentes' },
     { id: 'ÓCULOS DE SOL', label: '☀️ Óculos de Sol' },
-    { id: 'ACESSÓRIOS', label: '👜 Acessórios' }
+    { id: 'ACESSÓRIOS', label: '👜 Acessórios' },
+    { id: 'UPSELL', label: '🚀 Ofertas de Carrinho' } // 🟢 Adicionado para você ver e gerenciar os adicionais
   ];
 
   if (carregando) return null;
@@ -348,6 +350,8 @@ export default function Produtos() {
                   <option value="ÓCULOS DE SOL">ÓCULOS DE SOL</option>
                   <option value="ACESSÓRIOS">ACESSÓRIOS</option>
                   <option value="LENTE">LENTE</option>
+                  {/* 🟢 Adicionado ao Seletor de Tipo na hora do Cadastro */}
+                  <option value="UPSELL">OFERTA EXTRA (CARRINHO)</option> 
                 </select>
               </div>
 

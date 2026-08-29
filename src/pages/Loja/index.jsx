@@ -54,56 +54,91 @@ function ModalTermos({ onClose }) {
 }
 
 // =======================================================
-// 🟢 COMPONENTE: CARD DE PRODUTO (Estilo Grife Premium)
+// 🟢 COMPONENTE: CARD DE PRODUTO
 // =======================================================
 function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
   const [imgIndex, setImgIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
   const productId = produto._id || produto.id;
   
   const fotos = (produto.fotos && produto.fotos.length > 0) ? produto.fotos : (produto.foto ? [produto.foto] : []);
   const fotoAtual = fotos[imgIndex];
 
   const nextImg = (e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     setImgIndex((prev) => (prev + 1) % fotos.length);
   };
 
   const prevImg = (e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     setImgIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1));
+  };
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    if (distance > 50) nextImg();
+    if (distance < -50) prevImg();
+  };
+
+  const getUrlFoto = (f) => {
+    if (!f) return '';
+    if (f.startsWith('http') || f.startsWith('data:')) return f;
+    return `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`;
   };
 
   return (
     <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:border-[#c5a880]/30 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
       
-      {produto.referencia && (
-        <div className="absolute top-5 left-5 z-10 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">
+      {produto.categoria === 'COMBO' && (
+        <div className="absolute top-5 right-5 z-10 bg-orange-100 backdrop-blur-md text-orange-700 border border-orange-200 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
+          Combo Oferta
+        </div>
+      )}
+
+      {produto.referencia && produto.categoria !== 'COMBO' && (
+        <div className="absolute top-5 left-5 z-10 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm pointer-events-none">
           Ref: {produto.referencia}
         </div>
       )}
       
-      <div className="aspect-square bg-gradient-to-br from-gray-50 to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria">
+      <div 
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="aspect-square bg-gradient-to-br from-gray-50 to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
+      >
         {fotoAtual ? (
           <img 
-            src={fotoAtual.startsWith('http') ? fotoAtual : `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`} 
+            src={getUrlFoto(fotoAtual)} 
             alt={produto.nome} 
             onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
             className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-1000 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] drop-shadow-xl"
           />
         ) : null}
         
-        <span className={`text-7xl opacity-5 absolute ${fotoAtual ? 'hidden' : 'block'}`}>👓</span>
+        <span className={`text-7xl opacity-5 absolute pointer-events-none ${fotoAtual ? 'hidden' : 'block'}`}>👓</span>
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.02] transition-colors duration-500 pointer-events-none"></div>
 
         {fotos.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
+            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
               ‹
             </button>
-            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
+            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
               ›
             </button>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover/galeria:opacity-100 transition-all duration-300 z-20 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full pointer-events-none">
               {fotos.map((_, idx) => (
                 <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === imgIndex ? 'bg-[#1d3026] w-3' : 'bg-gray-400'}`} />
               ))}
@@ -134,7 +169,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
                 : 'bg-[#1d3026] text-white hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
             }`}
           >
-            {noCarrinho ? '✓' : '🛍️'}
+            {noCarrinho ? '✓' : '🛒'}
           </button>
         </div>
       </div>
@@ -155,7 +190,7 @@ export default function HomeLoja() {
   
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   const [isScrolled, setIsScrolled] = useState(false);
-  const [gerandoLink, setGerandoLink] = useState(false); // 🟢 Controle de botão InfinitePay
+  const [gerandoLink, setGerandoLink] = useState(false);
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
   const [mostrarTermos, setMostrarTermos] = useState(false);
@@ -163,6 +198,24 @@ export default function HomeLoja() {
   const [carrinho, setCarrinho] = useState(() => {
     try { return JSON.parse(localStorage.getItem('carrinhoVirtualElos')) || []; } catch (e) { return []; }
   });
+
+  const [cupomDigitado, setCupomDigitado] = useState('');
+  const [cupomAtivo, setCupomAtivo] = useState(null); 
+  const [validandoCupom, setValidandoCupom] = useState(false);
+
+  // 🟢 NOVA REGRA: Verifica se há itens promocionais (UPSELL ou COMBO) no carrinho
+  const temPromocaoNoCarrinho = useMemo(() => {
+    return carrinho.some(i => i.categoria === 'UPSELL' || i.categoria === 'COMBO');
+  }, [carrinho]);
+
+  // Se o cliente colocar a Promoção e já tiver um cupom, removemos o cupom na hora!
+  useEffect(() => {
+    if (temPromocaoNoCarrinho && cupomAtivo) {
+      setCupomAtivo(null);
+      setCupomDigitado('');
+      alert("⚠️ O cupom de desconto foi removido, pois não é cumulativo com a oferta especial adicionada ao carrinho.");
+    }
+  }, [temPromocaoNoCarrinho, cupomAtivo]);
 
   useEffect(() => {
     localStorage.setItem('carrinhoVirtualElos', JSON.stringify(carrinho));
@@ -186,7 +239,8 @@ export default function HomeLoja() {
     nome: clienteLogado?.nome || '', 
     telefone: clienteLogado?.telefone || '', 
     cpf: clienteLogado?.cpf || '',
-    endereco: clienteLogado?.endereco || ''
+    endereco: clienteLogado?.endereco || '',
+    temGrau: null 
   });
 
   const buscarPedidos = async () => {
@@ -204,20 +258,62 @@ export default function HomeLoja() {
     if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado) buscarPedidos();
   }, [abaAtiva, clienteLogado]); 
 
+  // ==========================================
+  // 🟢 BUSCA PRODUTO DE UPSELL DINAMICAMENTE
+  // ==========================================
+  const produtoUpsell = useMemo(() => {
+    return (produtos || []).find(p => p.categoria === 'UPSELL' && p.quantidade > 0);
+  }, [produtos]);
+
+  const calculosCarrinho = useMemo(() => {
+    const subtotalBruto = carrinho.reduce((total, item) => total + Number(item.preco), 0);
+    
+    // Se tiver oferta (UPSELL/COMBO), o desconto do cupom é zero obrigatoriamente
+    let descontoCupom = 0;
+
+    if (cupomAtivo && !temPromocaoNoCarrinho) {
+      const valorElegivelCupom = carrinho.reduce((total, item) => total + Number(item.preco), 0);
+      
+      if (cupomAtivo.tipo === 'PERCENTUAL') {
+        descontoCupom = valorElegivelCupom * (Number(cupomAtivo.valor) / 100);
+      } else {
+        descontoCupom = Math.min(Number(cupomAtivo.valor), valorElegivelCupom); 
+      }
+    }
+
+    const totalFinal = Math.max(0, subtotalBruto - descontoCupom);
+
+    return {
+      subtotalBruto,
+      descontoCupom,
+      totalFinal
+    };
+  }, [carrinho, cupomAtivo, temPromocaoNoCarrinho]);
+
+  const validarCupomServidor = async () => {
+    if (!cupomDigitado.trim()) return;
+    setValidandoCupom(true);
+    try {
+      const res = await fetch(`${apiUrl}/cupons/validar/${cupomDigitado}`);
+      const data = await res.json();
+      if (data.valido) {
+        setCupomAtivo(data.cupom);
+      } else {
+        setCupomAtivo(null);
+        alert(data.error || "Cupom inválido.");
+      }
+    } catch (e) {
+      alert("Erro ao validar cupom.");
+    } finally {
+      setValidandoCupom(false);
+    }
+  };
+
   const handleMascaraTel = (v) => {
     let valor = v.replace(/\D/g, '');
     if (valor.length > 11) valor = valor.substring(0, 11);
     if (valor.length > 2) valor = `(${valor.substring(0,2)}) ${valor.substring(2)}`;
     if (valor.length > 10) valor = `${valor.substring(0,10)}-${valor.substring(10)}`;
-    return valor;
-  };
-
-  const handleMascaraCpf = (v) => {
-    let valor = v.replace(/\D/g, '');
-    if (valor.length > 11) valor = valor.substring(0, 11);
-    if (valor.length > 3) valor = `${valor.substring(0,3)}.${valor.substring(3)}`;
-    if (valor.length > 7) valor = `${valor.substring(0,7)}.${valor.substring(7)}`;
-    if (valor.length > 11) valor = `${valor.substring(0,11)}-${valor.substring(11)}`;
     return valor;
   };
 
@@ -232,17 +328,18 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE');
+    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE' && p.categoria !== 'UPSELL');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.referencia || '').toLowerCase().includes(busca.toLowerCase()));
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.categoria === categoriaAtiva);
     return filtrados;
   }, [produtos, busca, categoriaAtiva]);
 
   const categorias = [
-    { id: 'TODAS', label: 'Tudo', icone: '✨' },
-    { id: 'ARMAÇÃO', label: 'Óculos', icone: '👓' },
-    { id: 'ÓCULOS DE SOL', label: 'Solar', icone: '☀️' },
-    { id: 'ACESSÓRIOS', label: 'Acessórios', icone: '👜' }
+    { id: 'TODAS', label: 'Tudo' },
+    { id: 'ARMAÇÃO', label: 'Óculos' },
+    { id: 'ÓCULOS DE SOL', label: 'Solar' },
+    { id: 'ACESSÓRIOS', label: 'Acessórios' },
+    { id: 'COMBO', label: 'Combos' }
   ];
 
   const adicionarAoCarrinho = (produto) => {
@@ -257,19 +354,31 @@ export default function HomeLoja() {
     if (carrinho.length === 1) setEtapaCheckout(0);
   };
 
-  const valorTotalCarrinho = carrinho.reduce((total, item) => total + Number(item.preco), 0);
-
   const processarPedido = async (e) => {
     e.preventDefault();
+    
+    const temArmacaoNoCarrinho = carrinho.some(i => i.categoria === 'ARMAÇÃO');
+    if (temArmacaoNoCarrinho && dadosCliente.temGrau === null) {
+      alert("Por favor, selecione nas opções abaixo se as suas lentes terão grau ou não.");
+      return;
+    }
+
     setProcessando(true);
+
+    let enderecoFinal = dadosCliente.endereco;
+    if (temArmacaoNoCarrinho) {
+      enderecoFinal += dadosCliente.temGrau 
+        ? '\n\n[ÓCULOS COM GRAU - Cliente enviará a Receita]' 
+        : '\n\n[ÓCULOS SEM GRAU - Apenas lente de descanso/estética]';
+    }
 
     const payload = {
       clienteNome: dadosCliente.nome.toUpperCase(),
       clienteTelefone: dadosCliente.telefone,
       clienteCpf: dadosCliente.cpf,
-      clienteEndereco: dadosCliente.endereco,
+      clienteEndereco: enderecoFinal, 
       itens: carrinho.map(item => ({ id: item._id, nome: item.nome, preco: item.preco, referencia: item.referencia })),
-      valorTotal: valorTotalCarrinho
+      valorTotal: calculosCarrinho.totalFinal 
     };
 
     try {
@@ -280,6 +389,8 @@ export default function HomeLoja() {
         const data = await res.json();
         setPedidoFinalizado(data.pedido); 
         setCarrinho([]); 
+        setCupomAtivo(null);
+        setCupomDigitado('');
         setEtapaCheckout(2); 
       } else alert("Ops! Tivemos um problema.");
     } catch (err) { alert("Erro ao conectar com o servidor."); } 
@@ -297,7 +408,14 @@ export default function HomeLoja() {
   const avisarWhatsApp = (pedidoEspecifico = null) => {
     const p = pedidoEspecifico || pedidoFinalizado;
     if (!p) return;
-    const texto = `*OLÁ! GOSTARIA DE FALAR SOBRE O MEU PEDIDO!* 📦✨\n\n*Número do Pedido:* #${p.numeroPedidoOnline}\n*Meu Nome:* ${p.clienteNome}\n*Valor:* R$ ${Number(p.valorTotal).toFixed(2).replace('.', ',')}\n\nEstou enviando minha receita e/ou o comprovante.`;
+    
+    const ehSemGrau = p.clienteEndereco && p.clienteEndereco.includes('SEM GRAU');
+    const txtReceita = ehSemGrau 
+      ? "Meu óculos é *SEM GRAU*, quero a lente apenas para descanso/estética." 
+      : "Estou enviando minha *Receita Médica* para a produção das minhas lentes.";
+
+    const texto = `*OLÁ! GOSTARIA DE FALAR SOBRE O MEU PEDIDO!* 📦✨\n\n*Número do Pedido:* #${p.numeroPedidoOnline}\n*Meu Nome:* ${p.clienteNome}\n*Valor:* R$ ${Number(p.valorTotal).toFixed(2).replace('.', ',')}\n\n${txtReceita}\n\nAqui está o comprovante de pagamento.`;
+    
     window.open(`https://wa.me/5585985506571?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
@@ -419,13 +537,13 @@ export default function HomeLoja() {
                     <button 
                       key={cat.id} 
                       onClick={() => setCategoriaAtiva(cat.id)}
-                      className={`flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${
+                      className={`flex-shrink-0 flex items-center px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${
                         categoriaAtiva === cat.id 
                         ? 'bg-[#1d3026] text-[#c5a880] shadow-md scale-105' 
                         : 'bg-white text-gray-500 border border-gray-200 hover:border-[#c5a880]/50 hover:text-[#1d3026]'
                       }`}
                     >
-                      <span className="text-base">{cat.icone}</span> {cat.label}
+                      {cat.label}
                     </button>
                   ))}
                 </div>
@@ -455,7 +573,7 @@ export default function HomeLoja() {
 
             {produtosLoja.length === 0 ? (
               <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-gray-100 flex flex-col items-center">
-                <span className="text-7xl opacity-10 mb-6 drop-shadow-sm">🛍️</span>
+                <span className="text-7xl opacity-10 mb-6 drop-shadow-sm">🛒</span>
                 <p className="text-gray-400 font-medium text-lg">Ainda não temos produtos nesta categoria.</p>
                 <button onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} className="mt-6 px-6 py-3 bg-gray-50 text-[#1d3026] hover:bg-gray-100 rounded-xl font-bold uppercase tracking-widest text-xs transition-colors">
                   Ver Todo o Catálogo
@@ -522,7 +640,7 @@ export default function HomeLoja() {
 
                     <div className="flex flex-col md:items-end justify-between gap-6 w-full md:w-auto md:border-l border-gray-100 md:pl-8">
                       <div className="md:text-right">
-                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em] mb-1">Total</p>
+                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em] mb-1">Total Pago</p>
                         <p className="text-3xl font-tradicional italic font-bold text-[#1d3026]">{Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
 
@@ -573,38 +691,139 @@ export default function HomeLoja() {
                 <div className="space-y-4">
                   {carrinho.length === 0 ? (
                     <div className="text-center text-gray-400 py-20">
-                      <span className="text-6xl opacity-10 block mb-6">🛍️</span>
-                      <p className="text-sm font-medium">Sua sacola está vazia.</p>
+                      <span className="text-6xl opacity-10 block mb-6">🛒</span>
+                      <p className="text-sm font-medium">Seu carrinho está vazio.</p>
                     </div>
                   ) : (
-                    carrinho.map(item => {
-                      const fotoCapa = (item.fotos && item.fotos.length > 0) ? item.fotos[0] : item.foto;
-                      return (
-                        <div key={item._id} className="flex items-center gap-4 bg-[#f9f8f6] p-4 rounded-2xl border border-transparent hover:border-[#c5a880]/30 transition-all group">
-                          <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100 p-2 relative shadow-sm">
-                            {fotoCapa ? (
-                              <img src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${item._id || item.id}/foto?v=1`} className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; }}/>
-                            ) : null}
+                    <>
+                      {carrinho.map(item => {
+                        const fotoCapa = (item.fotos && item.fotos.length > 0) ? item.fotos[0] : item.foto;
+                        return (
+                          <div key={item._id} className="flex items-center gap-4 bg-[#f9f8f6] p-4 rounded-2xl border border-transparent hover:border-[#c5a880]/30 transition-all group">
+                            <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100 p-2 relative shadow-sm">
+                              {fotoCapa ? (
+                                <img src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${item._id || item.id}/foto?v=1`} className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; }}/>
+                              ) : null}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-xs font-bold text-[#1d3026] line-clamp-2">{item.nome}</h4>
+                              <p className="text-[10px] font-black tracking-widest uppercase text-gray-400 mt-1 mb-2">Ref: {item.referencia || 'N/A'}</p>
+                              <p className="text-sm font-tradicional italic font-bold text-[#c5a880]">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            </div>
+                            <button onClick={() => removerDoCarrinho(item._id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-red-500 transition-all text-lg shadow-sm bg-white">&times;</button>
                           </div>
-                          <div className="flex-1">
-                            <h4 className="text-xs font-bold text-[#1d3026] line-clamp-2">{item.nome}</h4>
-                            <p className="text-[10px] font-black tracking-widest uppercase text-gray-400 mt-1 mb-2">Ref: {item.referencia || 'N/A'}</p>
-                            <p className="text-sm font-tradicional italic font-bold text-[#c5a880]">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        );
+                      })}
+
+                      {/* 🟢 BANNER DE UPSELL DINÂMICO AJUSTADO */}
+                      {produtoUpsell && carrinho.some(i => i.categoria === 'ARMAÇÃO') && !carrinho.some(i => i._id === produtoUpsell._id) && (
+                        <div className="mt-6 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-4 flex flex-col gap-3 animate-in slide-in-from-bottom-2 shadow-sm relative overflow-hidden">
+                          
+                          {/* Efeitos de Luz no Fundo */}
+                          <div className="absolute -right-4 -top-4 w-16 h-16 bg-orange-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
+                          <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-yellow-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
+
+                          <div className="flex gap-3 items-start relative z-10">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0 text-xl border border-orange-100">
+                              🎁
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-orange-600 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm">
+                                  Oferta Desbloqueada
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-black text-orange-900 tracking-tight leading-tight">Preço especial de Combo!</h4>
+                              <p className="text-[10px] text-orange-800/80 font-medium mt-1.5 leading-relaxed">
+                                Como você escolheu uma armação, adicione a <strong className="text-orange-900">{produtoUpsell.nome}</strong> com desconto exclusivo! (Você nos diz na próxima tela se tem grau ou não).
+                              </p>
+                            </div>
                           </div>
-                          <button onClick={() => removerDoCarrinho(item._id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-red-500 transition-all text-lg shadow-sm bg-white">&times;</button>
+                          <button 
+                            onClick={() => adicionarAoCarrinho(produtoUpsell)}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl shadow-lg shadow-orange-600/20 transition-all active:scale-95 relative z-10"
+                          >
+                            + Aproveitar Oferta por {Number(produtoUpsell.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </button>
                         </div>
-                      );
-                    })
+                      )}
+
+                      {/* 🟢 ÁREA DE CUPONS NO CARRINHO - COM BLOQUEIO DE CUMULATIVIDADE */}
+                      <div className="pt-6 mt-6 border-t border-gray-100">
+                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
+                        
+                        {temPromocaoNoCarrinho ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                              🚫 Cupons não são cumulativos com os combos e ofertas extras que você já possui no carrinho.
+                            </p>
+                          </div>
+                        ) : !cupomAtivo ? (
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="Digite o código" 
+                              value={cupomDigitado}
+                              onChange={e => setCupomDigitado(e.target.value.toUpperCase())}
+                              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold uppercase tracking-widest text-[#1d3026]"
+                            />
+                            <button 
+                              onClick={validarCupomServidor}
+                              disabled={validandoCupom || !cupomDigitado}
+                              className="px-5 bg-[#1d3026] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-50"
+                            >
+                              {validandoCupom ? '...' : 'Aplicar'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-emerald-600 text-lg">🏷️</span>
+                              <div>
+                                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">{cupomAtivo.codigo}</p>
+                                <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">Desconto aplicado com sucesso!</p>
+                              </div>
+                            </div>
+                            <button onClick={() => { setCupomAtivo(null); setCupomDigitado(''); }} className="text-gray-400 hover:text-red-500 text-lg">&times;</button>
+                          </div>
+                        )}
+                      </div>
+
+                    </>
                   )}
                 </div>
               )}
 
               {etapaCheckout === 1 && (
-                <form id="formCheckout" onSubmit={processarPedido} className="space-y-6 animate-in fade-in">
+                <form id="formCheckout" onSubmit={processarPedido} className="space-y-6 animate-in fade-in pb-4">
                   <div className="bg-[#1d3026]/5 p-5 rounded-2xl border border-[#1d3026]/10 mb-4 flex items-start gap-4">
                     <span className="text-xl">✨</span>
                     <p className="text-xs text-[#1d3026] font-medium leading-relaxed">Pronto para finalizar! Por favor, confirme os dados de entrega abaixo.</p>
                   </div>
+
+                  {carrinho.some(i => i.categoria === 'ARMAÇÃO') && (
+                    <div className="space-y-3 pt-2 pb-4 border-b border-gray-100">
+                      <label className="text-[9px] font-black text-[#c5a880] uppercase tracking-widest ml-2">Sobre suas lentes</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button 
+                          type="button" 
+                          onClick={() => setDadosCliente({...dadosCliente, temGrau: false})} 
+                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === false ? 'bg-[#1d3026] text-white border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
+                        >
+                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === false ? 'text-[#e6d0a7]' : 'text-gray-400'}`}>Sem Grau</span>
+                          <span className="text-xs font-bold">Apenas p/ Descanso</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setDadosCliente({...dadosCliente, temGrau: true})} 
+                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === true ? 'bg-[#1d3026] text-white border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
+                        >
+                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === true ? 'text-[#e6d0a7]' : 'text-gray-400'}`}>Com Grau</span>
+                          <span className="text-xs font-bold">Vou enviar a receita</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2">Nome Completo</label>
@@ -635,12 +854,12 @@ export default function HomeLoja() {
                   </div>
 
                   <div className="mt-auto space-y-4">
-                    {/* 🟢 INTEGRAÇÃO INFINITEPAY API OFICIAL CORRIGIDA */}
                     <button 
                       disabled={gerandoLink}
                       onClick={async () => { 
                         setGerandoLink(true);
                         try {
+                          const fatorDesconto = pedidoFinalizado.valorTotal / valorTotalCarrinho; 
                           const payload = {
                             handle: infinitePayUser, 
                             order_nsu: String(pedidoFinalizado.numeroPedidoOnline),
@@ -651,7 +870,7 @@ export default function HomeLoja() {
                             },
                             items: pedidoFinalizado.itens.map(item => ({
                               quantity: 1,
-                              price: Math.round(Number(item.preco) * 100), 
+                              price: Math.round((Number(item.preco) * fatorDesconto) * 100), 
                               description: item.nome
                             }))
                           };
@@ -684,20 +903,38 @@ export default function HomeLoja() {
               )}
             </div>
 
-            {/* RODAPÉ DO CARRINHO */}
+            {/* 🟢 RODAPÉ DO CARRINHO (RESUMO COM DESCONTOS) */}
             {etapaCheckout < 2 && carrinho.length > 0 && (
-              <div className="p-6 md:p-8 border-t border-gray-100 bg-[#f9f8f6]">
-                <div className="flex justify-between items-end mb-6">
-                  <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Estimado</span>
-                  <span className="text-3xl font-tradicional italic font-bold text-[#1d3026]">{valorTotalCarrinho.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <div className="p-6 md:p-8 border-t border-gray-100 bg-[#f9f8f6] space-y-4">
+                
+                {/* Mostra Desconto do Cupom se tiver cupom válido */}
+                {calculosCarrinho.descontoCupom > 0 && (
+                  <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black uppercase tracking-widest">Cupom Promocional</span>
+                    </div>
+                    <span className="text-xs font-bold">- {calculosCarrinho.descontoCupom.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-end pt-2 border-t border-gray-200/50">
+                  <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Final</span>
+                  <div className="text-right">
+                    {calculosCarrinho.descontoCupom > 0 && (
+                       <p className="text-xs text-gray-400 line-through mb-1">{calculosCarrinho.subtotalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    )}
+                    <span className="text-3xl font-tradicional italic font-bold text-[#1d3026]">
+                      {calculosCarrinho.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
                 </div>
                 
                 {etapaCheckout === 0 ? (
-                  <button onClick={() => verificarLoginEAvancar('CHECKOUT')} className="w-full bg-[#1d3026] text-[#e6d0a7] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em]">
-                    Finalizar Compra
+                  <button onClick={() => verificarLoginEAvancar('CHECKOUT')} className="w-full bg-[#1d3026] text-[#e6d0a7] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] mt-4">
+                    Avançar Pagamento
                   </button>
                 ) : (
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 mt-4">
                     <button onClick={() => setEtapaCheckout(0)} disabled={processando} className="w-1/3 bg-white text-gray-500 border border-gray-200 font-bold py-5 rounded-xl transition-all hover:bg-gray-50 text-[10px] uppercase tracking-widest">Voltar</button>
                     <button type="submit" form="formCheckout" disabled={processando} className="w-2/3 bg-[#1d3026] text-white hover:bg-[#c5a880] font-bold py-5 rounded-xl shadow-xl transition-all active:scale-[0.98] text-[10px] uppercase tracking-widest flex justify-center items-center">
                       {processando ? <span className="animate-spin text-lg">⏳</span> : 'Confirmar Pedido'}
