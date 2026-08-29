@@ -54,16 +54,25 @@ function ModalTermos({ onClose }) {
 }
 
 // =======================================================
-// 🟢 COMPONENTE: CARD DE PRODUTO
+// 🟢 COMPONENTE: CARD DE PRODUTO (OTIMIZADO)
 // =======================================================
 function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
+  
+  // 🟢 Novo estado para controlar o carregamento da imagem
+  const [imgCarregada, setImgCarregada] = useState(false);
+  
   const productId = produto._id || produto.id;
   
   const fotos = (produto.fotos && produto.fotos.length > 0) ? produto.fotos : (produto.foto ? [produto.foto] : []);
   const fotoAtual = fotos[imgIndex];
+
+  // Sempre que a foto muda (passou no carrossel), volta para "carregando"
+  useEffect(() => {
+    setImgCarregada(false);
+  }, [imgIndex]);
 
   const nextImg = (e) => {
     if (e) e.stopPropagation();
@@ -101,13 +110,13 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
     <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:border-[#c5a880]/30 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
       
       {produto.categoria === 'COMBO' && (
-        <div className="absolute top-5 right-5 z-10 bg-orange-100 backdrop-blur-md text-orange-700 border border-orange-200 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
+        <div className="absolute top-5 right-5 z-20 bg-orange-100 backdrop-blur-md text-orange-700 border border-orange-200 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
           Combo Oferta
         </div>
       )}
 
       {produto.referencia && produto.categoria !== 'COMBO' && (
-        <div className="absolute top-5 left-5 z-10 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm pointer-events-none">
+        <div className="absolute top-5 left-5 z-20 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm pointer-events-none">
           Ref: {produto.referencia}
         </div>
       )}
@@ -118,27 +127,41 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
         onTouchEnd={handleTouchEnd}
         className="aspect-square bg-gradient-to-br from-gray-50 to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
       >
+        {/* 🟢 Spinner de Carregamento (Mostra enquanto a imagem não chega) */}
+        {!imgCarregada && fotoAtual && (
+          <div className="absolute inset-0 flex items-center justify-center z-0">
+            <div className="w-8 h-8 border-4 border-gray-200 border-t-[#c5a880] rounded-full animate-spin"></div>
+          </div>
+        )}
+
         {fotoAtual ? (
           <img 
             src={getUrlFoto(fotoAtual)} 
             alt={produto.nome} 
-            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-1000 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] drop-shadow-xl"
+            loading="lazy"      // 🟢 Otimização: Só carrega se aparecer na tela
+            decoding="async"    // 🟢 Otimização: Não trava o site enquanto desenha a foto
+            onLoad={() => setImgCarregada(true)}
+            onError={(e) => { 
+              e.target.style.display = 'none'; 
+              e.target.nextSibling.style.display = 'block'; 
+              setImgCarregada(true);
+            }}
+            className={`w-full h-full object-contain group-hover:scale-110 transition-all duration-1000 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] drop-shadow-xl relative z-10 ${imgCarregada ? 'opacity-100' : 'opacity-0'}`}
           />
         ) : null}
         
-        <span className={`text-7xl opacity-5 absolute pointer-events-none ${fotoAtual ? 'hidden' : 'block'}`}>👓</span>
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.02] transition-colors duration-500 pointer-events-none"></div>
+        <span className={`text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.02] transition-colors duration-500 pointer-events-none z-10"></div>
 
         {fotos.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
+            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">
               ‹
             </button>
-            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 hover:scale-110">
+            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">
               ›
             </button>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-20 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full pointer-events-none">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full pointer-events-none">
               {fotos.map((_, idx) => (
                 <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === imgIndex ? 'bg-[#1d3026] w-3' : 'bg-gray-400'}`} />
               ))}
@@ -147,7 +170,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
         )}
       </div>
       
-      <div className="p-6 flex flex-col flex-1 bg-white relative">
+      <div className="p-6 flex flex-col flex-1 bg-white relative z-20">
         <h3 className="font-sans font-bold text-[#1d3026] text-sm leading-relaxed line-clamp-2 mb-4 group-hover:text-[#c5a880] transition-colors">
           {produto.nome}
         </h3>
@@ -203,12 +226,11 @@ export default function HomeLoja() {
   const [cupomAtivo, setCupomAtivo] = useState(null); 
   const [validandoCupom, setValidandoCupom] = useState(false);
 
-  // 🟢 NOVA REGRA: Verifica se há itens promocionais (UPSELL ou COMBO) no carrinho
+  // 🟢 Verifica se há itens promocionais (UPSELL ou COMBO) no carrinho
   const temPromocaoNoCarrinho = useMemo(() => {
     return carrinho.some(i => i.categoria === 'UPSELL' || i.categoria === 'COMBO');
   }, [carrinho]);
 
-  // Se o cliente colocar a Promoção e já tiver um cupom, removemos o cupom na hora!
   useEffect(() => {
     if (temPromocaoNoCarrinho && cupomAtivo) {
       setCupomAtivo(null);
@@ -268,7 +290,6 @@ export default function HomeLoja() {
   const calculosCarrinho = useMemo(() => {
     const subtotalBruto = carrinho.reduce((total, item) => total + Number(item.preco), 0);
     
-    // Se tiver oferta (UPSELL/COMBO), o desconto do cupom é zero obrigatoriamente
     let descontoCupom = 0;
 
     if (cupomAtivo && !temPromocaoNoCarrinho) {
