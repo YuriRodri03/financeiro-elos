@@ -6,6 +6,9 @@ export default function Equipe() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
+  // 🟢 ESTADO PARA CONTROLAR A EDIÇÃO
+  const [editandoId, setEditandoId] = useState(null);
+
   // Puxa quem está logado agora
   const meuUsuario = JSON.parse(localStorage.getItem('otica_elos_dados_equipe') || '{}');
 
@@ -38,7 +41,6 @@ export default function Equipe() {
 
       if (res.ok) {
         const dadosAtualizados = await res.json();
-        // Atualiza o cache local para a barra lateral mudar o nome na hora
         localStorage.setItem('otica_elos_dados_equipe', JSON.stringify({
           id: dadosAtualizados._id, nome: dadosAtualizados.nome, usuario: dadosAtualizados.usuario, cargo: dadosAtualizados.cargo
         }));
@@ -52,22 +54,49 @@ export default function Equipe() {
     finally { setCarregando(false); }
   };
 
-  // 🟢 CADASTRAR NOVO FUNCIONÁRIO
-  const cadastrarFuncionario = async (e) => {
+  // 🟢 INICIAR E CANCELAR EDIÇÃO DA EQUIPE
+  const iniciarEdicao = (func) => {
+    setEditandoId(func._id);
+    setFormNovo({ nome: func.nome, usuario: func.usuario, senha: '', cargo: func.cargo });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setFormNovo({ nome: '', usuario: '', senha: '', cargo: 'VENDEDOR' });
+  };
+
+  // 🟢 SALVAR FUNCIONÁRIO (Criação ou Edição)
+  const salvarFuncionario = async (e) => {
     e.preventDefault();
     setCarregando(true);
     try {
-      const res = await fetch(`${API_URL}/funcionarios`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formNovo)
+      const payload = { nome: formNovo.nome, usuario: formNovo.usuario, cargo: formNovo.cargo };
+      
+      // Só envia a senha se o admin digitou algo novo
+      if (formNovo.senha.trim() !== '') {
+        payload.senha = formNovo.senha;
+      } else if (!editandoId) {
+        // Se for um NOVO cadastro, a senha é obrigatória
+        alert("A senha inicial é obrigatória para novos cadastros.");
+        setCarregando(false);
+        return;
+      }
+
+      const url = editandoId ? `${API_URL}/funcionarios/${editandoId}` : `${API_URL}/funcionarios`;
+      const metodo = editandoId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        alert(`Acesso liberado para ${formNovo.nome}!`);
-        setFormNovo({ nome: '', usuario: '', senha: '', cargo: 'VENDEDOR' });
+        alert(editandoId ? "Dados atualizados com sucesso!" : `Acesso liberado para ${formNovo.nome}!`);
+        cancelarEdicao();
         buscarFuncionarios();
       } else {
         const err = await res.json();
-        alert(err.error || "Erro ao cadastrar. O usuário pode já existir.");
+        alert(err.error || "Erro ao salvar. O usuário pode já existir.");
       }
     } catch (error) { alert("Erro de conexão."); }
     finally { setCarregando(false); }
@@ -139,11 +168,18 @@ export default function Equipe() {
         {abaAtiva === 'GERENCIAR' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
             
-            {/* CRIAR FUNCIONÁRIO */}
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 h-fit sticky top-24">
-              <h2 className="font-tradicional text-2xl text-[#c5a880] italic font-bold mb-6">Novo Colaborador</h2>
+            {/* FORMULÁRIO: CRIAR OU EDITAR FUNCIONÁRIO */}
+            <div className={`bg-white rounded-[2rem] p-8 shadow-sm border h-fit sticky top-24 transition-colors ${editandoId ? 'border-orange-200 ring-4 ring-orange-50' : 'border-gray-100'}`}>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="font-tradicional text-2xl text-[#c5a880] italic font-bold">
+                  {editandoId ? 'Editar Colaborador' : 'Novo Colaborador'}
+                </h2>
+                {editandoId && (
+                  <span className="bg-orange-100 text-orange-600 text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-widest">Editando</span>
+                )}
+              </div>
               
-              <form onSubmit={cadastrarFuncionario} className="space-y-5">
+              <form onSubmit={salvarFuncionario} className="space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Nome Completo</label>
                   <input type="text" placeholder="Ex: João Silva" value={formNovo.nome} onChange={e => setFormNovo({...formNovo, nome: e.target.value})} required className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] font-bold text-gray-700" />
@@ -155,8 +191,10 @@ export default function Equipe() {
                     <input type="text" placeholder="Ex: joao.vendas" value={formNovo.usuario} onChange={e => setFormNovo({...formNovo, usuario: e.target.value.toLowerCase()})} required className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] font-bold text-gray-700 lowercase" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Senha Inicial</label>
-                    <input type="text" placeholder="Ex: 123456" value={formNovo.senha} onChange={e => setFormNovo({...formNovo, senha: e.target.value})} required className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] font-bold text-gray-700" />
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">
+                      {editandoId ? 'Nova Senha (Opcional)' : 'Senha Inicial'}
+                    </label>
+                    <input type="text" placeholder={editandoId ? "Deixe em branco para manter" : "Ex: 123456"} value={formNovo.senha} onChange={e => setFormNovo({...formNovo, senha: e.target.value})} className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] font-bold text-gray-700" />
                   </div>
                 </div>
 
@@ -168,9 +206,16 @@ export default function Equipe() {
                   </select>
                 </div>
 
-                <button type="submit" disabled={carregando} className="w-full bg-[#c5a880] hover:bg-[#b0946d] text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl shadow-lg active:scale-95 transition-all mt-2">
-                  {carregando ? 'Cadastrando...' : 'Liberar Acesso'}
-                </button>
+                <div className="flex gap-3 pt-2">
+                  {editandoId && (
+                    <button type="button" onClick={cancelarEdicao} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all">
+                      Cancelar
+                    </button>
+                  )}
+                  <button type="submit" disabled={carregando} className={`flex-[2] text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl shadow-lg active:scale-95 transition-all ${editandoId ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20' : 'bg-[#c5a880] hover:bg-[#b0946d] shadow-[#c5a880]/20'}`}>
+                    {carregando ? 'Salvando...' : (editandoId ? 'Salvar Alterações' : 'Liberar Acesso')}
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -178,7 +223,7 @@ export default function Equipe() {
             <div className="space-y-3">
               <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4 ml-1">Acessos Ativos</p>
               {funcionarios.map(func => (
-                <div key={func._id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition-shadow">
+                <div key={func._id} className={`bg-white p-5 rounded-2xl shadow-sm border flex justify-between items-center transition-all ${editandoId === func._id ? 'border-orange-300 ring-2 ring-orange-50' : 'border-gray-100 hover:shadow-md'}`}>
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner ${func.cargo === 'ADMIN' ? 'bg-elos-verde text-white' : 'bg-gray-100 text-gray-500'}`}>
                       {func.cargo === 'ADMIN' ? '👑' : '💼'}
@@ -191,10 +236,16 @@ export default function Equipe() {
                       <p className="text-[10px] font-black text-gray-400 tracking-widest">Login: <span className="text-[#c5a880] lowercase">{func.usuario}</span></p>
                     </div>
                   </div>
+                  
                   {func._id !== meuUsuario.id && (
-                    <button onClick={() => deletarFuncionario(func._id, func.nome, func.cargo)} className="text-red-400 hover:text-white hover:bg-red-500 w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-red-50" title="Revogar Acesso">
-                      🗑️
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => iniciarEdicao(func)} className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-gray-50 border border-gray-100" title="Editar Credenciais">
+                        ✏️
+                      </button>
+                      <button onClick={() => deletarFuncionario(func._id, func.nome, func.cargo)} className="text-red-400 hover:text-white hover:bg-red-500 w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-red-50 border border-red-100/50" title="Revogar Acesso">
+                        🗑️
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
