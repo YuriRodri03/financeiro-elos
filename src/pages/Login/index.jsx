@@ -236,7 +236,7 @@ export default function Login({ onLogin }) {
           <form onSubmit={handleLogin} className="p-8 sm:p-10 space-y-6 animate-in fade-in duration-300">
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">E-mail, CPF ou Usuário</label>
-              <input type="text" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="cliente@email.com ou joao.vendedor" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" />
+              <input type="text" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="cliente@email.com" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" />
             </div>
 
             <div className="space-y-1.5">
