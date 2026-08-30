@@ -16,7 +16,7 @@ export default function Login({ onLogin }) {
     _id: null, nome: '', cpf: '', dataNascimento: '', telefone: '', email: '', endereco: '', senha: '', confirmarSenha: ''
   });
 
-  // 🟢 RECUPERAÇÃO VIA E-MAIL
+  // RECUPERAÇÃO VIA E-MAIL
   const [etapaRecuperacao, setEtapaRecuperacao] = useState(1);
   const [recuperaEmail, setRecuperaEmail] = useState('');
   const [codigoDigitado, setCodigoDigitado] = useState('');
@@ -47,19 +47,11 @@ export default function Login({ onLogin }) {
     return v;
   };
 
-  // 🟢 LÓGICA DE LOGIN UNIFICADA (Funcionário vs Cliente)
+  // 🟢 LÓGICA DE LOGIN 100% PELO BANCO DE DADOS
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
     const emailTratado = loginEmail.trim().toLowerCase();
-
-    // Retrocompatibilidade temporária (Caso o banco caia, a master senha salva você)
-    if ((emailTratado === 'admin' || emailTratado === 'admin@oticaelos.com') && loginSenha === 'elos2026') {
-      onLogin({ nome: 'Mestre Temporário', usuario: 'admin', cargo: 'ADMIN' });
-      navigate('/admin'); 
-      setCarregando(false); 
-      return;
-    }
 
     try {
       // 1. TENTA LOGAR COMO FUNCIONÁRIO (PAINEL ADMIN)
@@ -72,7 +64,7 @@ export default function Login({ onLogin }) {
       if (resFunc.ok) {
         // Deu certo! É um funcionário (Admin ou Vendedor)
         const dadosFuncionario = await resFunc.json();
-        onLogin(dadosFuncionario); // Envia os dados pro main.jsx
+        onLogin(dadosFuncionario); 
         navigate('/admin');
         setCarregando(false);
         return;
@@ -159,7 +151,7 @@ export default function Login({ onLogin }) {
     finally { setCarregando(false); }
   };
 
-  // 🟢 1. SOLICITA O CÓDIGO NO E-MAIL
+  // SOLICITA O CÓDIGO NO E-MAIL
   const handleSolicitarCodigoEmail = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -180,7 +172,7 @@ export default function Login({ onLogin }) {
     }
   };
 
-  // 🟢 2. VALIDA O CÓDIGO E SALVA NOVA SENHA
+  // VALIDA O CÓDIGO E SALVA NOVA SENHA
   const handleSalvarNovaSenha = async (e) => {
     e.preventDefault();
     setCarregando(true);
