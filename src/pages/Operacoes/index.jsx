@@ -6,7 +6,7 @@ export default function Operacoes() {
   const API_URL = import.meta.env.VITE_API_URL;
 
   // 🟢 NAVEGAÇÃO INTERNA DO PAINEL
-  const [abaAtiva, setAbaAtiva] = useState('PEDIDOS'); // 'PEDIDOS', 'CUPONS', 'COMBOS'
+  const [abaAtiva, setAbaAtiva] = useState('PEDIDOS'); // 'PEDIDOS', 'CUPONS', 'PROMOCOES'
 
   // =====================================
   // 1. ESTADOS E LÓGICA - PEDIDOS ONLINE
@@ -117,21 +117,13 @@ export default function Operacoes() {
   };
 
   // =====================================
-  // 3. ESTADOS E LÓGICA - MONTADOR DE COMBOS
+  // 3. ESTADOS E LÓGICA - PROMOÇÕES POR CATEGORIA (NOVO)
   // =====================================
   const [produtosTotais, setProdutosTotais] = useState([]);
-  const [produtosSelecionadosCombo, setProdutosSelecionadosCombo] = useState([]);
-  const [nomeCombo, setNomeCombo] = useState('');
-  
-  // 🟢 Estado de busca
-  const [buscaProdutoCombo, setBuscaProdutoCombo] = useState('');
-  
-  const [tipoDescontoCombo, setTipoDescontoCombo] = useState('PERCENTUAL');
-  const [valorDescontoCombo, setValorDescontoCombo] = useState('');
-  
-  const [salvandoCombo, setSalvandoCombo] = useState(false);
+  const [formPromo, setFormPromo] = useState({ categoriaAlvo: 'ÓCULOS DE SOL', tipoDesconto: 'PERCENTUAL', valorDesconto: '' });
+  const [salvandoPromo, setSalvandoPromo] = useState(false);
 
-  const buscarProdutosEstoque = async () => {
+  const buscarRegrasPromocionais = async () => {
     try {
       const res = await fetch(`${API_URL}/produtos`);
       if (res.ok) setProdutosTotais(await res.json());
@@ -139,91 +131,57 @@ export default function Operacoes() {
   };
 
   useEffect(() => {
-    if (abaAtiva === 'COMBOS') buscarProdutosEstoque();
+    if (abaAtiva === 'PROMOCOES') buscarRegrasPromocionais();
   }, [abaAtiva]);
 
-  const toggleProdutoCombo = (produto) => {
-    const jaSelecionado = produtosSelecionadosCombo.find(p => p._id === produto._id);
-    if (jaSelecionado) {
-      setProdutosSelecionadosCombo(prev => prev.filter(p => p._id !== produto._id));
-    } else {
-      setProdutosSelecionadosCombo(prev => [...prev, produto]);
-    }
-  };
+  // Filtra as regras salvas disfarçadas de produto
+  const promocoesAtivas = produtosTotais.filter(p => p.categoria === 'PROMO_CATE');
 
-  const totalOriginalCombo = produtosSelecionadosCombo.reduce((acc, curr) => acc + Number(curr.preco), 0);
-  let precoCalculadoCombo = totalOriginalCombo;
-  
-  if (valorDescontoCombo) {
-    const desc = Number(valorDescontoCombo);
-    if (tipoDescontoCombo === 'PERCENTUAL') {
-      precoCalculadoCombo = totalOriginalCombo - (totalOriginalCombo * (desc / 100));
-    } else {
-      precoCalculadoCombo = totalOriginalCombo - desc;
-    }
-  }
-  precoCalculadoCombo = Math.max(0, precoCalculadoCombo); 
-
-  const combosExistentes = produtosTotais.filter(p => p.categoria === 'COMBO');
-
-  // 🟢 Filtro de busca para exibir na lista do Combo
-  const produtosFiltradosCombo = produtosTotais.filter(p => {
-    if (p.categoria === 'COMBO' || p.categoria === 'LENTE') return false;
-    if (buscaProdutoCombo) {
-      const termo = buscaProdutoCombo.toLowerCase();
-      const matchNome = p.nome.toLowerCase().includes(termo);
-      const matchRef = (p.referencia || '').toLowerCase().includes(termo);
-      return matchNome || matchRef;
-    }
-    return true;
-  });
-
-  const gerarCombo = async (e) => {
+  const gerarPromocao = async (e) => {
     e.preventDefault();
-    if (produtosSelecionadosCombo.length < 2) return alert("Selecione pelo menos 2 produtos para formar um combo.");
-    if (!nomeCombo.trim() || !valorDescontoCombo) return alert("Preencha o nome e o valor do desconto.");
+    if (!formPromo.valorDesconto) return alert("Preencha o valor do desconto!");
 
-    setSalvandoCombo(true);
+    // Verifica se já existe uma promoção para essa categoria para não bugar
+    const jaExiste = promocoesAtivas.find(p => p.nome === `PROMOCAO_${formPromo.categoriaAlvo}`);
+    if (jaExiste) {
+      return alert(`Já existe uma promoção ativa para ${formPromo.categoriaAlvo}. Por favor, exclua a antiga antes de criar uma nova!`);
+    }
+
+    setSalvandoPromo(true);
     try {
-      const menorQuantidade = Math.min(...produtosSelecionadosCombo.map(p => p.quantidade || 0));
-      const idsVinculados = "ITENS:" + produtosSelecionadosCombo.map(p => p._id).join(',');
-
-      const payloadCombo = {
-        nome: "COMBO: " + nomeCombo,
-        preco: Number(precoCalculadoCombo.toFixed(2)), 
-        categoria: 'COMBO',
-        quantidade: menorQuantidade > 0 ? menorQuantidade : 1, 
-        referencia: idsVinculados,
-        foto: produtosSelecionadosCombo[0].foto 
+      // 🟢 O Pulo do Gato: Salvamos a regra disfarçada na tabela de Produtos
+      const payloadPromo = {
+        nome: `PROMOCAO_${formPromo.categoriaAlvo}`,
+        categoria: 'PROMO_CATE',
+        preco: Number(formPromo.valorDesconto), // Guarda o valor (ex: 15)
+        referencia: formPromo.tipoDesconto,     // Guarda se é % ou R$
+        quantidade: 1,
+        foto: '' 
       };
 
       const res = await fetch(`${API_URL}/produtos`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadCombo)
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadPromo)
       });
 
       if (res.ok) {
-        alert("Combo gerado e enviado para a Vitrine com sucesso!");
-        setProdutosSelecionadosCombo([]);
-        setNomeCombo('');
-        setValorDescontoCombo('');
-        setTipoDescontoCombo('PERCENTUAL');
-        setBuscaProdutoCombo('');
-        buscarProdutosEstoque();
+        alert("Promoção ativada! Os preços na vitrine serão remarcados imediatamente.");
+        setFormPromo({ categoriaAlvo: 'ÓCULOS DE SOL', tipoDesconto: 'PERCENTUAL', valorDesconto: '' });
+        buscarRegrasPromocionais();
       } else {
-        alert("Erro ao criar combo no servidor.");
+        alert("Erro ao ativar promoção no servidor.");
       }
     } catch (err) {
-      alert("Erro na conexão ao criar combo.");
+      alert("Erro na conexão.");
     } finally {
-      setSalvandoCombo(false);
+      setSalvandoPromo(false);
     }
   };
 
-  const deletarComboExistente = async (id) => {
-    if (!window.confirm("Desfazer este Combo? Ele sairá da loja online.")) return;
+  const deletarPromocao = async (id) => {
+    if (!window.confirm("Deseja encerrar essa promoção? Os preços voltarão ao normal na loja.")) return;
     try {
       await fetch(`${API_URL}/produtos/${id}`, { method: 'DELETE' });
-      buscarProdutosEstoque();
+      buscarRegrasPromocionais();
     } catch (e) {}
   };
 
@@ -251,8 +209,8 @@ export default function Operacoes() {
           <button onClick={() => setAbaAtiva('PEDIDOS')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${abaAtiva === 'PEDIDOS' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'}`}>
             📦 Pedidos
           </button>
-          <button onClick={() => setAbaAtiva('COMBOS')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${abaAtiva === 'COMBOS' ? 'bg-orange-600 text-white shadow-md' : 'text-gray-400 hover:text-orange-600'}`}>
-            🎁 Combos
+          <button onClick={() => setAbaAtiva('PROMOCOES')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${abaAtiva === 'PROMOCOES' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-red-600'}`}>
+            🔥 Promoções
           </button>
           <button onClick={() => setAbaAtiva('CUPONS')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${abaAtiva === 'CUPONS' ? 'bg-[#c5a880] text-white shadow-md' : 'text-gray-400 hover:text-[#c5a880]'}`}>
             🎟️ Cupons
@@ -369,149 +327,110 @@ export default function Operacoes() {
         )}
 
         {/* ======================================================== */}
-        {/* 🟢 ABA 2: MONTADOR DE COMBOS */}
+        {/* 🟢 ABA 2: PROMOÇÕES DE CATEGORIA (NOVO) */}
         {/* ======================================================== */}
-        {abaAtiva === 'COMBOS' && (
+        {abaAtiva === 'PROMOCOES' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             
-            {/* LISTA DE PRODUTOS PARA ESCOLHER COM BARRA DE PESQUISA */}
-            <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 flex flex-col h-[80vh]">
-              <h2 className="font-tradicional text-2xl text-elos-verde italic font-bold mb-1">Inventário</h2>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-6">Selecione os itens para o combo</p>
+            {/* CRIADOR DE REGRAS */}
+            <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-xl ring-1 ring-red-500/10 sticky top-24 border border-red-50">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-3xl">🔥</span>
+                <h2 className="font-tradicional text-2xl text-red-600 italic font-bold">Criar Promoção</h2>
+              </div>
+              <p className="text-[10px] text-red-400 uppercase tracking-widest font-black mb-8 ml-11">Remarcação em Massa</p>
               
-              {/* 🟢 BARRA DE PESQUISA ADICIONADA AQUI */}
-              <div className="mb-4 relative">
-                <input
-                  type="text"
-                  placeholder="Buscar produto ou ref..."
-                  value={buscaProdutoCombo}
-                  onChange={e => setBuscaProdutoCombo(e.target.value)}
-                  className="w-full bg-gray-50 p-3.5 pl-10 rounded-xl border border-gray-200 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 text-xs font-bold text-gray-700 transition-all"
-                />
-                <span className="absolute left-3.5 top-3.5 text-gray-400">🔍</span>
-              </div>
-
-              <div className="overflow-y-auto custom-scrollbar flex-1 pr-2 space-y-3">
-                {produtosFiltradosCombo.length === 0 ? (
-                  <p className="text-center text-xs font-bold text-gray-400 mt-10">Nenhum produto encontrado.</p>
-                ) : (
-                  produtosFiltradosCombo.map(produto => {
-                    const taSelecionado = produtosSelecionadosCombo.some(p => p._id === produto._id);
-                    return (
-                      <div 
-                        key={produto._id} 
-                        onClick={() => toggleProdutoCombo(produto)}
-                        className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${taSelecionado ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-gray-50 border-gray-100 hover:border-orange-200'}`}
-                      >
-                        <div className="flex-1 pr-4">
-                          <p className={`text-xs font-bold ${taSelecionado ? 'text-orange-800' : 'text-gray-700'}`}>{produto.nome}</p>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mt-1">
-                            {produto.categoria} {produto.referencia ? `• Ref: ${produto.referencia}` : ''} • R$ {produto.preco}
-                          </p>
-                        </div>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-colors ${taSelecionado ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300'}`}>
-                          {taSelecionado && '✓'}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* FECHAMENTO DO COMBO */}
-            <div className="space-y-6 sticky top-24">
-              <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-xl ring-1 ring-black/5">
-                <h2 className="font-tradicional text-2xl text-orange-600 italic font-bold mb-1">Montar Combo</h2>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-6">{produtosSelecionadosCombo.length} itens selecionados</p>
+              <form onSubmit={gerarPromocao} className="space-y-6">
                 
-                {produtosSelecionadosCombo.length === 0 ? (
-                  <div className="text-center py-10 bg-orange-50/50 rounded-2xl border border-orange-100 border-dashed">
-                    <p className="text-orange-400 font-bold uppercase tracking-widest text-xs">Marque os itens ao lado.</p>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Aplicar Desconto em:</label>
+                  <select 
+                    value={formPromo.categoriaAlvo} 
+                    onChange={e => setFormPromo({...formPromo, categoriaAlvo: e.target.value})} 
+                    className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 text-sm font-bold text-red-900 cursor-pointer"
+                  >
+                    <option value="ÓCULOS DE SOL">Todos os Óculos de Sol</option>
+                    <option value="ARMAÇÃO">Todas as Armações</option>
+                    <option value="ACESSÓRIOS">Todos os Acessórios</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Tipo de Desconto</label>
+                    <select 
+                      value={formPromo.tipoDesconto} 
+                      onChange={e => setFormPromo({...formPromo, tipoDesconto: e.target.value, valorDesconto: ''})} 
+                      className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 text-xs font-bold text-red-900 cursor-pointer"
+                    >
+                      <option value="PERCENTUAL">% Porcentagem</option>
+                      <option value="FIXO">R$ Valor Fixo</option>
+                    </select>
                   </div>
-                ) : (
-                  <form onSubmit={gerarCombo} className="space-y-5">
-                    <ul className="space-y-2 mb-4">
-                      {produtosSelecionadosCombo.map(p => (
-                        <li key={p._id} className="flex justify-between text-xs font-medium text-gray-600 border-b border-gray-100 pb-2">
-                          <span className="truncate pr-4">1x {p.nome}</span>
-                          <span>R$ {p.preco}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 mb-6">
-                      <span className="text-[10px] uppercase font-black tracking-widest text-gray-500">Valor Original (Soma)</span>
-                      <span className="text-sm font-black text-gray-400 line-through">R$ {totalOriginalCombo.toFixed(2)}</span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-orange-600 tracking-widest ml-1">Nome para Vitrine</label>
-                      <input type="text" placeholder="Ex: Combo Sol de Verão" value={nomeCombo} onChange={e => setNomeCombo(e.target.value)} required className="w-full bg-orange-50/50 p-3.5 rounded-xl border border-orange-200 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 font-bold text-orange-800 text-sm transition-all" />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-orange-600 tracking-widest ml-1">Tipo Desconto</label>
-                        <select 
-                          value={tipoDescontoCombo} 
-                          onChange={e => { setTipoDescontoCombo(e.target.value); setValorDescontoCombo(''); }} 
-                          className="w-full bg-orange-50/50 p-3.5 rounded-xl border border-orange-200 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 text-xs font-bold text-orange-800"
-                        >
-                          <option value="PERCENTUAL">% Porcentagem</option>
-                          <option value="FIXO">R$ Valor Fixo</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-orange-600 tracking-widest ml-1">Desconto</label>
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          min="0"
-                          placeholder={tipoDescontoCombo === 'PERCENTUAL' ? "Ex: 10" : "Ex: 50.00"} 
-                          value={valorDescontoCombo} 
-                          onChange={e => setValorDescontoCombo(e.target.value)} 
-                          required 
-                          className="w-full bg-orange-50/50 p-3.5 rounded-xl border border-orange-200 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 font-black text-orange-600 text-lg transition-all" 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center bg-orange-100/50 p-3 rounded-xl border border-orange-200 mt-2">
-                      <span className="text-[10px] uppercase font-black tracking-widest text-orange-800">Preço Final do Combo</span>
-                      <span className="text-xl font-black text-orange-600">R$ {precoCalculadoCombo.toFixed(2)}</span>
-                    </div>
-
-                    <button type="submit" disabled={salvandoCombo} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-lg shadow-orange-600/30 active:scale-95 transition-all mt-4">
-                      {salvandoCombo ? 'Gerando...' : 'Finalizar Combo e Enviar p/ Loja'}
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              {/* COMBOS ATIVOS */}
-              {combosExistentes.length > 0 && (
-                <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-                  <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4">Combos Ativos na Loja</p>
-                  <div className="space-y-3">
-                    {combosExistentes.map(combo => (
-                      <div key={combo._id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <div className="flex-1 pr-4">
-                          <p className="text-xs font-bold text-elos-verde line-clamp-1">{combo.nome}</p>
-                          <p className="text-[10px] font-black text-orange-500 mt-1">R$ {combo.preco.toFixed(2)}</p>
-                        </div>
-                        <button onClick={() => deletarComboExistente(combo._id)} className="text-red-400 hover:text-red-600 bg-white border border-gray-200 w-8 h-8 rounded-lg flex items-center justify-center transition-colors shadow-sm" title="Desfazer Combo">
-                          🗑️
-                        </button>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Valor Off</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="1"
+                      placeholder={formPromo.tipoDesconto === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} 
+                      value={formPromo.valorDesconto} 
+                      onChange={e => setFormPromo({...formPromo, valorDesconto: e.target.value})} 
+                      required 
+                      className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 font-black text-red-700 text-lg transition-all" 
+                    />
                   </div>
                 </div>
+
+                <div className="bg-red-50 p-4 rounded-xl border border-red-100 mt-2">
+                  <p className="text-[10px] text-red-800 font-bold leading-relaxed">
+                    🚨 <strong className="uppercase">Atenção:</strong> Ao ativar, o sistema vai cruzar o preço original de todos os itens da categoria selecionada e mostrar o preço novo em destaque na loja virtual.
+                  </p>
+                </div>
+
+                <button type="submit" disabled={salvandoPromo} className="w-full bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[11px] py-5 rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all mt-4">
+                  {salvandoPromo ? 'Ativando...' : 'Ativar Promoção na Loja'}
+                </button>
+              </form>
+            </div>
+
+            {/* LISTA DE PROMOÇÕES ATIVAS */}
+            <div className="space-y-4">
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Liquidações Ativas</p>
+              
+              {promocoesAtivas.length === 0 ? (
+                <div className="bg-white/50 border border-gray-100 border-dashed rounded-[2rem] p-10 text-center">
+                  <span className="text-4xl opacity-20 block mb-4">🛒</span>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Sua loja está com preços normais.</p>
+                </div>
+              ) : (
+                promocoesAtivas.map(promo => {
+                  const categoriaNome = promo.nome.replace('PROMOCAO_', '');
+                  return (
+                    <div key={promo._id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-red-100 flex justify-between items-center relative overflow-hidden group">
+                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-red-500"></div>
+                      
+                      <div className="pl-3">
+                        <span className="bg-red-100 text-red-600 text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md mb-2 inline-block">Ativa Agora</span>
+                        <h3 className="font-bold text-gray-800 mb-1">
+                          Promoção em <span className="text-elos-verde">{categoriaNome}</span>
+                        </h3>
+                        <p className="text-xl font-black text-red-600 tracking-tight">
+                          {promo.referencia === 'PERCENTUAL' ? `${promo.preco}% OFF` : `R$ ${promo.preco.toFixed(2)} OFF`}
+                        </p>
+                      </div>
+
+                      <button onClick={() => deletarPromocao(promo._id)} className="w-12 h-12 rounded-xl bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 border border-gray-100 hover:border-red-200 transition-all flex items-center justify-center text-lg" title="Encerrar Promoção">
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
+
           </div>
         )}
-
 
         {/* ======================================================== */}
         {/* ABA 3: GERENCIADOR DE CUPONS */}

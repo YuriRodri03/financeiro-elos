@@ -54,45 +54,25 @@ function ModalTermos({ onClose }) {
 }
 
 // =======================================================
-// 🟢 COMPONENTE: CARD DE PRODUTO (OTIMIZADO)
+// 🟢 COMPONENTE: CARD DE PRODUTO
 // =======================================================
-function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
+function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPromocional }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
-  
-  // 🟢 Novo estado para controlar o carregamento da imagem
   const [imgCarregada, setImgCarregada] = useState(false);
   
   const productId = produto._id || produto.id;
-  
   const fotos = (produto.fotos && produto.fotos.length > 0) ? produto.fotos : (produto.foto ? [produto.foto] : []);
   const fotoAtual = fotos[imgIndex];
 
-  // Sempre que a foto muda (passou no carrossel), volta para "carregando"
-  useEffect(() => {
-    setImgCarregada(false);
-  }, [imgIndex]);
+  useEffect(() => { setImgCarregada(false); }, [imgIndex]);
 
-  const nextImg = (e) => {
-    if (e) e.stopPropagation();
-    setImgIndex((prev) => (prev + 1) % fotos.length);
-  };
+  const nextImg = (e) => { if (e) e.stopPropagation(); setImgIndex((prev) => (prev + 1) % fotos.length); };
+  const prevImg = (e) => { if (e) e.stopPropagation(); setImgIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1)); };
 
-  const prevImg = (e) => {
-    if (e) e.stopPropagation();
-    setImgIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1));
-  };
-
-  const handleTouchStart = (e) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
+  const handleTouchStart = (e) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientX); };
+  const handleTouchMove = (e) => { setTouchEnd(e.targetTouches[0].clientX); };
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
@@ -109,13 +89,14 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
   return (
     <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:border-[#c5a880]/30 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
       
-      {produto.categoria === 'COMBO' && (
-        <div className="absolute top-5 right-5 z-20 bg-orange-100 backdrop-blur-md text-orange-700 border border-orange-200 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm pointer-events-none">
-          Combo Oferta
+      {/* 🟢 ETIQUETA DE PROMOÇÃO EM DESTAQUE */}
+      {precoPromocional && precoPromocional < produto.preco && (
+        <div className="absolute top-5 right-5 z-20 bg-red-600 backdrop-blur-md text-white border border-red-500 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
+          🔥 Promoção!
         </div>
       )}
 
-      {produto.referencia && produto.categoria !== 'COMBO' && (
+      {produto.referencia && !precoPromocional && (
         <div className="absolute top-5 left-5 z-20 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm pointer-events-none">
           Ref: {produto.referencia}
         </div>
@@ -127,7 +108,6 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
         onTouchEnd={handleTouchEnd}
         className="aspect-square bg-gradient-to-br from-gray-50 to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
       >
-        {/* 🟢 Spinner de Carregamento (Mostra enquanto a imagem não chega) */}
         {!imgCarregada && fotoAtual && (
           <div className="absolute inset-0 flex items-center justify-center z-0">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-[#c5a880] rounded-full animate-spin"></div>
@@ -138,8 +118,8 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
           <img 
             src={getUrlFoto(fotoAtual)} 
             alt={produto.nome} 
-            loading="lazy"      // 🟢 Otimização: Só carrega se aparecer na tela
-            decoding="async"    // 🟢 Otimização: Não trava o site enquanto desenha a foto
+            loading="lazy" 
+            decoding="async" 
             onLoad={() => setImgCarregada(true)}
             onError={(e) => { 
               e.target.style.display = 'none'; 
@@ -155,12 +135,8 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
 
         {fotos.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">
-              ‹
-            </button>
-            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">
-              ›
-            </button>
+            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">‹</button>
+            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">›</button>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full pointer-events-none">
               {fotos.map((_, idx) => (
                 <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === imgIndex ? 'bg-[#1d3026] w-3' : 'bg-gray-400'}`} />
@@ -178,18 +154,37 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl }) {
         <div className="mt-auto flex items-end justify-between">
           <div className="flex flex-col">
             <span className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
-            <span className="font-tradicional italic font-bold text-[#1d3026] text-2xl tracking-tight">
-              {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-            </span>
+            
+            {/* 🟢 SE TIVER PROMOÇÃO, RISCA O PREÇO ANTIGO E DESTACA O NOVO */}
+            {precoPromocional && precoPromocional < produto.preco ? (
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-400 line-through font-bold">
+                  {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+                <span className="font-tradicional italic font-bold text-red-600 text-2xl tracking-tight leading-none mt-1">
+                  {Number(precoPromocional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+            ) : (
+              <span className="font-tradicional italic font-bold text-[#1d3026] text-2xl tracking-tight leading-none mt-1">
+                {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            )}
           </div>
           
           <button 
-            onClick={() => adicionarAoCarrinho(produto)}
+            onClick={() => {
+              // Se tiver promoção, manda o produto pro carrinho já com o preço novo!
+              const produtoParaCarrinho = precoPromocional ? { ...produto, preco: precoPromocional, precoOriginal: produto.preco } : produto;
+              adicionarAoCarrinho(produtoParaCarrinho);
+            }}
             disabled={noCarrinho}
             className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-md ${
               noCarrinho 
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
-                : 'bg-[#1d3026] text-white hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
+                : precoPromocional
+                  ? 'bg-red-600 text-white hover:bg-red-700 hover:shadow-red-600/40 hover:-translate-y-1 active:scale-95'
+                  : 'bg-[#1d3026] text-white hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
             }`}
           >
             {noCarrinho ? '✓' : '🛒'}
@@ -226,16 +221,36 @@ export default function HomeLoja() {
   const [cupomAtivo, setCupomAtivo] = useState(null); 
   const [validandoCupom, setValidandoCupom] = useState(false);
 
-  // 🟢 Verifica se há itens promocionais (UPSELL ou COMBO) no carrinho
+  // 🟢 INTELIGÊNCIA DE PROMOÇÕES (Lê as regras salvas pelo Admin)
+  const promocoesAtivas = useMemo(() => {
+    return (produtos || []).filter(p => p.categoria === 'PROMO_CATE');
+  }, [produtos]);
+
+  const obterPrecoPromocional = (produto) => {
+    const regraPromo = promocoesAtivas.find(p => p.nome === `PROMOCAO_${produto.categoria}`);
+    if (!regraPromo) return null;
+
+    let precoComDesconto = Number(produto.preco);
+    const valorDesconto = Number(regraPromo.preco);
+
+    if (regraPromo.referencia === 'PERCENTUAL') {
+      precoComDesconto = precoComDesconto - (precoComDesconto * (valorDesconto / 100));
+    } else {
+      precoComDesconto = precoComDesconto - valorDesconto;
+    }
+    
+    return Math.max(0, precoComDesconto);
+  };
+
   const temPromocaoNoCarrinho = useMemo(() => {
-    return carrinho.some(i => i.categoria === 'UPSELL' || i.categoria === 'COMBO');
+    return carrinho.some(i => i.categoria === 'UPSELL' || i.precoOriginal);
   }, [carrinho]);
 
   useEffect(() => {
     if (temPromocaoNoCarrinho && cupomAtivo) {
       setCupomAtivo(null);
       setCupomDigitado('');
-      alert("⚠️ O cupom de desconto foi removido, pois não é cumulativo com a oferta especial adicionada ao carrinho.");
+      alert("⚠️ O cupom de desconto foi removido, pois você já possui itens em promoção no carrinho (Descontos não cumulativos).");
     }
   }, [temPromocaoNoCarrinho, cupomAtivo]);
 
@@ -280,16 +295,12 @@ export default function HomeLoja() {
     if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado) buscarPedidos();
   }, [abaAtiva, clienteLogado]); 
 
-  // ==========================================
-  // 🟢 BUSCA PRODUTO DE UPSELL DINAMICAMENTE
-  // ==========================================
   const produtoUpsell = useMemo(() => {
     return (produtos || []).find(p => p.categoria === 'UPSELL' && p.quantidade > 0);
   }, [produtos]);
 
   const calculosCarrinho = useMemo(() => {
     const subtotalBruto = carrinho.reduce((total, item) => total + Number(item.preco), 0);
-    
     let descontoCupom = 0;
 
     if (cupomAtivo && !temPromocaoNoCarrinho) {
@@ -304,11 +315,7 @@ export default function HomeLoja() {
 
     const totalFinal = Math.max(0, subtotalBruto - descontoCupom);
 
-    return {
-      subtotalBruto,
-      descontoCupom,
-      totalFinal
-    };
+    return { subtotalBruto, descontoCupom, totalFinal };
   }, [carrinho, cupomAtivo, temPromocaoNoCarrinho]);
 
   const validarCupomServidor = async () => {
@@ -323,11 +330,8 @@ export default function HomeLoja() {
         setCupomAtivo(null);
         alert(data.error || "Cupom inválido.");
       }
-    } catch (e) {
-      alert("Erro ao validar cupom.");
-    } finally {
-      setValidandoCupom(false);
-    }
+    } catch (e) { alert("Erro ao validar cupom."); } 
+    finally { setValidandoCupom(false); }
   };
 
   const handleMascaraTel = (v) => {
@@ -349,7 +353,7 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE' && p.categoria !== 'UPSELL');
+    let filtrados = (produtos || []).filter(p => p.quantidade > 0 && p.categoria !== 'LENTE' && p.categoria !== 'UPSELL' && p.categoria !== 'PROMO_CATE');
     if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.referencia || '').toLowerCase().includes(busca.toLowerCase()));
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.categoria === categoriaAtiva);
     return filtrados;
@@ -359,8 +363,7 @@ export default function HomeLoja() {
     { id: 'TODAS', label: 'Tudo' },
     { id: 'ARMAÇÃO', label: 'Óculos' },
     { id: 'ÓCULOS DE SOL', label: 'Solar' },
-    { id: 'ACESSÓRIOS', label: 'Acessórios' },
-    { id: 'COMBO', label: 'Combos' }
+    { id: 'ACESSÓRIOS', label: 'Acessórios' }
   ];
 
   const adicionarAoCarrinho = (produto) => {
@@ -543,6 +546,9 @@ export default function HomeLoja() {
                   começa aqui.
                 </span>
               </h1>
+              <p className="mt-8 text-gray-300 max-w-lg mx-auto font-light leading-relaxed text-sm md:text-base">
+                Descubra a combinação perfeita entre design sofisticado, tecnologia visual e conforto para o seu dia a dia.
+              </p>
             </div>
             <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f9f8f6] to-transparent"></div>
           </div>
@@ -606,6 +612,7 @@ export default function HomeLoja() {
                     noCarrinho={carrinho.some(item => item._id === (produto._id || produto.id))}
                     adicionarAoCarrinho={adicionarAoCarrinho}
                     apiUrl={apiUrl}
+                    precoPromocional={obterPrecoPromocional(produto)} // 🟢 Injeta o preço calculado da promoção
                   />
                 ))}
               </div>
@@ -726,7 +733,12 @@ export default function HomeLoja() {
                             <div className="flex-1">
                               <h4 className="text-xs font-bold text-[#1d3026] line-clamp-2">{item.nome}</h4>
                               <p className="text-[10px] font-black tracking-widest uppercase text-gray-400 mt-1 mb-2">Ref: {item.referencia || 'N/A'}</p>
-                              <p className="text-sm font-tradicional italic font-bold text-[#c5a880]">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                              <div className="flex gap-2 items-baseline">
+                                <p className="text-sm font-tradicional italic font-bold text-[#c5a880]">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                {item.precoOriginal && (
+                                  <p className="text-[9px] text-gray-400 line-through font-bold">R$ {Number(item.precoOriginal).toFixed(2)}</p>
+                                )}
+                              </div>
                             </div>
                             <button onClick={() => removerDoCarrinho(item._id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-red-500 transition-all text-lg shadow-sm bg-white">&times;</button>
                           </div>
@@ -766,14 +778,14 @@ export default function HomeLoja() {
                         </div>
                       )}
 
-                      {/* 🟢 ÁREA DE CUPONS NO CARRINHO - COM BLOQUEIO DE CUMULATIVIDADE */}
+                      {/* 🟢 ÁREA DE CUPONS NO CARRINHO */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
                         
                         {temPromocaoNoCarrinho ? (
                           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                              🚫 Cupons não são cumulativos com os combos e ofertas extras que você já possui no carrinho.
+                              🚫 Cupons não são cumulativos com os itens em liquidação que você já possui no carrinho.
                             </p>
                           </div>
                         ) : !cupomAtivo ? (
@@ -925,7 +937,6 @@ export default function HomeLoja() {
             {etapaCheckout < 2 && carrinho.length > 0 && (
               <div className="p-6 md:p-8 border-t border-gray-100 bg-[#f9f8f6] space-y-4">
                 
-                {/* Mostra Desconto do Cupom se tiver cupom válido */}
                 {calculosCarrinho.descontoCupom > 0 && (
                   <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
                     <div className="flex flex-col">
