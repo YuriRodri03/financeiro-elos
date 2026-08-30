@@ -1,24 +1,29 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout }) {
+export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, onLogout }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const location = useLocation();
 
-  // 🟢 ATUALIZADO: Incluído o item 'Operações' na lista de navegação
-  const linksNav = [
-    { id: 'dashboard', nome: 'Dashboard', icone: '📊' },
-    { id: 'vendas', nome: 'Nova Venda', icone: '👓' },
-    { id: 'ordens-servico', nome: 'Painel de OS', icone: '📋' }, 
-    { id: 'operacoes', nome: 'Operações', icone: '⚙️' }, // Novo Item
-    { id: 'clientes', nome: 'Clientes', icone: '👥' },
-    { id: 'produtos', nome: 'Catálogo', icone: '📦' },
-    { id: 'despesas', nome: 'Despesas', icone: '💸' },
-    { id: 'relatorios', nome: 'Cobrança', icone: '🚨' },
-    { id: 'zap', nome: 'Automação', icone: '🟢' }, 
+  const linksNavTotais = [
+    { id: 'dashboard', nome: 'Dashboard', icone: '📊', restricao: 'ADMIN' },
+    { id: 'vendas', nome: 'Nova Venda', icone: '👓', restricao: 'TODOS' },
+    { id: 'ordens-servico', nome: 'Painel de OS', icone: '📋', restricao: 'TODOS' }, 
+    { id: 'operacoes', nome: 'Operações', icone: '⚙️', restricao: 'ADMIN' }, 
+    { id: 'clientes', nome: 'Clientes', icone: '👥', restricao: 'TODOS' },
+    { id: 'produtos', nome: 'Catálogo', icone: '📦', restricao: 'TODOS' },
+    { id: 'despesas', nome: 'Despesas', icone: '💸', restricao: 'ADMIN' },
+    { id: 'relatorios', nome: 'Cobrança', icone: '🚨', restricao: 'ADMIN' },
+    { id: 'zap', nome: 'Automação', icone: '🟢', restricao: 'ADMIN' },
+    { id: 'equipe', nome: 'Equipe & Acessos', icone: '🛡️', restricao: 'ADMIN' },
   ];
 
-  // 🟢 CORRIGIDO: Agora apenas chama a função do main.jsx (que já sabe para onde navegar) e fecha o menu.
+  // 🟢 FILTRO DE SEGURANÇA: Remove do menu os botões proibidos para o Vendedor
+  const linksNav = linksNavTotais.filter(link => {
+    if (cargo === 'VENDEDOR' && link.restricao === 'ADMIN') return false;
+    return true;
+  });
+
   const handleNavegacao = (abaId) => {
     setAbaAtiva(abaId);
     setMenuAberto(false);
@@ -30,7 +35,7 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
       <nav className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-elos-bege/10 shadow-sm px-4 md:px-10 py-4 flex items-center justify-between transition-all gap-4">
         
         {/* LOGO DA ÓTICA */}
-        <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => handleNavegacao('dashboard')}>
+        <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => handleNavegacao(cargo === 'VENDEDOR' ? 'vendas' : 'dashboard')}>
           <span className="text-2xl animate-in fade-in duration-500">👓</span>
           <div className="flex flex-col">
             <span className="font-tradicional text-xl font-black text-elos-verde italic tracking-tight leading-none">
@@ -46,10 +51,10 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
         <div className="flex items-center gap-4 shrink-0">
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-black text-elos-texto uppercase tracking-wide">
-              {usuarioLogado || 'Painel Admin'}
+              {usuarioLogado || 'Equipe Elos'}
             </span>
             <span className="text-[9px] font-bold text-green-600 uppercase tracking-tighter text-right">
-              ● Online
+              ● {cargo || 'ADMIN'}
             </span>
           </div>
 
@@ -92,10 +97,9 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
                 </button>
               </div>
 
-              {/* Lista Vertical de Links - Apenas rolagem para cima e para baixo */}
+              {/* Lista Vertical de Links - Filtrada por Cargo */}
               <div className="flex flex-col gap-2 max-h-[65vh] overflow-y-auto no-scrollbar overflow-x-hidden">
                 {linksNav.map((link) => {
-                  // 🟢 CORRIGIDO: Só compara a aba atual para manter as páginas de Vendas/Clientes acesas ao acessá-las.
                   const ativo = abaAtual === link.id; 
                   return (
                     <button
@@ -119,7 +123,7 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, onLogout 
             <div className="border-t border-gray-100 pt-4 flex items-center justify-between gap-2">
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-black text-elos-texto uppercase tracking-wide truncate">
-                  {usuarioLogado || 'Admin'}
+                  {usuarioLogado || 'Equipe Elos'}
                 </span>
                 <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Ótica Elos &copy; 2026</span>
               </div>

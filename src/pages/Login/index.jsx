@@ -47,33 +47,65 @@ export default function Login({ onLogin }) {
     return v;
   };
 
+  // 🟢 LÓGICA DE LOGIN UNIFICADA (Funcionário vs Cliente)
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
     const emailTratado = loginEmail.trim().toLowerCase();
 
+    // Retrocompatibilidade temporária (Caso o banco caia, a master senha salva você)
     if ((emailTratado === 'admin' || emailTratado === 'admin@oticaelos.com') && loginSenha === 'elos2026') {
-      onLogin(); navigate('/admin'); setCarregando(false); return;
+      onLogin({ nome: 'Mestre Temporário', usuario: 'admin', cargo: 'ADMIN' });
+      navigate('/admin'); 
+      setCarregando(false); 
+      return;
     }
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
-      if (!res.ok) throw new Error("Erro na resposta do servidor");
-      const clientes = await res.json();
-      const clienteEncontrado = clientes.find(c => (c.email && c.email.toLowerCase() === emailTratado) || (c.cpf && c.cpf.replace(/\D/g, '') === emailTratado.replace(/\D/g, '')));
+      // 1. TENTA LOGAR COMO FUNCIONÁRIO (PAINEL ADMIN)
+      const resFunc = await fetch(`${import.meta.env.VITE_API_URL}/funcionarios/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: emailTratado, senha: loginSenha })
+      });
+
+      if (resFunc.ok) {
+        // Deu certo! É um funcionário (Admin ou Vendedor)
+        const dadosFuncionario = await resFunc.json();
+        onLogin(dadosFuncionario); // Envia os dados pro main.jsx
+        navigate('/admin');
+        setCarregando(false);
+        return;
+      }
+
+      // 2. SE NÃO FOR FUNCIONÁRIO, TENTA LOGAR COMO CLIENTE (LOJA VIRTUAL)
+      const resCli = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
+      if (!resCli.ok) throw new Error("Erro na resposta do servidor");
+      const clientes = await resCli.json();
+      
+      const clienteEncontrado = clientes.find(c => 
+        (c.email && c.email.toLowerCase() === emailTratado) || 
+        (c.cpf && c.cpf.replace(/\D/g, '') === emailTratado.replace(/\D/g, ''))
+      );
 
       if (clienteEncontrado && clienteEncontrado.senha === loginSenha) {
         localStorage.setItem('clienteLogadoElos', JSON.stringify(clienteEncontrado));
         const redirectPosLogin = localStorage.getItem('redirect_pos_login');
         if (redirectPosLogin === 'loja') {
-          localStorage.removeItem('redirect_pos_login'); navigate('/');
+          localStorage.removeItem('redirect_pos_login'); 
+          navigate('/');
         } else {
           mostrarToast(`Bem-vindo(a), ${clienteEncontrado.nome.split(' ')[0]}!`, "sucesso");
           setTimeout(() => navigate('/'), 1000);
         }
-      } else mostrarToast("Credenciais inválidas. Verifique seu e-mail/CPF e senha.", "erro");
-    } catch (error) { mostrarToast("Não foi possível conectar ao servidor.", "erro"); } 
-    finally { setCarregando(false); }
+      } else {
+        mostrarToast("Credenciais inválidas. Verifique os dados digitados.", "erro");
+      }
+    } catch (error) { 
+      mostrarToast("Não foi possível conectar ao servidor.", "erro"); 
+    } finally { 
+      setCarregando(false); 
+    }
   };
 
   const handleVerificarCpf = async (cpfDigitado) => {
@@ -211,8 +243,8 @@ export default function Login({ onLogin }) {
         {modo === 'LOGIN' && (
           <form onSubmit={handleLogin} className="p-8 sm:p-10 space-y-6 animate-in fade-in duration-300">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">E-mail ou CPF</label>
-              <input type="text" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="exemplo@email.com ou 000.000.000-00" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" />
+              <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">E-mail, CPF ou Usuário</label>
+              <input type="text" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="cliente@email.com ou joao.vendedor" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" />
             </div>
 
             <div className="space-y-1.5">

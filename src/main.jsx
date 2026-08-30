@@ -13,8 +13,8 @@ import Despesas from './pages/Despesas';
 import Login from './pages/Login'; 
 import Produtos from './pages/Produtos';
 import Zap from './pages/Zap';
+import Equipe from './pages/Equipe';
 import Navbar from './components/Navbar'; 
-
 import NovaOrdemServico from './pages/OrdemServico/index'; 
 import PainelOS from './pages/PainelOS'; 
 import EditarVenda from './pages/EditarVenda/index'; 
@@ -47,38 +47,63 @@ function FolhasCaindo() {
   );
 }
 
-function ConteudoAbasPersistentes() {
+// 🟢 Componente Central: Rotas e Restrições
+function ConteudoAbasPersistentes({ cargo }) {
   const location = useLocation();
   const currentPath = location.pathname;
 
+  // 🟢 BLOQUEIO DE ACESSO DIRETO VIA URL (Proteção RBAC)
+  const isVendedor = cargo === 'VENDEDOR';
+  
+  const mostrarRota = (caminho) => {
+    // Se for Vendedor, bloqueia Despesas, Operações, Relatórios e Zap
+    if (isVendedor) {
+      const rotasProibidas = ['/admin/despesas', '/admin/operacoes', '/admin/zap', '/admin/relatorios', '/admin/dashboard'];
+      if (rotasProibidas.includes(caminho)) return false;
+      // Se ele tentar ir pro /admin raiz, o painel vai ficar em branco. No InterfaceSistema nós o forçaremos pro /admin/vendas
+      if (caminho === '/admin' && currentPath === '/admin') return false; 
+    }
+    return currentPath === caminho;
+  };
+
   return (
     <div className="animate-in fade-in duration-500">
-      <div style={{ display: currentPath === '/admin' || currentPath === '/admin/dashboard' ? 'block' : 'none' }}>
-        <Dashboard />
-      </div>
-      <div style={{ display: currentPath === '/admin/vendas' ? 'block' : 'none' }}>
+      {/* Rotas Restritas a ADMIN */}
+      {!isVendedor && (
+        <>
+          <div style={{ display: currentPath === '/admin' || currentPath === '/admin/dashboard' ? 'block' : 'none' }}>
+            <Dashboard />
+          </div>
+          <div style={{ display: mostrarRota('/admin/despesas') ? 'block' : 'none' }}>
+            <Despesas />
+          </div>
+          <div style={{ display: mostrarRota('/admin/operacoes') ? 'block' : 'none' }}>
+            <Operacoes />
+          </div>
+          <div style={{ display: mostrarRota('/admin/zap') ? 'block' : 'none' }}>
+            <Zap />
+          </div>
+          <div style={{ display: mostrarRota('/admin/relatorios') ? 'block' : 'none' }}>
+            <RelatorioInadimplencia />
+          </div>
+          <div style={{ display: mostrarRota('/admin/equipe') ? 'block' : 'none' }}>
+            <Equipe />
+          </div>
+        </>
+      )}
+
+      {/* Rotas Liberadas para TODOS (Admin e Vendedor) */}
+      <div style={{ display: mostrarRota('/admin/vendas') ? 'block' : 'none' }}>
         <Vendas />
       </div>
-      <div style={{ display: currentPath === '/admin/despesas' ? 'block' : 'none' }}>
-        <Despesas />
-      </div>
-      <div style={{ display: currentPath === '/admin/clientes' ? 'block' : 'none' }}>
+      <div style={{ display: mostrarRota('/admin/clientes') ? 'block' : 'none' }}>
         <Clientes />
       </div>
-      <div style={{ display: currentPath === '/admin/produtos' ? 'block' : 'none' }}>
+      <div style={{ display: mostrarRota('/admin/produtos') ? 'block' : 'none' }}>
         <Produtos />
       </div>
-      <div style={{ display: currentPath === '/admin/zap' ? 'block' : 'none' }}>
-        <Zap />
-      </div>
-      <div style={{ display: currentPath === '/admin/relatorios' ? 'block' : 'none' }}>
-        <RelatorioInadimplencia />
-      </div>
-      <div style={{ display: currentPath === '/admin/ordens-servico' ? 'block' : 'none' }}>
+      <div style={{ display: mostrarRota('/admin/ordens-servico') ? 'block' : 'none' }}>
         <PainelOS />
-      </div>
-      <div style={{ display: currentPath === '/admin/operacoes' ? 'block' : 'none' }}>
-        <Operacoes />
       </div>
 
       <Routes>
@@ -86,6 +111,7 @@ function ConteudoAbasPersistentes() {
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
         <Route path="/vendas/editar/:id" element={<EditarVenda />} />
         
+        {/* Placeholder nulo para rotas base capturadas pelos divs persistentes */}
         <Route path="/" element={null} />
         <Route path="/dashboard" element={null} />
         <Route path="/operacoes" element={null} />
@@ -102,14 +128,21 @@ function ConteudoAbasPersistentes() {
   );
 }
 
-function InterfaceSistema({ aoDeslogar }) {
+function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [modalConfirmSair, setModalConfirmSair] = useState(false);
 
+  // 🟢 Se o Vendedor logar e cair no /admin, joga ele pras Vendas direto!
+  useEffect(() => {
+    if (dadosUsuario?.cargo === 'VENDEDOR' && (location.pathname === '/admin' || location.pathname === '/admin/dashboard')) {
+      navigate('/admin/vendas', { replace: true });
+    }
+  }, [location.pathname, dadosUsuario, navigate]);
+
   const obterAbaInversa = () => {
     const rota = location.pathname.replace('/admin', '');
-    if (rota === '' || rota === '/') return 'dashboard';
+    if (rota === '' || rota === '/') return dadosUsuario?.cargo === 'VENDEDOR' ? 'vendas' : 'dashboard';
     if (rota.startsWith('/nova-os')) return null; 
     if (rota.startsWith('/ordem-servico/editar')) return null; 
     if (rota.startsWith('/vendas/editar')) return null; 
@@ -123,10 +156,12 @@ function InterfaceSistema({ aoDeslogar }) {
 
   return (
     <div className="min-h-screen bg-elos-fundo">
+      {/* 🟢 Mandando o Cargo para o Navbar para ele esconder os botões */}
       <Navbar 
         abaAtual={obterAbaInversa()} 
         setAbaAtiva={lidarMudancaAba} 
-        usuarioLogado="Painel Admin" 
+        usuarioLogado={dadosUsuario?.nome || "Equipe Elos"} 
+        cargo={dadosUsuario?.cargo || "VENDEDOR"}
         onLogout={() => setModalConfirmSair(true)} 
       />
 
@@ -145,7 +180,7 @@ function InterfaceSistema({ aoDeslogar }) {
       )}
 
       <main>
-        <ConteudoAbasPersistentes />
+        <ConteudoAbasPersistentes cargo={dadosUsuario?.cargo} />
       </main>
     </div>
   );
@@ -153,21 +188,39 @@ function InterfaceSistema({ aoDeslogar }) {
 
 function AppContent() {
   const [autenticadoAdmin, setAutenticadoAdmin] = useState(false);
+  const [dadosUsuarioLocal, setDadosUsuarioLocal] = useState(null);
   const { carregando } = useFinanceiro();
 
+  // 🟢 Carrega os dados do Login ao abrir o site
   useEffect(() => {
-    const auth = localStorage.getItem('otica_elos_auth');
-    if (auth === 'true') setAutenticadoAdmin(true);
+    const authStatus = localStorage.getItem('otica_elos_auth');
+    const dadosEquipe = localStorage.getItem('otica_elos_dados_equipe');
+    
+    if (authStatus === 'true' && dadosEquipe) {
+      setAutenticadoAdmin(true);
+      setDadosUsuarioLocal(JSON.parse(dadosEquipe));
+    } else if (authStatus === 'true') {
+      // Retrocompatibilidade (Se ele tava logado na versão antiga, assume que é Admin)
+      setAutenticadoAdmin(true);
+      setDadosUsuarioLocal({ nome: 'Admin', cargo: 'ADMIN' });
+    }
   }, []);
 
-  const realizarLoginAdmin = () => {
+  // 🟢 Recebe os dados exatos do banco vindo da tela de Login
+  const realizarLoginAdmin = (dadosFuncionario) => {
     setAutenticadoAdmin(true);
+    setDadosUsuarioLocal(dadosFuncionario);
     localStorage.setItem('otica_elos_auth', 'true');
+    if (dadosFuncionario) {
+      localStorage.setItem('otica_elos_dados_equipe', JSON.stringify(dadosFuncionario));
+    }
   };
 
   const realizarLogoutAdmin = () => {
     setAutenticadoAdmin(false);
+    setDadosUsuarioLocal(null);
     localStorage.removeItem('otica_elos_auth');
+    localStorage.removeItem('otica_elos_dados_equipe');
   };
 
   if (carregando) {
@@ -185,19 +238,16 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* 🟢 1. Vitrine da Loja (Home) */}
       <Route path="/" element={<HomeLoja />} />
       <Route path="/loja" element={<Navigate to="/" replace />} />
       
-      {/* 🟢 2. Tela de Login Universal (Permitida para TODOS) */}
+      {/* Login agora espera receber o Objeto inteiro do funcionário */}
       <Route path="/login" element={<Login onLogin={realizarLoginAdmin} />} />
 
-      {/* 🟢 3. Painel Administrativo Protegido */}
       <Route path="/admin/*" element={
-        autenticadoAdmin ? <InterfaceSistema aoDeslogar={realizarLogoutAdmin} /> : <Navigate to="/login" replace />
+        autenticadoAdmin ? <InterfaceSistema aoDeslogar={realizarLogoutAdmin} dadosUsuario={dadosUsuarioLocal} /> : <Navigate to="/login" replace />
       } />
       
-      {/* 🟢 4. Segurança (Qualquer outra URL não encontrada volta pra Loja) */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

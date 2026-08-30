@@ -32,6 +32,7 @@ mongoose.connect(MONGO_URI)
     console.log("✅ Banco MongoDB da Ótica Elos Conectado!");
     atualizarVendasAntigas(); 
     inicializarMensagensPadrao(); 
+    inicializarAdmin(); // 🟢 Cria o primeiro Admin se não existir
     inicializarWhatsApp();
   })
   .catch(err => console.error("❌ Erro na conexão:", err));
@@ -39,6 +40,17 @@ mongoose.connect(MONGO_URI)
 // ==========================================
 // --- MODELOS (SCHEMAS) ---
 // ==========================================
+
+// 🟢 NOVO MODELO: FUNCIONÁRIOS (CONTROLE DE ACESSO)
+const FuncionarioSchema = new mongoose.Schema({
+  nome: { type: String, required: true },
+  usuario: { type: String, required: true, unique: true },
+  senha: { type: String, required: true },
+  cargo: { type: String, enum: ['ADMIN', 'VENDEDOR'], default: 'VENDEDOR' },
+  ativo: { type: Boolean, default: true }
+});
+const Funcionario = mongoose.model('Funcionario', FuncionarioSchema);
+
 const Cliente = mongoose.model('Cliente', {
   nome: String, cpf: String, dataNascimento: String, telefone: String, email: String, endereco: String, observacoes: String, foto: String,
   senha: { type: String, default: "" }, tokenRecuperacao: { type: String, default: null }, tokenExpiraEm: { type: Date, default: null }
@@ -50,15 +62,14 @@ const Venda = mongoose.model('Venda', {
 
 const Despesa = mongoose.model('Despesa', { descricao: String, valor: Number, categoria: String, vencimento: String, paga: Boolean });
 
-// 🟢 MODELO DE PRODUTOS CORRIGIDO PARA MULTI-FOTOS
 const ProdutoSchema = new mongoose.Schema({
   nome: { type: String, required: true },
   preco: { type: Number, required: true },
   categoria: { type: String, required: true },
   quantidade: { type: Number, default: 0 },
   referencia: { type: String, default: "" },
-  foto: { type: String, default: "" }, // Mantém para retrocompatibilidade
-  fotos: [{ type: String }] // Força o Mongoose a aceitar o Array de Strings
+  foto: { type: String, default: "" }, 
+  fotos: [{ type: String }] 
 });
 const Produto = mongoose.model('Produto', ProdutoSchema, 'produtos');
 
@@ -76,7 +87,6 @@ const OrdemServico = mongoose.model('OrdemServico', {
   observacoes: String, consultor: String
 });
 
-// 🟢 NOVO MODELO: CUPONS DE DESCONTO
 const CupomSchema = new mongoose.Schema({
   codigo: { type: String, required: true, uppercase: true, unique: true },
   tipo: { type: String, enum: ['PERCENTUAL', 'FIXO'], required: true },
@@ -91,6 +101,22 @@ const PedidoOnlineSchema = new mongoose.Schema({
   itens: Array, valorTotal: Number, status: { type: String, default: 'AGUARDANDO_PAGAMENTO' }, dataPedido: { type: Date, default: Date.now }, infinitePayId: String
 });
 const PedidoOnline = mongoose.model('PedidoOnline', PedidoOnlineSchema);
+
+// 🟢 INTELIGÊNCIA: Cria o dono da loja automaticamente se não houver ninguém
+const inicializarAdmin = async () => {
+  try {
+    const adminExiste = await Funcionario.findOne({ cargo: 'ADMIN' });
+    if (!adminExiste) {
+      await new Funcionario({ 
+        nome: 'Administrador (Dono)', 
+        usuario: 'admin', 
+        senha: '123', 
+        cargo: 'ADMIN' 
+      }).save();
+      console.log("👤 Usuário Mestre criado com sucesso! (User: admin | Senha: 123)");
+    }
+  } catch (err) { console.error("Erro ao criar admin", err); }
+};
 
 const atualizarVendasAntigas = async () => {
   try {
@@ -144,53 +170,83 @@ app.post('/api/whatsapp/mensagens', async (req, res) => {
 });
 
 // ==========================================
-// --- ROTAS API: CUPONS DE DESCONTO (NOVO) ---
+// --- ROTAS API: FUNCIONÁRIOS (NOVO) ---
 // ==========================================
-// Lista todos os cupons (Para o Painel Admin)
+
+// Rota de Login para a equipe
+app.post('/api/funcionarios/login', async (req, res) => {
+  try {
+    const { usuario, senha } = req.body;
+    const func = await Funcionario.findOne({ usuario: usuario.toLowerCase(), senha });
+    
+    if (!func) return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+    if (!func.ativo) return res.status(403).json({ error: 'Sua conta foi desativada pelo administrador.' });
+
+    // Retorna os dados seguros do usuário (sem a senha)
+    res.json({ id: func._id, nome: func.nome, usuario: func.usuario, cargo: func.cargo });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro no servidor' });
+  }
+});
+
+// Listar funcionários (Apenas para o Admin)
+app.get('/api/funcionarios', async (req, res) => {
+  try { res.json(await Funcionario.find().select('-senha')); } 
+  catch (err) { res.status(500).json({ error: "Erro ao buscar" }); }
+});
+
+// Criar funcionário
+app.post('/api/funcionarios', async (req, res) => {
+  try { 
+    const dados = { ...req.body, usuario: req.body.usuario.toLowerCase() };
+    const novoFunc = new Funcionario(dados); 
+    await novoFunc.save(); 
+    res.status(201).json(novoFunc); 
+  } catch (err) { 
+    if (err.code === 11000) return res.status(400).json({ error: "Este nome de usuário já está em uso." });
+    res.status(500).json({ error: "Erro ao salvar funcionário" }); 
+  }
+});
+
+// Editar funcionário
+app.put('/api/funcionarios/:id', async (req, res) => {
+  try { 
+    if (req.body.usuario) req.body.usuario = req.body.usuario.toLowerCase();
+    const func = await Funcionario.findByIdAndUpdate(req.params.id, req.body, { new: true }); 
+    res.json(func); 
+  } catch (err) { res.status(500).json({ error: "Erro ao atualizar" }); }
+});
+
+// Excluir funcionário
+app.delete('/api/funcionarios/:id', async (req, res) => {
+  try { await Funcionario.findByIdAndDelete(req.params.id); res.json({ message: "Excluído." }); } 
+  catch (err) { res.status(500).json({ error: "Erro ao deletar" }); }
+});
+
+// ==========================================
+// --- ROTAS API: CUPONS DE DESCONTO ---
+// ==========================================
 app.get('/api/cupons', async (req, res) => {
   try { res.json(await Cupom.find().sort({ dataFim: -1 })); } 
   catch (err) { res.status(500).json({ error: "Erro ao buscar cupons" }); }
 });
-
-// Cria um cupom
 app.post('/api/cupons', async (req, res) => {
-  try { 
-    const novoCupom = new Cupom(req.body); 
-    await novoCupom.save(); 
-    res.status(201).json(novoCupom); 
-  } catch (err) { 
-    if (err.code === 11000) return res.status(400).json({ error: "Já existe um cupom com este código." });
-    res.status(500).json({ error: "Erro ao salvar cupom" }); 
-  }
+  try { const novoCupom = new Cupom(req.body); await novoCupom.save(); res.status(201).json(novoCupom); } catch (err) { if (err.code === 11000) return res.status(400).json({ error: "Já existe um cupom com este código." }); res.status(500).json({ error: "Erro ao salvar cupom" }); }
 });
-
-// Edita um cupom (ligar/desligar, mudar validade)
 app.put('/api/cupons/:id', async (req, res) => {
-  try { 
-    const cupomEditado = await Cupom.findByIdAndUpdate(req.params.id, req.body, { new: true }); 
-    res.json(cupomEditado); 
-  } catch (err) { res.status(500).json({ error: "Erro ao atualizar cupom" }); }
+  try { const cupomEditado = await Cupom.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(cupomEditado); } catch (err) { res.status(500).json({ error: "Erro ao atualizar cupom" }); }
 });
-
-// Deleta um cupom
 app.delete('/api/cupons/:id', async (req, res) => {
-  try { await Cupom.findByIdAndDelete(req.params.id); res.json({ message: "Cupom excluído com sucesso." }); } 
-  catch (err) { res.status(500).json({ error: "Erro ao deletar cupom" }); }
+  try { await Cupom.findByIdAndDelete(req.params.id); res.json({ message: "Cupom excluído com sucesso." }); } catch (err) { res.status(500).json({ error: "Erro ao deletar cupom" }); }
 });
-
-// 🟢 VALIDAÇÃO INTELIGENTE DO CUPOM NO CHECKOUT DA LOJA
 app.get('/api/cupons/validar/:codigo', async (req, res) => {
   try {
     const cupom = await Cupom.findOne({ codigo: req.params.codigo.toUpperCase() });
-    
     if (!cupom) return res.status(404).json({ valido: false, error: "Cupom não encontrado." });
     if (!cupom.ativo) return res.status(400).json({ valido: false, error: "Este cupom está inativo." });
     if (new Date() > new Date(cupom.dataFim)) return res.status(400).json({ valido: false, error: "Este cupom já expirou." });
-
     res.json({ valido: true, cupom });
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao validar cupom" });
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao validar cupom" }); }
 });
 
 // ==========================================
@@ -201,7 +257,22 @@ app.get('/api/clientes/:id', async (req, res) => {
   try { const cliente = await Cliente.findById(req.params.id); if (!cliente) return res.status(404).json({ error: "Não encontrado" }); res.json(cliente); } 
   catch (err) { res.status(500).json({ error: "Erro" }); }
 });
-app.post('/api/clientes', async (req, res) => res.json(await new Cliente(req.body).save()));
+app.post('/api/clientes', async (req, res) => {
+  try {
+    const novoCliente = new Cliente(req.body);
+    await novoCliente.save();
+
+    // Disparo da mensagem de boas-vindas
+    if (novoCliente.telefone) {
+      let num = novoCliente.telefone.replace(/\D/g, ''); 
+      if (!num.startsWith('55')) num = `55${num}`;
+      const msg = `Olá, ${novoCliente.nome.split(' ')[0]}! ✨\n\nSeja muito bem-vindo(a) à *Ótica Elos*! Seu cadastro foi realizado com sucesso. Sempre que precisar, este é o nosso canal oficial de atendimento.`;
+      validarNumeroWhatsApp(num).then(jid => enviarMensagemTexto(jid, msg)).catch(()=>{});
+    }
+
+    res.json(novoCliente);
+  } catch(e) { res.status(500).json({error: "Erro"}); }
+});
 app.put('/api/clientes/:id', async (req, res) => {
   try { const clienteAtualizado = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true }); if (!clienteAtualizado) return res.status(404).json({ error: "Não encontrado" }); await Venda.updateMany({ cpf: clienteAtualizado.cpf }, { $set: { cliente: clienteAtualizado.nome } }); res.json(clienteAtualizado); } 
   catch (err) { res.status(500).json({ error: "Erro" }); }
@@ -331,7 +402,6 @@ app.delete('/api/despesas/:id', async (req, res) => { try { await Despesa.findBy
 
 app.get('/api/produtos', async (req, res) => {
   try {
-    // 🟢 Colocamos a palavra 'fotos' no final do select para o banco enviar a galeria!
     const listaProdutos = await Produto.find({}).select('nome preco categoria quantidade referencia foto fotos').lean();
     res.json(listaProdutos);
   } catch (err) {
