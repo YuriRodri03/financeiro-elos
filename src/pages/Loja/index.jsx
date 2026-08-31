@@ -82,7 +82,15 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
 
   const getUrlFoto = (f) => {
     if (!f) return '';
-    if (f.startsWith('http') || f.startsWith('data:')) return f;
+    
+    // 🟢 MÁGICA: Se a foto já estiver na nuvem (ImgBB, etc), passa pelo Otimizador!
+    if (f.startsWith('http')) {
+      // Pega a URL original, tira o 'https://' do começo para o otimizador não bugar
+      const urlLimpa = f.replace(/^https?:\/\//, '');
+      return `https://wsrv.nl/?url=${urlLimpa}&w=600&output=webp&q=80`;
+    }
+    
+    if (f.startsWith('data:')) return f;
     return `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`;
   };
 
@@ -546,9 +554,6 @@ export default function HomeLoja() {
                   começa aqui.
                 </span>
               </h1>
-              <p className="mt-8 text-gray-300 max-w-lg mx-auto font-light leading-relaxed text-sm md:text-base">
-                Descubra a combinação perfeita entre design sofisticado, tecnologia visual e conforto para o seu dia a dia.
-              </p>
             </div>
             <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f9f8f6] to-transparent"></div>
           </div>

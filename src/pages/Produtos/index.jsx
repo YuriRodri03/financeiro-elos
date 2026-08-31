@@ -13,14 +13,13 @@ export default function Produtos() {
   
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
   
-  // 🟢 ESTADO ATUALIZADO: 'fotos' agora é um array
   const [novoProduto, setNovoProduto] = useState({
     nome: '',
     referencia: '', 
     preco: '',
     categoria: 'ARMAÇÃO',
     quantidade: '',
-    fotos: [] // Agora suporta galeria
+    fotos: []
   });
 
   const [uploadingMultiplo, setUploadingMultiplo] = useState(false);
@@ -61,7 +60,7 @@ export default function Produtos() {
     }
   };
 
-  // 🟢 NOVO UPLOAD MÚLTIPLO DE IMAGENS
+  // 🟢 NOVO UPLOAD COM COMPRESSOR E CONVERSOR PARA WEBP INTEGRADO
   const handleAdicionarFotoGaleria = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -72,15 +71,55 @@ export default function Produtos() {
     }
 
     setUploadingMultiplo(true);
-    mostrarToast(`Enviando ${files.length} foto(s) para a nuvem... ☁️`, "sucesso");
+    mostrarToast(`Comprimindo e enviando ${files.length} foto(s)... ⏳`, "sucesso");
+
+    // 🛠️ Função interna mágica que espreme a imagem
+    const comprimirImagem = (file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Tamanho máximo ideal para e-commerce (quadrado padrão)
+            const MAX_WIDTH = 800; 
+            const MAX_HEIGHT = 800;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+            } else {
+              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Converte para formato WebP com 80% de qualidade (Super leve!)
+            canvas.toBlob((blob) => {
+              resolve(new File([blob], "foto_otimizada.webp", { type: 'image/webp' }));
+            }, 'image/webp', 0.8);
+          };
+        };
+      });
+    };
 
     let novosLinks = [];
 
     for (let file of files) {
-      const formData = new FormData();
-      formData.append("image", file);
-
       try {
+        // 1. Otimiza a imagem antes de subir
+        const fotoSuperLeve = await comprimirImagem(file);
+        
+        // 2. Sobe para o ImgBB
+        const formData = new FormData();
+        formData.append("image", fotoSuperLeve);
+
         const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
           method: "POST",
           body: formData,
@@ -99,7 +138,7 @@ export default function Produtos() {
 
     if (novosLinks.length > 0) {
       setNovoProduto(prev => ({ ...prev, fotos: [...prev.fotos, ...novosLinks] }));
-      mostrarToast(`${novosLinks.length} foto(s) carregada(s)! ✅`, "sucesso");
+      mostrarToast(`${novosLinks.length} foto(s) otimizada(s) com sucesso! ✅`, "sucesso");
     } else {
       mostrarToast("Falha no upload das fotos.", "erro");
     }
@@ -107,7 +146,6 @@ export default function Produtos() {
     setUploadingMultiplo(false);
   };
 
-  // Remove uma foto específica da galeria
   const handleRemoverFoto = (indexRemover) => {
     setNovoProduto(prev => ({
       ...prev,
@@ -120,7 +158,6 @@ export default function Produtos() {
     setAbaAtiva(p.categoria); 
     setMostrarFormCadastro(true); 
     
-    // Tratamento híbrido: Se o produto antigo tem só 'foto' (string), colocamos no array 'fotos'
     let fotosCarregadas = p.fotos || [];
     if (fotosCarregadas.length === 0 && p.foto) {
       fotosCarregadas = [p.foto];
@@ -168,8 +205,8 @@ export default function Produtos() {
       nome: novoProduto.nome.toUpperCase(),
       preco: precoLimpo,
       categoria: novoProduto.categoria,
-      fotos: novoProduto.fotos, // Salva o array de fotos
-      foto: novoProduto.fotos[0] || '' // Mantém compatibilidade antiga (a primeira foto é a capa)
+      fotos: novoProduto.fotos, 
+      foto: novoProduto.fotos[0] || '' 
     };
 
     if (novoProduto.categoria !== 'LENTE') {
@@ -198,7 +235,7 @@ export default function Produtos() {
       case 'ÓCULOS DE SOL': return '☀️';
       case 'ACESSÓRIOS': return '👜';
       case 'LENTE': return '🔍';
-      case 'UPSELL': return '🚀'; // 🟢 Novo ícone
+      case 'UPSELL': return '🚀';
       default: return '👓';
     }
   };
@@ -208,7 +245,7 @@ export default function Produtos() {
     { id: 'LENTE', label: '🔍 Lentes' },
     { id: 'ÓCULOS DE SOL', label: '☀️ Óculos de Sol' },
     { id: 'ACESSÓRIOS', label: '👜 Acessórios' },
-    { id: 'UPSELL', label: '🚀 Ofertas de Carrinho' } // 🟢 Adicionado para você ver e gerenciar os adicionais
+    { id: 'UPSELL', label: '🚀 Ofertas de Carrinho' } 
   ];
 
   if (carregando) return null;
@@ -308,7 +345,7 @@ export default function Produtos() {
                   
                   <div className="relative">
                     <button type="button" disabled={uploadingMultiplo} className="px-6 py-3 bg-elos-bege text-white rounded-xl text-xs font-bold hover:bg-elos-verde transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                      {uploadingMultiplo ? 'Enviando... ⏳' : '➕ Adicionar Fotos'}
+                      {uploadingMultiplo ? 'Otimizando... ⏳' : '➕ Adicionar Fotos'}
                     </button>
                     <input type="file" multiple accept="image/*" onChange={handleAdicionarFotoGaleria} disabled={uploadingMultiplo} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed" />
                   </div>
@@ -350,7 +387,6 @@ export default function Produtos() {
                   <option value="ÓCULOS DE SOL">ÓCULOS DE SOL</option>
                   <option value="ACESSÓRIOS">ACESSÓRIOS</option>
                   <option value="LENTE">LENTE</option>
-                  {/* 🟢 Adicionado ao Seletor de Tipo na hora do Cadastro */}
                   <option value="UPSELL">OFERTA EXTRA (CARRINHO)</option> 
                 </select>
               </div>
