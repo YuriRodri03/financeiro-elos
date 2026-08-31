@@ -546,9 +546,6 @@ export default function HomeLoja() {
                   começa aqui.
                 </span>
               </h1>
-              <p className="mt-8 text-gray-300 max-w-lg mx-auto font-light leading-relaxed text-sm md:text-base">
-                Descubra a combinação perfeita entre design sofisticado, tecnologia visual e conforto para o seu dia a dia.
-              </p>
             </div>
             <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f9f8f6] to-transparent"></div>
           </div>
