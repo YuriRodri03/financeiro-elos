@@ -239,6 +239,7 @@ export default function Equipe() {
                   
                   {func._id !== meuUsuario.id && (
                     <div className="flex items-center gap-2">
+                      {/* BOTÃO DE EDIÇÃO INSERIDO AQUI */}
                       <button onClick={() => iniciarEdicao(func)} className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-gray-50 border border-gray-100" title="Editar Credenciais">
                         ✏️
                       </button>

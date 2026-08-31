@@ -82,14 +82,10 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
 
   const getUrlFoto = (f) => {
     if (!f) return '';
-    
-    // 🟢 MÁGICA: Se a foto já estiver na nuvem (ImgBB, etc), passa pelo Otimizador!
     if (f.startsWith('http')) {
-      // Pega a URL original, tira o 'https://' do começo para o otimizador não bugar
       const urlLimpa = f.replace(/^https?:\/\//, '');
       return `https://wsrv.nl/?url=${urlLimpa}&w=600&output=webp&q=80`;
     }
-    
     if (f.startsWith('data:')) return f;
     return `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`;
   };
@@ -97,7 +93,6 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
   return (
     <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:border-[#c5a880]/30 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
       
-      {/* 🟢 ETIQUETA DE PROMOÇÃO EM DESTAQUE */}
       {precoPromocional && precoPromocional < produto.preco && (
         <div className="absolute top-5 right-5 z-20 bg-red-600 backdrop-blur-md text-white border border-red-500 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
           🔥 Promoção!
@@ -163,7 +158,6 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
           <div className="flex flex-col">
             <span className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
             
-            {/* 🟢 SE TIVER PROMOÇÃO, RISCA O PREÇO ANTIGO E DESTACA O NOVO */}
             {precoPromocional && precoPromocional < produto.preco ? (
               <div className="flex flex-col">
                 <span className="text-xs text-gray-400 line-through font-bold">
@@ -182,7 +176,6 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
           
           <button 
             onClick={() => {
-              // Se tiver promoção, manda o produto pro carrinho já com o preço novo!
               const produtoParaCarrinho = precoPromocional ? { ...produto, preco: precoPromocional, precoOriginal: produto.preco } : produto;
               adicionarAoCarrinho(produtoParaCarrinho);
             }}
@@ -229,7 +222,6 @@ export default function HomeLoja() {
   const [cupomAtivo, setCupomAtivo] = useState(null); 
   const [validandoCupom, setValidandoCupom] = useState(false);
 
-  // 🟢 INTELIGÊNCIA DE PROMOÇÕES (Lê as regras salvas pelo Admin)
   const promocoesAtivas = useMemo(() => {
     return (produtos || []).filter(p => p.categoria === 'PROMO_CATE');
   }, [produtos]);
@@ -554,6 +546,9 @@ export default function HomeLoja() {
                   começa aqui.
                 </span>
               </h1>
+              <p className="mt-8 text-gray-300 max-w-lg mx-auto font-light leading-relaxed text-sm md:text-base">
+                Descubra a combinação perfeita entre design sofisticado, tecnologia visual e conforto para o seu dia a dia.
+              </p>
             </div>
             <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f9f8f6] to-transparent"></div>
           </div>
@@ -617,7 +612,7 @@ export default function HomeLoja() {
                     noCarrinho={carrinho.some(item => item._id === (produto._id || produto.id))}
                     adicionarAoCarrinho={adicionarAoCarrinho}
                     apiUrl={apiUrl}
-                    precoPromocional={obterPrecoPromocional(produto)} // 🟢 Injeta o preço calculado da promoção
+                    precoPromocional={obterPrecoPromocional(produto)} 
                   />
                 ))}
               </div>
@@ -750,23 +745,16 @@ export default function HomeLoja() {
                         );
                       })}
 
-                      {/* 🟢 BANNER DE UPSELL DINÂMICO AJUSTADO */}
                       {produtoUpsell && carrinho.some(i => i.categoria === 'ARMAÇÃO') && !carrinho.some(i => i._id === produtoUpsell._id) && (
                         <div className="mt-6 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-4 flex flex-col gap-3 animate-in slide-in-from-bottom-2 shadow-sm relative overflow-hidden">
-                          
-                          {/* Efeitos de Luz no Fundo */}
                           <div className="absolute -right-4 -top-4 w-16 h-16 bg-orange-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
                           <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-yellow-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
 
                           <div className="flex gap-3 items-start relative z-10">
-                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0 text-xl border border-orange-100">
-                              🎁
-                            </div>
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0 text-xl border border-orange-100">🎁</div>
                             <div>
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-orange-600 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm">
-                                  Oferta Desbloqueada
-                                </span>
+                                <span className="bg-orange-600 text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm">Oferta Desbloqueada</span>
                               </div>
                               <h4 className="text-sm font-black text-orange-900 tracking-tight leading-tight">Preço especial de Combo!</h4>
                               <p className="text-[10px] text-orange-800/80 font-medium mt-1.5 leading-relaxed">
@@ -783,7 +771,6 @@ export default function HomeLoja() {
                         </div>
                       )}
 
-                      {/* 🟢 ÁREA DE CUPONS NO CARRINHO */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
                         
@@ -823,7 +810,6 @@ export default function HomeLoja() {
                           </div>
                         )}
                       </div>
-
                     </>
                   )}
                 </div>
@@ -894,7 +880,11 @@ export default function HomeLoja() {
                       onClick={async () => { 
                         setGerandoLink(true);
                         try {
-                          const fatorDesconto = pedidoFinalizado.valorTotal / valorTotalCarrinho; 
+                          // 🟢 CORREÇÃO DO BUG MATEMÁTICO
+                          // Puxa o subtotal dos itens salvos no pedido (já que o carrinho tá vazio)
+                          const subtotalOriginal = pedidoFinalizado.itens.reduce((acc, item) => acc + Number(item.preco), 0);
+                          const fatorDesconto = subtotalOriginal > 0 ? pedidoFinalizado.valorTotal / subtotalOriginal : 1;
+                          
                           const payload = {
                             handle: infinitePayUser, 
                             order_nsu: String(pedidoFinalizado.numeroPedidoOnline),
