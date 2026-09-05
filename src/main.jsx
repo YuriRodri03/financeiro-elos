@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
 
 import HomeLoja from './pages/Loja';
@@ -52,15 +52,12 @@ function ConteudoAbasPersistentes({ cargo }) {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  // 🟢 BLOQUEIO DE ACESSO DIRETO VIA URL (Proteção RBAC)
   const isVendedor = cargo === 'VENDEDOR';
   
   const mostrarRota = (caminho) => {
-    // Se for Vendedor, bloqueia Despesas, Operações, Relatórios e Zap
     if (isVendedor) {
       const rotasProibidas = ['/admin/despesas', '/admin/operacoes', '/admin/zap', '/admin/relatorios', '/admin/dashboard'];
       if (rotasProibidas.includes(caminho)) return false;
-      // Se ele tentar ir pro /admin raiz, o painel vai ficar em branco. No InterfaceSistema nós o forçaremos pro /admin/vendas
       if (caminho === '/admin' && currentPath === '/admin') return false; 
     }
     return currentPath === caminho;
@@ -68,7 +65,6 @@ function ConteudoAbasPersistentes({ cargo }) {
 
   return (
     <div className="animate-in fade-in duration-500">
-      {/* Rotas Restritas a ADMIN */}
       {!isVendedor && (
         <>
           <div style={{ display: currentPath === '/admin' || currentPath === '/admin/dashboard' ? 'block' : 'none' }}>
@@ -92,7 +88,6 @@ function ConteudoAbasPersistentes({ cargo }) {
         </>
       )}
 
-      {/* Rotas Liberadas para TODOS (Admin e Vendedor) */}
       <div style={{ display: mostrarRota('/admin/vendas') ? 'block' : 'none' }}>
         <Vendas />
       </div>
@@ -109,10 +104,8 @@ function ConteudoAbasPersistentes({ cargo }) {
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
-        {/* 🟢 CORREÇÃO: A rota Editar Venda também deve ser carregada pelo Router para pegar o :id dinâmico */}
         <Route path="/vendas/editar/:id" element={<EditarVenda />} />
         
-        {/* Placeholder nulo para rotas base capturadas pelos divs persistentes */}
         <Route path="/" element={null} />
         <Route path="/dashboard" element={null} />
         <Route path="/operacoes" element={null} />
@@ -134,7 +127,6 @@ function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
   const navigate = useNavigate();
   const [modalConfirmSair, setModalConfirmSair] = useState(false);
 
-  // 🟢 Se o Vendedor logar e cair no /admin, joga ele pras Vendas direto!
   useEffect(() => {
     if (dadosUsuario?.cargo === 'VENDEDOR' && (location.pathname === '/admin' || location.pathname === '/admin/dashboard')) {
       navigate('/admin/vendas', { replace: true });
@@ -157,7 +149,6 @@ function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
 
   return (
     <div className="min-h-screen bg-elos-fundo">
-      {/* 🟢 Mandando o Cargo para o Navbar para ele esconder os botões */}
       <Navbar 
         abaAtual={obterAbaInversa()} 
         setAbaAtiva={lidarMudancaAba} 
@@ -187,27 +178,39 @@ function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
   );
 }
 
-function AppContent() {
-  const [autenticadoAdmin, setAutenticadoAdmin] = useState(false);
-  const [dadosUsuarioLocal, setDadosUsuarioLocal] = useState(null);
-  const { carregando } = useFinanceiro();
+// 🟢 COMPONENTES "SALVA-VIDAS": Interceptam os botões antigos e mandam para o lugar certo
+function InterceptarEdicaoVenda() {
+  const { id } = useParams();
+  return <Navigate to={`/admin/vendas/editar/${id}`} replace />;
+}
+function InterceptarNovaOS() {
+  const { numeroPedido } = useParams();
+  return <Navigate to={`/admin/nova-os/${numeroPedido}`} replace />;
+}
+function InterceptarEditarOS() {
+  const { id } = useParams();
+  return <Navigate to={`/admin/ordem-servico/editar/${id}`} replace />;
+}
 
-  // 🟢 Carrega os dados do Login ao abrir o site
-  useEffect(() => {
+function AppContent() {
+  // 🟢 CORREÇÃO CRÍTICA DO LOGOUT NO F5
+  const [autenticadoAdmin, setAutenticadoAdmin] = useState(() => {
+    return localStorage.getItem('otica_elos_auth') === 'true';
+  });
+  
+  const [dadosUsuarioLocal, setDadosUsuarioLocal] = useState(() => {
     const authStatus = localStorage.getItem('otica_elos_auth');
     const dadosEquipe = localStorage.getItem('otica_elos_dados_equipe');
-    
     if (authStatus === 'true' && dadosEquipe) {
-      setAutenticadoAdmin(true);
-      setDadosUsuarioLocal(JSON.parse(dadosEquipe));
+      return JSON.parse(dadosEquipe);
     } else if (authStatus === 'true') {
-      // Retrocompatibilidade (Se ele tava logado na versão antiga, assume que é Admin)
-      setAutenticadoAdmin(true);
-      setDadosUsuarioLocal({ nome: 'Admin', cargo: 'ADMIN' });
+      return { nome: 'Admin', cargo: 'ADMIN' };
     }
-  }, []);
+    return null;
+  });
 
-  // 🟢 Recebe os dados exatos do banco vindo da tela de Login
+  const { carregando } = useFinanceiro();
+
   const realizarLoginAdmin = (dadosFuncionario) => {
     setAutenticadoAdmin(true);
     setDadosUsuarioLocal(dadosFuncionario);
@@ -243,6 +246,11 @@ function AppContent() {
       <Route path="/loja" element={<Navigate to="/" replace />} />
       
       <Route path="/login" element={<Login onLogin={realizarLoginAdmin} />} />
+
+      {/* 🟢 ROTAS DE REDIRECIONAMENTO: Seguram a bronca dos arquivos inacabados */}
+      <Route path="/vendas/editar/:id" element={<InterceptarEdicaoVenda />} />
+      <Route path="/nova-os/:numeroPedido" element={<InterceptarNovaOS />} />
+      <Route path="/ordem-servico/editar/:id" element={<InterceptarEditarOS />} />
 
       <Route path="/admin/*" element={
         autenticadoAdmin ? <InterfaceSistema aoDeslogar={realizarLogoutAdmin} dadosUsuario={dadosUsuarioLocal} /> : <Navigate to="/login" replace />
