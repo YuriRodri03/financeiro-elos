@@ -15,9 +15,9 @@ import Produtos from './pages/Produtos';
 import Zap from './pages/Zap';
 import Equipe from './pages/Equipe';
 import Navbar from './components/Navbar'; 
-import NovaOrdemServico from './pages/OrdemServico/index'; 
+import NovaOrdemServico from './pages/OrdemServico'; 
 import PainelOS from './pages/PainelOS'; 
-import EditarVenda from './pages/EditarVenda/index'; 
+import EditarVenda from './pages/EditarVenda'; 
 
 import './index.css'; 
 
