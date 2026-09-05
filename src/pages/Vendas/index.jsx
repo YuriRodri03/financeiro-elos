@@ -571,8 +571,9 @@ export default function Vendas() {
                             >
                               🖨️
                             </button>
+                            {/* 🟢 CORREÇÃO DA ROTA: AGORA TEM O /ADMIN NO COMEÇO */}
                             <button 
-                              onClick={() => navigate(`/vendas/editar/${v._id || v.id}`)}
+                              onClick={() => navigate(`/admin/vendas/editar/${v._id || v.id}`)}
                               className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
                               title="Editar Venda"
                             >
