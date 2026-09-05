@@ -101,21 +101,22 @@ function ConteudoAbasPersistentes({ cargo }) {
         <PainelOS />
       </div>
 
+      {/* 🟢 O SEGREDO ESTAVA AQUI: Rotas filhas do Admin NÃO PODEM ter barra (/) no começo! */}
       <Routes>
-        <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
-        <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
-        <Route path="/vendas/editar/:id" element={<EditarVenda />} />
+        <Route path="nova-os/:numeroPedido" element={<NovaOrdemServico />} />
+        <Route path="ordem-servico/editar/:id" element={<NovaOrdemServico />} />
+        <Route path="vendas/editar/:id" element={<EditarVenda />} />
         
-        <Route path="/" element={null} />
-        <Route path="/dashboard" element={null} />
-        <Route path="/operacoes" element={null} />
-        <Route path="/vendas" element={null} />
-        <Route path="/despesas" element={null} />
-        <Route path="/clientes" element={null} />
-        <Route path="/produtos" element={null} />
-        <Route path="/zap" element={null} />
-        <Route path="/relatorios" element={null} />
-        <Route path="/ordens-servico" element={null} />
+        <Route path="" element={null} />
+        <Route path="dashboard" element={null} />
+        <Route path="operacoes" element={null} />
+        <Route path="vendas" element={null} />
+        <Route path="despesas" element={null} />
+        <Route path="clientes" element={null} />
+        <Route path="produtos" element={null} />
+        <Route path="zap" element={null} />
+        <Route path="relatorios" element={null} />
+        <Route path="ordens-servico" element={null} />
         <Route path="*" element={null} />
       </Routes>
     </div>
@@ -178,7 +179,7 @@ function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
   );
 }
 
-// 🟢 COMPONENTES "SALVA-VIDAS": Interceptam os botões antigos e mandam para o lugar certo
+// 🟢 Interceptadores para segurar usuários perdidos em botões antigos em cache
 function InterceptarEdicaoVenda() {
   const { id } = useParams();
   return <Navigate to={`/admin/vendas/editar/${id}`} replace />;
@@ -193,7 +194,6 @@ function InterceptarEditarOS() {
 }
 
 function AppContent() {
-  // 🟢 CORREÇÃO CRÍTICA DO LOGOUT NO F5
   const [autenticadoAdmin, setAutenticadoAdmin] = useState(() => {
     return localStorage.getItem('otica_elos_auth') === 'true';
   });
@@ -247,7 +247,6 @@ function AppContent() {
       
       <Route path="/login" element={<Login onLogin={realizarLoginAdmin} />} />
 
-      {/* 🟢 ROTAS DE REDIRECIONAMENTO: Seguram a bronca dos arquivos inacabados */}
       <Route path="/vendas/editar/:id" element={<InterceptarEdicaoVenda />} />
       <Route path="/nova-os/:numeroPedido" element={<InterceptarNovaOS />} />
       <Route path="/ordem-servico/editar/:id" element={<InterceptarEditarOS />} />
