@@ -109,6 +109,7 @@ function ConteudoAbasPersistentes({ cargo }) {
       <Routes>
         <Route path="/nova-os/:numeroPedido" element={<NovaOrdemServico />} />
         <Route path="/ordem-servico/editar/:id" element={<NovaOrdemServico />} />
+        {/* 🟢 CORREÇÃO: A rota Editar Venda também deve ser carregada pelo Router para pegar o :id dinâmico */}
         <Route path="/vendas/editar/:id" element={<EditarVenda />} />
         
         {/* Placeholder nulo para rotas base capturadas pelos divs persistentes */}
@@ -241,7 +242,6 @@ function AppContent() {
       <Route path="/" element={<HomeLoja />} />
       <Route path="/loja" element={<Navigate to="/" replace />} />
       
-      {/* Login agora espera receber o Objeto inteiro do funcionário */}
       <Route path="/login" element={<Login onLogin={realizarLoginAdmin} />} />
 
       <Route path="/admin/*" element={
