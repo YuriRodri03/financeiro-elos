@@ -79,8 +79,13 @@ export default function WhatsappConnect() {
     }
   };
 
-  const handleDesconectar = async () => {
-    if (!window.confirm('Tem certeza que deseja desconectar o WhatsApp da Ótica Elos?')) return;
+  // Desconectar ou Reiniciar a conexão limpando a sessão
+  const handleDesconectar = async (forcado = false) => {
+    const mensagemConfirmacao = forcado 
+      ? 'O sistema vai forçar o encerramento da conexão travada para gerar um novo QR Code. Continuar?'
+      : 'Tem certeza que deseja desconectar o WhatsApp da Ótica Elos?';
+      
+    if (!window.confirm(mensagemConfirmacao)) return;
     
     setCarregando(true);
     try {
@@ -90,7 +95,7 @@ export default function WhatsappConnect() {
       const data = await response.json();
       
       if (data.success) {
-        alert('Sessão encerrada com sucesso!');
+        alert(forcado ? 'Conexão reiniciada! Aguarde a tela atualizar para ler o novo QR Code.' : 'Sessão encerrada com sucesso!');
         setQrCode(null);
         buscarStatus();
       } else {
@@ -114,6 +119,7 @@ export default function WhatsappConnect() {
         return '#f59e0b'; // Laranja de atenção
       case 'Desconectado':
       case 'close':
+      case 'Erro ao conectar':
         return '#ef4444'; // Vermelho
       default:
         return '#6b7280'; // Cinza de carregamento
@@ -155,10 +161,12 @@ export default function WhatsappConnect() {
         marginBottom: '25px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '10px'
       }}>
         <div>
-          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'inline-block', textTransform: 'uppercase', tracking: '0.05em', fontWeight: 'bold' }}>
+          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'inline-block', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold' }}>
             Status do Conector
           </span>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginTop: '2px' }}>
@@ -166,26 +174,50 @@ export default function WhatsappConnect() {
           </div>
         </div>
 
-        {/* Exibe botão de desconectar rápido se estiver ativo */}
-        {(status === 'Conectado' || status === 'open') && (
-          <button
-            onClick={handleDesconectar}
-            disabled={carregando}
-            style={{
-              backgroundColor: '#fee2e2',
-              color: '#ef4444',
-              border: 'none',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              fontSize: '11px',
-              fontWeight: '700',
-              textTransform: 'uppercase',
-              cursor: carregando ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {carregando ? 'Encerrando...' : 'Desconectar'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Botão para Forçar Reinício (Sempre visível se NÃO estiver conectado bonitinho) */}
+          {(status !== 'Conectado' && status !== 'open' && status !== 'Aguardando Leitura do QR Code') && (
+            <button
+              onClick={() => handleDesconectar(true)}
+              disabled={carregando}
+              style={{
+                backgroundColor: '#eff6ff',
+                color: '#3b82f6',
+                border: 'none',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '11px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                cursor: carregando ? 'not-allowed' : 'pointer'
+              }}
+              title="Se a conexão travou em 'Iniciando', clique aqui para forçar um novo QR Code"
+            >
+              {carregando ? '⏳' : '🔄 Reiniciar Conexão'}
+            </button>
+          )}
+
+          {/* Exibe botão de desconectar clássico se estiver ativo */}
+          {(status === 'Conectado' || status === 'open') && (
+            <button
+              onClick={() => handleDesconectar(false)}
+              disabled={carregando}
+              style={{
+                backgroundColor: '#fee2e2',
+                color: '#ef4444',
+                border: 'none',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '11px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                cursor: carregando ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {carregando ? 'Encerrando...' : 'Desconectar'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Renderização do Conector QR */}
