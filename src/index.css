@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Isso força o Tailwind v4 a carregar seu arquivo de cores personalizadas */
+@config "../tailwind.config.cjs";
+
+@layer base {
+  body {
+    @apply bg-elos-fundo text-elos-texto font-sans;
+  }
+}
