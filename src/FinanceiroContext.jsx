@@ -4,8 +4,7 @@ const FinanceiroContext = createContext();
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
 
-// Render free demora pra acordar. 25s cobre o cold start sem deixar a tela presa pra sempre.
-const TEMPO_LIMITE_MS = 25000;
+const TEMPO_LIMITE_MS = 50000;
 
 async function pedir(caminho, opcoes = {}) {
   const { timeoutMs = TEMPO_LIMITE_MS, ...resto } = opcoes;
@@ -342,6 +341,10 @@ export function FinanceiroProvider({ children }) {
     await pedir(`/produtos/${produtoId}`, { method: 'DELETE' });
     setProdutos(prev => prev.filter(p => p._id !== produtoId && p.id !== produtoId));
   };
+  
+React.useEffect(() => {
+  recarregar(); // Busca vendas, clientes, despesas e produtos assim que o app inicia
+}, [recarregar]);
 
   return (
     <FinanceiroContext.Provider value={{
