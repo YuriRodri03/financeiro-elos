@@ -183,22 +183,6 @@ export function useEstornarBaixaParcela() {
   });
 }
 
-// 6. Estornar Baixa de Parcela
-export function useEstornarBaixaParcela() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ vendaId, numeroParcela }) => pedir(`/vendas/${vendaId}/parcela/${numeroParcela}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paga: false, dataPagamento: null })
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendas'] });
-    }
-  });
-}
-
 // 7. Excluir Venda
 export function useExcluirVenda() {
   const queryClient = useQueryClient();
