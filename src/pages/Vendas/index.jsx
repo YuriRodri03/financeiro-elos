@@ -22,8 +22,6 @@ export default function Vendas() {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
   
-  const [termoBuscaCliente, setTermoBuscaCliente] = useState('');
-
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
 
@@ -49,11 +47,11 @@ export default function Vendas() {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
-  // 🟢 CORRIGIDO: Sugestões reativas com busca independente
+  // 🟢 Sugestões de Clientes Baseadas Reativamente no input "cliente"
   const sugestoes = useMemo(() => {
-    if (!termoBuscaCliente || !mostrarSugestoes) return [];
+    if (!venda.cliente || !mostrarSugestoes) return [];
     
-    const termo = termoBuscaCliente.toLowerCase();
+    const termo = venda.cliente.toLowerCase();
     const termoSomenteNumeros = termo.replace(/\D/g, '');
 
     return clientes.filter(c => {
@@ -62,15 +60,14 @@ export default function Vendas() {
       const cpfMatch = c.cpf.includes(termo) || (termoSomenteNumeros && c.cpf.replace(/\D/g, '').includes(termoSomenteNumeros));
       return nomeMatch || cpfMatch;
     }).slice(0, 5);
-  }, [termoBuscaCliente, clientes, mostrarSugestoes]);
+  }, [venda.cliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
     setVenda({ ...venda, cliente: c.nome, cpf: c.cpf });
-    setTermoBuscaCliente(c.nome);
     setMostrarSugestoes(false);
   };
 
-  // 🟢 CORRIGIDO: Sugestões de Produtos
+  // 🟢 Sugestões de Produtos
   const sugestoesProd = useMemo(() => {
     if (!novoItem.nome || !mostrarSugestoesProd) return [];
     const termo = novoItem.nome.toLowerCase();
@@ -134,14 +131,12 @@ export default function Vendas() {
   const subtotalItens = useMemo(() => itensCarrinho.reduce((acc, item) => acc + item.preco, 0), [itensCarrinho]);
   const totalFinalVenda = useMemo(() => Math.max(0, subtotalItens - limparMoeda(venda.desconto)), [subtotalItens, venda.desconto]);
 
-  // 🟢 CORRIGIDO: HandleChange super resiliente
   const handleChange = (e) => {
     const { name, value } = e.target;
     
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
       const isCompleto = valorFormatado.length === 14;
-      
       const clienteExistente = isCompleto ? clientes.find(c => c.cpf === valorFormatado) : null;
       
       setVenda({ 
@@ -150,13 +145,7 @@ export default function Vendas() {
         cliente: clienteExistente ? clienteExistente.nome : venda.cliente 
       });
 
-      if (clienteExistente) {
-        setTermoBuscaCliente(clienteExistente.nome);
-        setMostrarSugestoes(false);
-      }
-
-    } else if (name === 'termoBusca') {
-      setTermoBuscaCliente(value);
+    } else if (name === 'cliente') {
       setVenda({ ...venda, cliente: value });
       setMostrarSugestoes(true);
 
@@ -201,7 +190,6 @@ export default function Vendas() {
           dataVenda: new Date().toISOString().split('T')[0],
           dataPrimeiraParcela: new Date().toISOString().split('T')[0]
         });
-        setTermoBuscaCliente('');
         setItensCarrinho([]);
         setAbaAtiva('historico');
       };
@@ -348,15 +336,15 @@ export default function Vendas() {
               </div>
 
               <div className="space-y-2 relative" ref={wrapperRef}>
-                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Buscar Cliente</label>
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
                 <input 
                   type="text" 
-                  name="termoBusca" 
-                  value={termoBuscaCliente} 
+                  name="cliente" 
+                  value={venda.cliente} 
                   onChange={handleChange} 
                   onFocus={() => setMostrarSugestoes(true)}
                   required 
-                  placeholder="Nome ou CPF..." 
+                  placeholder="Nome Completo ou CPF..." 
                   className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-elos-bege/30 transition-all" 
                 />
       
