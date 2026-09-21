@@ -1,16 +1,12 @@
 import React, { useState, useMemo } from 'react';
-
-// 🟢 ADICIONADO: Importando os hooks do React Query
 import { useDespesas, useAdicionarDespesa, useDarBaixaDespesa, useExcluirDespesa } from '../../hooks/useDespesas';
 
 export default function Despesas() {
-  // 🟢 AQUI: Puxando dados e mutações do React Query
-  const { data: despesas = [], isLoading: carregando } = useDespesas();
+  const { data: despesas = [] } = useDespesas();
   const adicionarDespesaMutation = useAdicionarDespesa();
   const darBaixaDespesaMutation = useDarBaixaDespesa();
   const excluirDespesaMutation = useExcluirDespesa();
 
-  // --- ESTADOS DE FILTRO ---
   const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
   const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
 
@@ -19,6 +15,7 @@ export default function Despesas() {
     valor: '',
     categoria: '',
     vencimento: new Date().toISOString().split('T')[0],
+    parcelas: 1, // 🟢 NOVO CAMPO: Para criar várias cópias/meses
     paga: false
   });
 
@@ -27,16 +24,13 @@ export default function Despesas() {
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
-    setTimeout(() => {
-      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
-    }, 3000);
+    setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
   };
 
   const abrirConfirmacao = (mensagem, acao) => {
     setConfirmModal({ visivel: true, mensagem, acao });
   };
 
-  // --- LÓGICA DE FILTRAGEM ---
   const despesasFiltradas = useMemo(() => {
     return despesas
       .filter(d => {
@@ -49,10 +43,7 @@ export default function Despesas() {
   const aplicarMascaraMoeda = (valor) => {
     let v = valor.replace(/\D/g, '');
     if (!v) return '';
-    v = (Number(v) / 100).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
+    v = (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     return v;
   };
 
@@ -65,9 +56,16 @@ export default function Despesas() {
     }
   };
 
+  const somarMesVencimento = (dataBaseStr, qtdMeses) => {
+    const date = new Date(dataBaseStr + 'T00:00:00');
+    date.setMonth(date.getMonth() + qtdMeses);
+    return date.toISOString().split('T')[0];
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const valorLimpo = Number(novaDespesa.valor.replace(/\D/g, '')) / 100;
+    const qtdParcelas = Number(novaDespesa.parcelas);
 
     if (!novaDespesa.descricao || valorLimpo <= 0 || !novaDespesa.categoria) {
       mostrarToast("Preencha a descrição, valor e categoria corretamente.", "erro");
@@ -75,25 +73,43 @@ export default function Despesas() {
     }
 
     try {
-      // 🟢 AQUI: Chama o mutateAsync ao invés do Context
-      await adicionarDespesaMutation.mutateAsync({ 
-        ...novaDespesa, 
-        valor: valorLimpo,
-        categoria: novaDespesa.categoria.toUpperCase()
-      });
+      // Se for parcela única, manda só uma. Se for mais, ele divide.
+      const loteDespesas = [];
+      const valorBaseParcela = parseFloat((valorLimpo / qtdParcelas).toFixed(2));
+      const sobraMatematica = parseFloat((valorLimpo - (valorBaseParcela * qtdParcelas)).toFixed(2));
+
+      for (let i = 0; i < qtdParcelas; i++) {
+        const isUltima = i === qtdParcelas - 1;
+        const valorDestaParcela = parseFloat((isUltima ? valorBaseParcela + sobraMatematica : valorBaseParcela).toFixed(2));
+        const dataVencimento = somarMesVencimento(novaDespesa.vencimento, i);
+        
+        let desc = novaDespesa.descricao;
+        if (qtdParcelas > 1) {
+          desc = `${novaDespesa.descricao} (${i + 1}/${qtdParcelas})`;
+        }
+
+        loteDespesas.push({
+          descricao: desc,
+          valor: valorDestaParcela,
+          categoria: novaDespesa.categoria.toUpperCase(),
+          vencimento: dataVencimento,
+          paga: i === 0 ? novaDespesa.paga : false // Só permite marcar pago na hora se for a primeira
+        });
+      }
+
+      // Dispara o Mutation que criamos no hook, enviando o array completo
+      await adicionarDespesaMutation.mutateAsync(loteDespesas);
       
       setNovaDespesa({
-        descricao: '', valor: '', categoria: '',
+        descricao: '', valor: '', categoria: '', parcelas: 1,
         vencimento: new Date().toISOString().split('T')[0],
         paga: false
       });
-      mostrarToast("Despesa registrada no fluxo de caixa!", "sucesso");
+      mostrarToast(qtdParcelas > 1 ? `✅ ${qtdParcelas} despesas programadas com sucesso!` : "Despesa registrada!", "sucesso");
     } catch (err) {
       mostrarToast("Erro ao salvar despesa no banco de dados.", "erro");
     }
   };
-
-  if (carregando) return null;
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -176,28 +192,41 @@ export default function Despesas() {
             Registrar Novo Gasto
           </h3>
           
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="md:col-span-2 space-y-2">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            <div className="md:col-span-6 space-y-2">
               <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Descrição do Gasto</label>
-              <input type="text" name="descricao" value={novaDespesa.descricao} onChange={handleChange} placeholder="Ex: Aluguel, Nota Fornecedor X..." required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              <input type="text" name="descricao" value={novaDespesa.descricao} onChange={handleChange} placeholder="Ex: Aluguel, Estoque de Lentes..." required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
             </div>
 
-            <div className="space-y-2">
+            <div className="md:col-span-3 space-y-2">
               <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Valor</label>
               <input type="text" name="valor" value={novaDespesa.valor} onChange={handleChange} placeholder="R$ 0,00" required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl font-bold text-red-600 outline-none" />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Vencimento</label>
+            <div className="md:col-span-3 space-y-2">
+              <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Repetição Mensal</label>
+              <select name="parcelas" value={novaDespesa.parcelas} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none font-bold">
+                <option value="1">1x (Apenas uma vez)</option>
+                <option value="2">2x (Dividir em 2 meses)</option>
+                <option value="3">3x (Dividir em 3 meses)</option>
+                <option value="4">4x (Dividir em 4 meses)</option>
+                <option value="5">5x (Dividir em 5 meses)</option>
+                <option value="6">6x (Dividir em 6 meses)</option>
+                <option value="12">12x (Recorrência Anual)</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-4 space-y-2">
+              <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">1º Vencimento</label>
               <input type="date" name="vencimento" value={novaDespesa.vencimento} onChange={handleChange} required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
             </div>
 
-            <div className="md:col-span-3 space-y-2">
-              <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Categoria (Digite manualmente)</label>
-              <input type="text" name="categoria" value={novaDespesa.categoria} onChange={handleChange} placeholder="Ex: FIXO, VARIÁVEL, LABORATORIO, ESTOQUE..." required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none uppercase" />
+            <div className="md:col-span-5 space-y-2">
+              <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter ml-1">Categoria (Manual)</label>
+              <input type="text" name="categoria" value={novaDespesa.categoria} onChange={handleChange} placeholder="Ex: FIXO, MARKETING..." required className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none uppercase" />
             </div>
 
-            <div className="md:col-span-1 flex items-end">
+            <div className="md:col-span-3 flex items-end">
               <button type="submit" disabled={adicionarDespesaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest">
                 {adicionarDespesaMutation.isPending ? 'Salvando...' : 'Registrar Gasto'}
               </button>
@@ -247,7 +276,6 @@ export default function Despesas() {
                       {!d.paga && (
                         <button 
                           onClick={() => abrirConfirmacao(`Deseja efetuar a baixa de "${d.descricao}" no valor de R$ ${d.valor.toFixed(2).replace('.', ',')}?`, () => {
-                            // 🟢 AQUI: Chamada com React Query
                             darBaixaDespesaMutation.mutate(d._id);
                             mostrarToast("Baixa realizada com sucesso!", "sucesso");
                           })} 
@@ -259,7 +287,6 @@ export default function Despesas() {
                       <button 
                         onClick={() => { 
                           abrirConfirmacao(`Deseja remover permanentemente o registro de despesa "${d.descricao}"?`, () => {
-                            // 🟢 AQUI: Chamada com React Query
                             excluirDespesaMutation.mutate(d._id);
                             mostrarToast("Despesa removida do sistema.", "sucesso");
                           });

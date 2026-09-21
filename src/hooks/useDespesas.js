@@ -1,3 +1,4 @@
+// src/hooks/useDespesas.js
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pedir } from '../utils/api';
 
@@ -10,16 +11,26 @@ export function useDespesas() {
   });
 }
 
-// 2. Adicionar Despesa
+// 2. Adicionar Múltiplas Despesas (Para Lidar com as Parcelas Automáticas)
 export function useAdicionarDespesa() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (novaDespesa) => pedir('/despesas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(novaDespesa)
-    }),
+    mutationFn: async (despesasArray) => {
+      // Se vier apenas um objeto (1 parcela), transforma em array para o loop rodar igual
+      const lotes = Array.isArray(despesasArray) ? despesasArray : [despesasArray];
+
+      // Dispara todas as requisições POST ao mesmo tempo (Promise.all)
+      const promessas = lotes.map(despesa => 
+        pedir('/despesas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(despesa)
+        })
+      );
+      
+      return Promise.all(promessas);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['despesas'] });
     }

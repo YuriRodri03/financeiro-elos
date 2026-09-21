@@ -2,24 +2,18 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
-// 🟢 ADICIONADO: Importando hooks do React Query
 import { useClientes } from '../../hooks/useClientes';
-import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos'; // O hook de produtos será criado depois, mas já deixei pronto
+import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos'; 
 import { useVendas, useAdicionarVenda } from '../../hooks/useVendas';
 
 export default function Vendas() {
   const navigate = useNavigate();
 
-  // 🟢 AQUI: Puxando dados do React Query
   const { data: clientes = [] } = useClientes();
   const { data: vendas = [] } = useVendas();
+  const { data: produtos = [] } = useProdutos();
   
-  // Como ainda não criamos o useProdutos.js, vamos simular que ele existe
-  // Caso de erro no Vite, volte temporariamente para o useFinanceiro() apenas para produtos.
-  // Vou presumir que você criará o useProdutos.js logo após esse passo!
-  const { data: produtos = [] } = useProdutos ? useProdutos() : { data: [] };
-  const adicionarProdutoMutation = useAdicionarProduto ? useAdicionarProduto() : { mutateAsync: async () => {} };
-  
+  const adicionarProdutoMutation = useAdicionarProduto();
   const adicionarVendaMutation = useAdicionarVenda();
 
   const [abaAtiva, setAbaAtiva] = useState('nova');
@@ -27,6 +21,9 @@ export default function Vendas() {
 
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
+  
+  const [termoBuscaCliente, setTermoBuscaCliente] = useState('');
+
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
 
@@ -52,23 +49,39 @@ export default function Vendas() {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
+  // 🟢 CORRIGIDO: Sugestões reativas com busca independente
   const sugestoes = useMemo(() => {
-    if (!venda.cliente || !mostrarSugestoes) return [];
-    return (clientes || []).filter(c => c.nome.toLowerCase().includes(venda.cliente.toLowerCase())).slice(0, 5);
-  }, [venda.cliente, clientes, mostrarSugestoes]);
+    if (!termoBuscaCliente || !mostrarSugestoes) return [];
+    
+    const termo = termoBuscaCliente.toLowerCase();
+    const termoSomenteNumeros = termo.replace(/\D/g, '');
+
+    return clientes.filter(c => {
+      if (!c.nome || !c.cpf) return false;
+      const nomeMatch = c.nome.toLowerCase().includes(termo);
+      const cpfMatch = c.cpf.includes(termo) || (termoSomenteNumeros && c.cpf.replace(/\D/g, '').includes(termoSomenteNumeros));
+      return nomeMatch || cpfMatch;
+    }).slice(0, 5);
+  }, [termoBuscaCliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
     setVenda({ ...venda, cliente: c.nome, cpf: c.cpf });
+    setTermoBuscaCliente(c.nome);
     setMostrarSugestoes(false);
   };
 
+  // 🟢 CORRIGIDO: Sugestões de Produtos
   const sugestoesProd = useMemo(() => {
     if (!novoItem.nome || !mostrarSugestoesProd) return [];
-    return (produtos || []).filter(p => p.nome.toLowerCase().includes(novoItem.nome.toLowerCase())).slice(0, 5);
+    const termo = novoItem.nome.toLowerCase();
+    return produtos.filter(p => p.nome.toLowerCase().includes(termo) || (p.referencia && p.referencia.toLowerCase().includes(termo))).slice(0, 5);
   }, [novoItem.nome, produtos, mostrarSugestoesProd]);
 
   const selecionarProdutoCat = (p) => {
-    setNovoItem({ nome: p.nome.toUpperCase(), preco: p.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) });
+    setNovoItem({ 
+      nome: p.nome.toUpperCase(), 
+      preco: aplicarMascaraMoeda(String(p.preco * 100)) 
+    });
     setMostrarSugestoesProd(false);
   };
 
@@ -91,11 +104,13 @@ export default function Vendas() {
   };
 
   const aplicarMascaraCPF = (valor) => valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  
   const aplicarMascaraMoeda = (valor) => {
     let v = String(valor).replace(/\D/g, '');
     if (!v) return '';
     return (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
+  
   const limparMoeda = (valor) => {
     if (!valor) return 0;
     return Number(String(valor).replace(/[^\d]/g, '')) / 100;
@@ -111,28 +126,47 @@ export default function Vendas() {
 
   const salvarItemNoCatalogo = async (item) => {
     try {
-      // 🟢 AQUI: React Query (assumindo que você criará useProdutos.js a seguir)
-      if (adicionarProdutoMutation.mutateAsync) {
-        await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
-        mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
-      }
+      await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
+      mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
     } catch (err) { mostrarToast("Erro ao sincronizar item com o catálogo.", "erro"); }
   };
 
   const subtotalItens = useMemo(() => itensCarrinho.reduce((acc, item) => acc + item.preco, 0), [itensCarrinho]);
   const totalFinalVenda = useMemo(() => Math.max(0, subtotalItens - limparMoeda(venda.desconto)), [subtotalItens, venda.desconto]);
 
+  // 🟢 CORRIGIDO: HandleChange super resiliente
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
     if (name === 'cpf') {
       const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
-      const clienteExistente = (clientes || []).find(c => c.cpf === valorFormatado);
-      setVenda({ ...venda, cpf: valorFormatado, cliente: clienteExistente ? clienteExistente.nome : (valorFormatado.length < 14 ? '' : venda.cliente) });
+      const isCompleto = valorFormatado.length === 14;
+      
+      const clienteExistente = isCompleto ? clientes.find(c => c.cpf === valorFormatado) : null;
+      
+      setVenda({ 
+        ...venda, 
+        cpf: valorFormatado, 
+        cliente: clienteExistente ? clienteExistente.nome : venda.cliente 
+      });
+
+      if (clienteExistente) {
+        setTermoBuscaCliente(clienteExistente.nome);
+        setMostrarSugestoes(false);
+      }
+
+    } else if (name === 'termoBusca') {
+      setTermoBuscaCliente(value);
+      setVenda({ ...venda, cliente: value });
+      setMostrarSugestoes(true);
+
     } else if (name === 'valorEntrada' || name === 'desconto') {
       setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
+      
     } else if (name === 'metodoPagamento') {
       const isAVista = value === 'Dinheiro' || value === 'Pix';
       setVenda({ ...venda, [name]: value, parcelas: isAVista ? 1 : venda.parcelas });
+      
     } else {
       setVenda({ ...venda, [name]: value });
     }
@@ -143,7 +177,7 @@ export default function Vendas() {
     if (itensCarrinho.length === 0) return mostrarToast("Adicione pelo menos um item ao carrinho antes de finalizar.", "erro");
     if (!venda.cliente || !venda.cpf) return mostrarToast("Identifique os dados do cliente vinculados a esta operação.", "erro");
 
-    const clienteBase = (clientes || []).find(c => c.cpf === venda.cpf);
+    const clienteBase = clientes.find(c => c.cpf === venda.cpf);
     const descontoNum = limparMoeda(venda.desconto);
     const valorEntradaNum = limparMoeda(venda.valorEntrada);
     const carrinhoParaPDF = [...itensCarrinho];
@@ -158,7 +192,6 @@ export default function Vendas() {
     };
 
     try {
-      // 🟢 AQUI: React Query - O hook useVendas já tem a lógica de 'montarParcelas' dentro dele
       const resultado = await adicionarVendaMutation.mutateAsync(dadosParaSalvar);
 
       const irParaHistorico = () => {
@@ -168,6 +201,7 @@ export default function Vendas() {
           dataVenda: new Date().toISOString().split('T')[0],
           dataPrimeiraParcela: new Date().toISOString().split('T')[0]
         });
+        setTermoBuscaCliente('');
         setItensCarrinho([]);
         setAbaAtiva('historico');
       };
@@ -314,16 +348,16 @@ export default function Vendas() {
               </div>
 
               <div className="space-y-2 relative" ref={wrapperRef}>
-                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Buscar Cliente</label>
                 <input 
                   type="text" 
-                  name="cliente" 
-                  value={venda.cliente} 
+                  name="termoBusca" 
+                  value={termoBuscaCliente} 
                   onChange={handleChange} 
                   onFocus={() => setMostrarSugestoes(true)}
                   required 
-                  placeholder="Nome Completo" 
-                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+                  placeholder="Nome ou CPF..." 
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-elos-bege/30 transition-all" 
                 />
       
                 {sugestoes.length > 0 && (
@@ -350,7 +384,7 @@ export default function Vendas() {
                 <div className="flex-1 relative">
                   <input 
                     type="text" 
-                    placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban, Lente Crizal...)" 
+                    placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban...)" 
                     className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm" 
                     value={novoItem.nome} 
                     onChange={(e) => {
@@ -388,7 +422,7 @@ export default function Vendas() {
 
               <div className="space-y-2">
                 {itensCarrinho.map(item => {
-                  const jaExisteNoCatalogo = (produtos || []).some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
+                  const jaExisteNoCatalogo = produtos.some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
 
                   return (
                     <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
@@ -557,7 +591,7 @@ export default function Vendas() {
                           <div className="flex justify-end gap-2">
                             <button 
                               onClick={() => {
-                                const clienteBase = (clientes || []).find(c => c.cpf === v.cpf);
+                                const clienteBase = clientes.find(c => c.cpf === v.cpf);
                                 gerarPDFDocumento({
                                   ...v,
                                   data: v.dataVenda ? v.dataVenda.split('-').reverse().join('/') : '',
