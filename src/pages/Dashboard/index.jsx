@@ -39,15 +39,6 @@ export default function Dashboard() {
     setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3500);
   };
 
-  if (carregando && vendas.length === 0 && despesas.length === 0) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center text-elos-verde">
-        <div className="w-10 h-10 border-4 border-elos-bege border-t-elos-verde rounded-full animate-spin mb-3"></div>
-        <p className="text-xs uppercase tracking-widest font-black text-gray-400">Carregando painel financeiro...</p>
-      </div>
-    );
-  }
-
   const formatarMoeda = (valor) => {
     if (ocultarValores) return "****";
     return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, '\u00A0');
