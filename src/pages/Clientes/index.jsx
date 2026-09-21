@@ -341,7 +341,14 @@ export default function Clientes() {
     return passaFiltroStatus && (c.nome.toLowerCase().includes(termo) || c.cpf.includes(termo));
   });
 
-  if (carregando) return null;
+if (carregando) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-elos-verde">
+        <div className="w-10 h-10 border-4 border-elos-bege border-t-elos-verde rounded-full animate-spin mb-3"></div>
+        <p className="text-xs uppercase tracking-widest font-black text-gray-400">Carregando clientes...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
