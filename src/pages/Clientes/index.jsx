@@ -48,37 +48,44 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
   const dataVencimentoStr = p.dataVencimento || calcularVencimento();
 
   const handleBaixa = async () => {
-    let valor = parseFloat(valorRecebido); 
+    // Tratamento robusto para vírgula
+    let stringValor = String(valorRecebido).replace(',', '.');
+    let valor = parseFloat(stringValor); 
+    
     if (isNaN(valor) || valor <= 0) {
       mostrarToast("Informe um valor válido para o pagamento.", "erro");
       return;
     }
     valor = parseFloat(valor.toFixed(2));
     
-    // 🟢 AQUI: Chama a função que foi passada por props (que agora usa React Query)
-    await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
-    mostrarToast("Baixa registrada com sucesso!", "sucesso");
+    try {
+      // 🟢 AQUI ESTAVA O ERRO: Passando parâmetros soltos em vez de um objeto
+      await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
+      mostrarToast("Baixa registrada com sucesso!", "sucesso");
 
-    const nomeProduto = p.numero === 0 
-      ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
-      : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
+      const nomeProduto = p.numero === 0 
+        ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
+        : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
 
-    abrirConfirmacao(`Pagamento de R$ ${valor.toFixed(2).replace('.', ',')} recebido com sucesso! Deseja emitir o Recibo Simples desta parcela agora?`, () => {
-      gerarPDFDocumento({
-        cliente: venda.cliente, 
-        cpf: venda.cpf, 
-        telefone: venda.telefone || "Não cadastrado", 
-        endereco: venda.endereco || "Não cadastrado", 
-        email: venda.email || "Não cadastrado",
-        valorTotal: valor, 
-        produto: nomeProduto, 
-        dataRecibo: dataBaixa.split('-').reverse().join('/'), 
-        metodoPagamento: "Dinheiro / Transferência",
-        desconto: 0,
-        numeroPedido: venda.numeroPedido,
-        itensCarrinho: [{ nome: nomeProduto.toUpperCase(), preco: valor }]
-      }, 'recibo');
-    });
+      abrirConfirmacao(`Pagamento de R$ ${valor.toFixed(2).replace('.', ',')} recebido com sucesso! Deseja emitir o Recibo Simples desta parcela agora?`, () => {
+        gerarPDFDocumento({
+          cliente: venda.cliente, 
+          cpf: venda.cpf, 
+          telefone: venda.telefone || "Não cadastrado", 
+          endereco: venda.endereco || "Não cadastrado", 
+          email: venda.email || "Não cadastrado",
+          valorTotal: valor, 
+          produto: nomeProduto, 
+          dataRecibo: dataBaixa.split('-').reverse().join('/'), 
+          metodoPagamento: "Dinheiro / Transferência",
+          desconto: 0,
+          numeroPedido: venda.numeroPedido,
+          itensCarrinho: [{ nome: nomeProduto.toUpperCase(), preco: valor }]
+        }, 'recibo');
+      });
+    } catch (err) {
+      mostrarToast("Erro ao processar baixa.", "erro");
+    }
   };
   
   return (
@@ -106,7 +113,15 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
         <div className="flex items-center gap-3">
           <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">✅ Paga</span>
           <button 
-            onClick={() => estornarBaixaParcela(vendaId, p.numero)} 
+            onClick={async () => {
+              try {
+                // 🟢 AQUI ESTAVA O ERRO DE ESTORNO
+                await estornarBaixaParcela(vendaId, p.numero);
+                mostrarToast("Estorno realizado com sucesso!", "sucesso");
+              } catch (e) {
+                mostrarToast("Falha ao estornar parcela.", "erro");
+              }
+            }} 
             className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors font-bold"
           >
             (Estornar)
@@ -118,6 +133,7 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
             <label className="text-[9px] font-black text-gray-400 uppercase">Valor Pago</label>
             <input 
               type="number" 
+              step="0.01"
               className="w-24 p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
               value={valorRecebido} 
               onChange={(e) => setValorRecebido(e.target.value)}

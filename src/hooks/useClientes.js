@@ -2,12 +2,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pedir } from '../utils/api';
 
-// 1. Buscar os clientes (Substitui o estado 'clientes', 'garantir' e 'status')
+// 1. Buscar os clientes
 export function useClientes() {
   return useQuery({
-    queryKey: ['clientes'], // Chave de cache
+    queryKey: ['clientes'], 
     queryFn: () => pedir('/clientes'),
-    staleTime: 1000 * 60 * 5, // Mantém os dados no cache (sem refazer requisição) por 5 minutos
+    staleTime: 1000 * 60 * 5, // Cache por 5 minutos
   });
 }
 
@@ -17,7 +17,7 @@ export function useAdicionarCliente() {
 
   return useMutation({
     mutationFn: async (novoCliente) => {
-      // Validação local igual a que você tinha
+      // Validação local igual à original
       const clientesAtuais = queryClient.getQueryData(['clientes']) || [];
       if (clientesAtuais.some((c) => c.cpf === novoCliente.cpf)) {
         throw new Error('Este CPF já está cadastrado.');
@@ -30,7 +30,6 @@ export function useAdicionarCliente() {
       });
     },
     onSuccess: () => {
-      // Quando der sucesso, avisa o React Query para recarregar a lista de clientes
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
   });
@@ -48,8 +47,9 @@ export function useEditarCliente() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
-      // Se quiser, no futuro pode invalidar as vendas aqui também para atualizar o nome do cliente lá
-      // queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      // 🟢 CORREÇÃO CRÍTICA: Descomentado! O backend atualiza o nome do cliente nas vendas antigas também. 
+      // Logo, o frontend precisa recarregar a tela de Vendas para não exibir o nome antigo.
+      queryClient.invalidateQueries({ queryKey: ['vendas'] });
     }
   });
 }
