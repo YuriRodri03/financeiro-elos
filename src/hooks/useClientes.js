@@ -6,7 +6,13 @@ import { pedir } from '../utils/api';
 export function useClientes() {
   return useQuery({
     queryKey: ['clientes'], 
-    queryFn: () => pedir('/clientes'),
+    queryFn: async () => {
+      const res = await pedir('/clientes');
+      console.log("👥 Resposta bruta da API de Clientes:", res);
+      // Garante que se o retorno vier encapsulado ou estranho, ele pega o array correto
+      const lista = Array.isArray(res) ? res : (res?.clientes || res?.data || []);
+      return lista;
+    },
     staleTime: 1000 * 60 * 5, // Cache por 5 minutos
   });
 }
@@ -17,7 +23,6 @@ export function useAdicionarCliente() {
 
   return useMutation({
     mutationFn: async (novoCliente) => {
-      // Validação local igual à original
       const clientesAtuais = queryClient.getQueryData(['clientes']) || [];
       if (clientesAtuais.some((c) => c.cpf === novoCliente.cpf)) {
         throw new Error('Este CPF já está cadastrado.');
@@ -47,8 +52,6 @@ export function useEditarCliente() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
-      // 🟢 CORREÇÃO CRÍTICA: Descomentado! O backend atualiza o nome do cliente nas vendas antigas também. 
-      // Logo, o frontend precisa recarregar a tela de Vendas para não exibir o nome antigo.
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
     }
   });
