@@ -1,5 +1,18 @@
 // src/utils/api.js
-const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+
+// Função inteligente que normaliza a URL do backend para sempre incluir /api no final
+const getApiUrl = () => {
+  let url = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+  // Remove barra no final se houver
+  url = url.replace(/\/$/, '');
+  // Se não terminar com /api, adiciona automaticamente
+  if (!url.endsWith('/api')) {
+    url += '/api';
+  }
+  return url;
+};
+
+const API_URL = getApiUrl();
 const TEMPO_LIMITE_MS = 50000;
 
 export async function pedir(caminho, opcoes = {}) {
@@ -7,8 +20,11 @@ export async function pedir(caminho, opcoes = {}) {
   const controlador = new AbortController();
   const timer = setTimeout(() => controlador.abort(), timeoutMs);
 
+  // Garante que o caminho comece com barra (ex: /clientes)
+  const caminhoFormatado = caminho.startsWith('/') ? caminho : `/${caminho}`;
+
   try {
-    const res = await fetch(`${API_URL}${caminho}`, {
+    const res = await fetch(`${API_URL}${caminhoFormatado}`, {
       ...resto,
       signal: controlador.signal
     });
