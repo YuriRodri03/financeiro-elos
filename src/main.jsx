@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { FinanceiroProvider, useFinanceiro } from './FinanceiroContext';
+
+// Importações do React Query
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import HomeLoja from './pages/Loja';
 import Dashboard from './pages/Dashboard';
@@ -20,6 +22,15 @@ import PainelOS from './pages/PainelOS';
 import EditarVenda from './pages/EditarVenda'; 
 
 import './index.css'; 
+
+// Configuração do React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // Evita requisições extras só por trocar de aba no navegador
+    },
+  },
+});
 
 function FolhasCaindo() {
   const folhas = Array.from({ length: 25 }); 
@@ -47,7 +58,7 @@ function FolhasCaindo() {
   );
 }
 
-// 🟢 Componente Central: Rotas e Restrições
+// Componente Central: Rotas e Restrições
 function ConteudoAbasPersistentes({ cargo }) {
   const location = useLocation();
   const currentPath = location.pathname;
@@ -101,7 +112,6 @@ function ConteudoAbasPersistentes({ cargo }) {
         <PainelOS />
       </div>
 
-      {/* 🟢 O SEGREDO ESTAVA AQUI: Rotas filhas do Admin NÃO PODEM ter barra (/) no começo! */}
       <Routes>
         <Route path="nova-os/:numeroPedido" element={<NovaOrdemServico />} />
         <Route path="ordem-servico/editar/:id" element={<NovaOrdemServico />} />
@@ -179,7 +189,7 @@ function InterfaceSistema({ aoDeslogar, dadosUsuario }) {
   );
 }
 
-// 🟢 Interceptadores para segurar usuários perdidos em botões antigos em cache
+// Interceptadores para segurar usuários perdidos em botões antigos em cache
 function InterceptarEdicaoVenda() {
   const { id } = useParams();
   return <Navigate to={`/admin/vendas/editar/${id}`} replace />;
@@ -209,7 +219,18 @@ function AppContent() {
     return null;
   });
 
-  const { carregando } = useFinanceiro();
+  // 🟢 NOVA LÓGICA DA SPLASH SCREEN ESTÉTICA
+  const [mostrarSplash, setMostrarSplash] = useState(true);
+
+  useEffect(() => {
+    // A tela some automaticamente após 4.5 segundos (4500 milissegundos)
+    // Se quiser alterar o tempo, mude o número 4500 abaixo:
+    const timer = setTimeout(() => {
+      setMostrarSplash(false);
+    }, 4500); 
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const realizarLoginAdmin = (dadosFuncionario) => {
     setAutenticadoAdmin(true);
@@ -227,14 +248,15 @@ function AppContent() {
     localStorage.removeItem('otica_elos_dados_equipe');
   };
 
-  if (carregando) {
+  // 🟢 RENDERIZA A SPLASH SCREEN SE O TIMER AINDA ESTIVER RODANDO
+  if (mostrarSplash) {
     return (
-      <div className="fixed inset-0 flex flex-col justify-center items-center bg-elos-fundo text-elos-verde z-[9999] overflow-hidden">
+      <div className="fixed inset-0 flex flex-col justify-center items-center bg-elos-fundo text-elos-verde z-[9999] overflow-hidden transition-opacity duration-1000">
         <FolhasCaindo />
-        <div className="relative z-10 text-center">
-          <h2 className="font-tradicional text-5xl mb-3 animate-pulse italic">Ótica Elos</h2>
+        <div className="relative z-10 text-center animate-in fade-in zoom-in-95 duration-1000">
+          <h2 className="font-tradicional text-5xl mb-3 italic">Ótica Elos</h2>
           <div className="w-16 h-[1px] bg-elos-bege mx-auto mb-4 opacity-40"></div>
-          <p className="text-[10px] uppercase tracking-[0.5em] font-black opacity-40">Sincronizando</p>
+          <p className="text-[10px] uppercase tracking-[0.5em] font-black opacity-40 animate-pulse">Bem-vindo</p>
         </div>
       </div>
     );
@@ -262,10 +284,10 @@ function AppContent() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <Router> 
-      <FinanceiroProvider>
+    <QueryClientProvider client={queryClient}>
+      <Router> 
         <AppContent />
-      </FinanceiroProvider>
-    </Router>
+      </Router>
+    </QueryClientProvider>
   </React.StrictMode>
 );

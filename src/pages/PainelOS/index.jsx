@@ -1,11 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFOrdemServico } from '../../documentosUtils';
 import { useNavigate } from 'react-router-dom';
+import { gerarPDFOrdemServico } from '../../documentosUtils';
+
+// 🟢 ADICIONADO: Importando os hooks do React Query
+import { useVendas } from '../../hooks/useVendas';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function PainelOS() {
-  const { vendas, carregando } = useFinanceiro();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // 🟢 AQUI: Usando o React Query para buscar as vendas (que contêm as OS)
+  const { data: vendas = [], isLoading: carregando } = useVendas();
 
   const [busca, setBusca] = useState('');
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
@@ -23,14 +29,15 @@ export default function PainelOS() {
   const handleExcluirOS = (idOS) => {
     abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; // Corrigido a rota
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
           method: 'DELETE'
         });
         
         if (response.ok) {
           mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
-          setTimeout(() => window.location.reload(), 1500); 
+          // 🟢 INVES DE RECARREGAR A PAGINA, APENAS INVALIDAMOS O CACHE PARA ATUALIZAR SOZINHO!
+          queryClient.invalidateQueries({ queryKey: ['vendas'] }); 
         } else {
           mostrarToast("Erro ao excluir OS no servidor.", "erro");
         }
@@ -179,7 +186,7 @@ export default function PainelOS() {
                           🖨️
                         </button>
                         <button 
-                          onClick={() => navigate(`/ordem-servico/editar/${os.idOS}`)}
+                          onClick={() => navigate(`/admin/ordem-servico/editar/${os.idOS}`)}
                           className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
                           title="Editar OS"
                         >

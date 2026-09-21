@@ -1,9 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
-// 🟢 AQUI: Adicionado o gerarPDFCarne na importação
+import { useNavigate } from 'react-router-dom';
+
+// 🟢 REMOVIDO: import { useFinanceiro } from '../../FinanceiroContext';
+// 🟢 ADICIONADO: Importando os novos hooks do React Query
+import { useClientes, useEditarCliente, useExcluirCliente } from '../../hooks/useClientes';
+import { useVendas, useEditarVenda, useExcluirVenda, useDarBaixaParcela, useEstornarBaixaParcela } from '../../hooks/useVendas';
+
 import { gerarPDFDocumento, gerarPDFOrdemServico, gerarPDFCarne } from '../../documentosUtils';
 import CadastroClientes from '../CadastroClientes'; 
-import { useNavigate } from 'react-router-dom';
 
 // --- FUNÇÃO AUXILIAR PARA MOEDA ---
 const aplicarMascaraMoeda = (valor) => {
@@ -51,11 +55,10 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
     }
     valor = parseFloat(valor.toFixed(2));
     
-    // 1. Aguarda a baixa acontecer no servidor via Contexto
+    // 🟢 AQUI: Chama a função que foi passada por props (que agora usa React Query)
     await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
     mostrarToast("Baixa registrada com sucesso!", "sucesso");
 
-    // 2. Pergunta automaticamente se quer o recibo
     const nomeProduto = p.numero === 0 
       ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
       : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
@@ -70,7 +73,7 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
         valorTotal: valor, 
         produto: nomeProduto, 
         dataRecibo: dataBaixa.split('-').reverse().join('/'), 
-        metodoPagamento: "Dinheiro / Transferência", // Campo genérico, já que é baixa avulsa
+        metodoPagamento: "Dinheiro / Transferência",
         desconto: 0,
         numeroPedido: venda.numeroPedido,
         itensCarrinho: [{ nome: nomeProduto.toUpperCase(), preco: valor }]
@@ -142,8 +145,20 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
 }
 
 export default function Clientes() {
-  const { vendas, clientes, darBaixaParcela, estornarBaixaParcela, excluirVenda, editarCliente, excluirCliente, carregando, editarVenda } = useFinanceiro();
   const navigate = useNavigate();
+  
+  // 🟢 AQUI: Usando o React Query em vez do useFinanceiro()
+  const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
+  const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
+  
+  const editarClienteMutation = useEditarCliente();
+  const excluirClienteMutation = useExcluirCliente();
+  const editarVendaMutation = useEditarVenda();
+  const excluirVendaMutation = useExcluirVenda();
+  const darBaixaParcelaMutation = useDarBaixaParcela();
+  const estornarBaixaParcelaMutation = useEstornarBaixaParcela();
+
+  const carregando = carregandoClientes || carregandoVendas;
   
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
@@ -151,8 +166,6 @@ export default function Clientes() {
   const [editandoCadastro, setEditandoCadastro] = useState(null);
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
-  
-  // 🟢 NOVO ESTADO: Modal do Carnê Pix
   const [modalCarne, setModalCarne] = useState(null);
 
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
@@ -176,7 +189,7 @@ export default function Clientes() {
   const handleExcluirOS = (idOS) => {
     abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; // Corrigido a URL da API
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
           method: 'DELETE'
         });
@@ -198,7 +211,7 @@ export default function Clientes() {
     setEditandoCadastro(null);
     setEditandoVenda(null);
     setModalRecibo(null);
-    setModalCarne(null); // Fecha o modal do carnê
+    setModalCarne(null); 
     setNovaFotoCliente(''); 
     setNovaFotoVenda('');   
   };
@@ -230,11 +243,12 @@ export default function Clientes() {
     };
 
     try {
-      await editarCliente(idMongo, dadosAtualizados);
+      // 🟢 AQUI: React Query espera um único objeto com as variáveis
+      await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: dadosAtualizados });
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
       setNovaFotoCliente('');
-      mostrarToast("Cadastro updated com sucesso!", "sucesso");
+      mostrarToast("Cadastro atualizado com sucesso!", "sucesso");
     } catch (err) { mostrarToast("Erro ao editar dados no servidor.", "erro"); }
   };
 
@@ -247,7 +261,8 @@ export default function Clientes() {
     };
 
     try {
-      await editarVenda(editandoVenda.vendaId, dadosAtualizados);
+      // 🟢 AQUI: Adaptado para React Query
+      await editarVendaMutation.mutateAsync({ vendaId: editandoVenda.vendaId, dadosNovos: dadosAtualizados });
       setEditandoVenda(null);
       setNovaFotoVenda('');
       mostrarToast("Pedido atualizado com sucesso!", "sucesso");
@@ -258,16 +273,18 @@ export default function Clientes() {
     abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
       const idMongo = clienteNoModal?._id;
       try {
-        await editarCliente(idMongo, { ...clienteNoModal, foto: '' });
+        // 🟢 AQUI: Adaptado para React Query
+        await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: { ...clienteNoModal, foto: '' } });
         mostrarToast("Foto de perfil removida.", "sucesso");
       } catch (err) { mostrarToast("Erro ao remover arquivo.", "erro"); }
     });
   };
 
   const handleExcluirFotoVenda = (vendaId, vendaAtual) => {
-    abrirConfirmacao("Deseja remover permanentemente a receita digital digitalizada deste pedido?", async () => {
+    abrirConfirmacao("Deseja remover permanentemente a receita digitalizada deste pedido?", async () => {
       try {
-        await editarVenda(vendaId, { ...vendaAtual, foto: '' });
+        // 🟢 AQUI: Adaptado para React Query
+        await editarVendaMutation.mutateAsync({ vendaId, dadosNovos: { ...vendaAtual, foto: '' } });
         mostrarToast("Receita óptica removida do histórico.", "sucesso");
       } catch (err) { mostrarToast("Erro ao limpar arquivo.", "erro"); }
     });
@@ -405,7 +422,8 @@ export default function Clientes() {
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
-                    <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirCliente(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
+                    {/* 🟢 AQUI: Adaptado exclusão */}
+                    <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
                   </div>
                 </td>
               </tr>
@@ -551,13 +569,12 @@ export default function Clientes() {
                             📄 Reemitir Pedido
                           </button>
 
-                          {/* 🟢 BOTÃO DO CARNÊ AQUI - Abre o Modal para digitar a chave */}
                           {venda.metodoPagamento === 'Boleto / Crediário' && (
                             <button 
                               onClick={() => {
                                 setModalCarne({
                                   vendaBase: venda,
-                                  chavePix: "(85) 8550-6571" // Chave sugerida automaticamente
+                                  chavePix: "(85) 8550-6571"
                                 });
                               }}
                               className="flex-1 md:flex-none bg-orange-50 text-orange-600 border-2 border-orange-100 hover:bg-orange-500 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
@@ -566,7 +583,8 @@ export default function Clientes() {
                             </button>
                           )}
 
-                          <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVenda(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
+                          {/* 🟢 AQUI: Adaptado Exclusão de Venda */}
+                          <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVendaMutation.mutate(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
                         </div>
                       </div>
 
@@ -616,8 +634,13 @@ export default function Clientes() {
                             key={idx} 
                             p={p} 
                             venda={venda} 
-                            darBaixaParcela={darBaixaParcela} 
-                            estornarBaixaParcela={estornarBaixaParcela} 
+                            // 🟢 AQUI: Passamos as mutações envolvidas numa função para manter compatibilidade com a LinhaParcela original
+                            darBaixaParcela={async (vendaId, numeroParcela, dataPagamento, valorPago) => {
+                              return await darBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela, dataPagamento, valorPago });
+                            }} 
+                            estornarBaixaParcela={async (vendaId, numeroParcela) => {
+                              return await estornarBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela });
+                            }} 
                             mostrarToast={mostrarToast} 
                             abrirConfirmacao={abrirConfirmacao} 
                           />

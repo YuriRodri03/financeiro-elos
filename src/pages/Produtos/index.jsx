@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
+
+// 🟢 ADICIONADO: Importando os hooks do React Query para Produtos
+import { 
+  useProdutos, 
+  useAdicionarProduto, 
+  useEditarProduto, 
+  useExcluirProduto 
+} from '../../hooks/useProdutos';
 
 export default function Produtos() {
-  const { produtos, adicionarProduto, editarProduto, excluirProduto, carregando } = useFinanceiro();
+  const { data: produtos = [], isLoading: carregando } = useProdutos();
+  const adicionarProdutoMutation = useAdicionarProduto();
+  const editarProdutoMutation = useEditarProduto();
+  const excluirProdutoMutation = useExcluirProduto();
 
   const apiUrl = import.meta.env.VITE_API_URL;
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
@@ -60,7 +70,6 @@ export default function Produtos() {
     }
   };
 
-  // 🟢 NOVO UPLOAD COM COMPRESSOR E CONVERSOR PARA WEBP INTEGRADO
   const handleAdicionarFotoGaleria = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -73,7 +82,6 @@ export default function Produtos() {
     setUploadingMultiplo(true);
     mostrarToast(`Comprimindo e enviando ${files.length} foto(s)... ⏳`, "sucesso");
 
-    // 🛠️ Função interna mágica que espreme a imagem
     const comprimirImagem = (file) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -83,7 +91,6 @@ export default function Produtos() {
           img.src = event.target.result;
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            // Tamanho máximo ideal para e-commerce (quadrado padrão)
             const MAX_WIDTH = 800; 
             const MAX_HEIGHT = 800;
             let width = img.width;
@@ -100,7 +107,6 @@ export default function Produtos() {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Converte para formato WebP com 80% de qualidade (Super leve!)
             canvas.toBlob((blob) => {
               resolve(new File([blob], "foto_otimizada.webp", { type: 'image/webp' }));
             }, 'image/webp', 0.8);
@@ -113,10 +119,8 @@ export default function Produtos() {
 
     for (let file of files) {
       try {
-        // 1. Otimiza a imagem antes de subir
         const fotoSuperLeve = await comprimirImagem(file);
         
-        // 2. Sobe para o ImgBB
         const formData = new FormData();
         formData.append("image", fotoSuperLeve);
 
@@ -185,7 +189,10 @@ export default function Produtos() {
     if (novaQuantidade < 0) return; 
     
     try {
-      await editarProduto(produto._id || produto.id, { ...produto, quantidade: novaQuantidade });
+      await editarProdutoMutation.mutateAsync({ 
+        produtoId: produto._id || produto.id, 
+        dadosNovos: { ...produto, quantidade: novaQuantidade } 
+      });
       mostrarToast(`Estoque atualizado!`, "sucesso");
     } catch (err) {
       mostrarToast("Erro ao atualizar o estoque.", "erro");
@@ -218,10 +225,10 @@ export default function Produtos() {
 
     try {
       if (editandoId) {
-        await editarProduto(editandoId, dadosProduto);
+        await editarProdutoMutation.mutateAsync({ produtoId: editandoId, dadosNovos: dadosProduto });
         mostrarToast("Item atualizado no sistema! 📝✨", "sucesso");
       } else {
-        await adicionarProduto(dadosProduto);
+        await adicionarProdutoMutation.mutateAsync(dadosProduto);
         mostrarToast("Item adicionado com sucesso! 📦✨", "sucesso");
       }
       handleCancelarEdicao(); 
@@ -251,12 +258,22 @@ export default function Produtos() {
   if (carregando) return null;
 
   const termoBuscado = buscaEstoque.toLowerCase();
-  const produtosExibidos = (produtos || []).filter(p => {
-    const deFatoNaAba = p.categoria === abaAtiva;
-    const nomeBate = (p.nome || '').toLowerCase().includes(termoBuscado);
-    const refBate = (p.referencia || '').toLowerCase().includes(termoBuscado);
-    return deFatoNaAba && (nomeBate || refBate);
-  });
+  
+  // 🟢 AQUI ESTÁ A MÁGICA DA ORDENAÇÃO POR MAIS RECENTE
+  const produtosExibidos = (produtos || [])
+    .filter(p => {
+      const deFatoNaAba = p.categoria === abaAtiva;
+      const nomeBate = (p.nome || '').toLowerCase().includes(termoBuscado);
+      const refBate = (p.referencia || '').toLowerCase().includes(termoBuscado);
+      return deFatoNaAba && (nomeBate || refBate);
+    })
+    .sort((a, b) => {
+      // O ID do MongoDB (ex: 64f1b2...) possui o timestamp (data) embutido nele.
+      // Comparar a string dos IDs de forma decrescente coloca os mais novos no topo!
+      const idA = String(a._id || a.id || '');
+      const idB = String(b._id || b.id || '');
+      return idB.localeCompare(idA);
+    });
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -335,7 +352,6 @@ export default function Produtos() {
             
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
-              {/* 🟢 GALERIA DE FOTOS */}
               <div className="md:col-span-12 flex flex-col gap-4 mb-2 bg-elos-fundo/50 p-6 rounded-[2rem] border border-elos-bege/20">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-elos-bege/20 pb-4">
                   <div>
@@ -438,8 +454,8 @@ export default function Produtos() {
                     Cancelar
                   </button>
                 )}
-                <button type="submit" disabled={uploadingMultiplo} className={`${editandoId ? 'bg-elos-bege hover:bg-elos-verde' : 'bg-elos-verde hover:bg-[#3a4a3e]'} text-white font-bold px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest disabled:opacity-50`}>
-                  {editandoId ? 'Salvar Alterações' : 'Salvar no Sistema'}
+                <button type="submit" disabled={uploadingMultiplo || adicionarProdutoMutation.isPending || editarProdutoMutation.isPending} className={`${editandoId ? 'bg-elos-bege hover:bg-elos-verde' : 'bg-elos-verde hover:bg-[#3a4a3e]'} text-white font-bold px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest disabled:opacity-50`}>
+                  {adicionarProdutoMutation.isPending || editarProdutoMutation.isPending ? 'Salvando...' : (editandoId ? 'Salvar Alterações' : 'Salvar no Sistema')}
                 </button>
               </div>
             </form>
@@ -471,7 +487,6 @@ export default function Produtos() {
                 {produtosExibidos.map((p) => {
                   const productId = p._id || p.id;
                   
-                  // Identifica a foto de capa (a primeira do array 'fotos' ou a antiga 'foto')
                   const fotoCapa = (p.fotos && p.fotos.length > 0) ? p.fotos[0] : p.foto;
                   
                   return (
@@ -544,7 +559,7 @@ export default function Produtos() {
                           <button onClick={() => handleIniciarEdicao(p)} className="bg-elos-fundo hover:bg-elos-bege hover:text-white text-elos-bege px-4 py-2.5 rounded-xl text-xs font-bold transition-all" title="Editar">
                             ✏️
                           </button>
-                          <button onClick={() => { abrirConfirmacao(`Deseja realmente remover "${p.nome}" do sistema?`, () => { excluirProduto(productId); mostrarToast("Item removido com sucesso!", "sucesso"); }); }} className="bg-red-50 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors" title="Excluir">
+                          <button onClick={() => { abrirConfirmacao(`Deseja realmente remover "${p.nome}" do sistema?`, () => { excluirProdutoMutation.mutate(productId); mostrarToast("Item removido com sucesso!", "sucesso"); }); }} className="bg-red-50 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors" title="Excluir">
                             🗑️
                           </button>
                         </div>

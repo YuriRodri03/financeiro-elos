@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
+
+// 🟢 ADICIONADO: Importando os hooks do React Query
+import { useVendas, useEditarVenda } from '../../hooks/useVendas';
+import { useClientes } from '../../hooks/useClientes';
 
 export default function RelatorioInadimplencia() {
-  const { vendas, clientes, editarVenda } = useFinanceiro();
-  const [dataPrevisaoTemp, setDataPrevisaoTemp] = useState({});
+  // 🟢 AQUI: Puxando dados e mutação do React Query
+  const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
+  const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
+  const editarVendaMutation = useEditarVenda();
 
-  // --- ESTADO PARA NOTIFICAÇÕES TOAST PREMIUM ---
+  const carregando = carregandoVendas || carregandoClientes;
+
+  const [dataPrevisaoTemp, setDataPrevisaoTemp] = useState({});
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
@@ -15,10 +22,9 @@ export default function RelatorioInadimplencia() {
     }, 3000);
   };
 
-  // 🟢 CORRIGIDO: Lógica para calcular vencimentos considerando a data da primeira parcela
   const obterParcelasVencidas = (venda) => {
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); // Zera as horas para comparar apenas datas
+    hoje.setHours(0, 0, 0, 0); 
 
     return (venda.listaParcelas || []).filter(p => {
       if (p.paga) return false;
@@ -26,20 +32,15 @@ export default function RelatorioInadimplencia() {
       let dataVencimento;
       
       if (p.numero === 0) {
-        // A entrada sempre vence no dia em que a venda foi feita
         dataVencimento = new Date(venda.dataVenda + 'T00:00:00');
       } else {
-        // As demais parcelas usam a 'dataPrimeiraParcela' como base (ou caem para a data da venda se não existir)
         const dataBaseParaCalculo = venda.dataPrimeiraParcela || venda.dataVenda;
         dataVencimento = new Date(dataBaseParaCalculo + 'T00:00:00');
-        // Adiciona os meses correspondentes (Ex: parcela 1 = soma 0 meses; parcela 2 = soma 1 mês)
         dataVencimento.setMonth(dataVencimento.getMonth() + (p.numero - 1));
       }
       
-      // Se a data de vencimento for menor que hoje, está atrasada
       return dataVencimento < hoje;
     }).map(p => {
-      // Repete o cálculo para devolver a data real para a interface
       let dataVenc;
       if (p.numero === 0) {
         dataVenc = new Date(venda.dataVenda + 'T00:00:00');
@@ -54,8 +55,8 @@ export default function RelatorioInadimplencia() {
 
   const salvarPrevisao = async (vendaId, data) => {
     try {
-      // Sincronizado com a rota PATCH e com o Mongoose do backend através do editarVenda
-      await editarVenda(vendaId, { dataPrevisaoPagamento: data });
+      // 🟢 AQUI: Chama a mutação do React Query
+      await editarVendaMutation.mutateAsync({ vendaId, dadosNovos: { dataPrevisaoPagamento: data } });
       mostrarToast("Prazo de pagamento registrado com sucesso!", "sucesso");
     } catch (error) {
       mostrarToast("Erro ao salvar prazo de previsão no banco.", "erro");
@@ -93,10 +94,11 @@ export default function RelatorioInadimplencia() {
     window.open(`https://wa.me/55${foneLimpo}?text=${encodeURIComponent(mensagem)}`, "_blank");
   };
 
+  if (carregando) return null;
+
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
       
-      {/* TOAST PREMIUM DA ÓTICA ELOS */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
@@ -186,7 +188,8 @@ export default function RelatorioInadimplencia() {
                               const targetId = v._id || v.id;
                               if(dataPrevisaoTemp[targetId]) salvarPrevisao(targetId, dataPrevisaoTemp[targetId]);
                             }}
-                            className="p-2 bg-elos-bege text-white rounded-lg hover:bg-elos-verde transition-colors"
+                            disabled={editarVendaMutation.isPending}
+                            className="p-2 bg-elos-bege text-white rounded-lg hover:bg-elos-verde transition-colors disabled:opacity-50"
                           >
                             OK
                           </button>

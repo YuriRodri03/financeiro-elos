@@ -1,9 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
 import { gerarPDFSaudeFinanceira } from '../../documentosUtils';
 
+// 🟢 ADICIONADO: Importando os hooks do React Query
+import { useVendas } from '../../hooks/useVendas';
+import { useDespesas } from '../../hooks/useDespesas';
+import { useClientes } from '../../hooks/useClientes';
+
 export default function Dashboard() {
-  const { vendas, despesas, clientes, carregando } = useFinanceiro();
+  // 🟢 AQUI: Puxando dados em tempo real e cacheados do React Query
+  const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
+  const { data: despesas = [], isLoading: carregandoDespesas } = useDespesas();
+  const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
+
+  const carregando = carregandoVendas || carregandoDespesas || carregandoClientes;
 
   const dataAtual = new Date();
   const [mesFiltro, setMesFiltro] = useState(dataAtual.getMonth() + 1);
@@ -11,7 +20,6 @@ export default function Dashboard() {
   const [modalTipo, setModalTipo] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('mensal'); // 'mensal', 'anual', 'geral'
 
-  // 🟢 NOVO: Estado para controlar qual mês foi tocado no celular para exibir o gráfico
   const [mesExpandido, setMesExpandido] = useState(null);
 
   const [relatorioInicio, setRelatorioInicio] = useState('');
@@ -369,7 +377,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* ÁREA DO GRÁFICO 🟢 CORRIGIDA PARA TOUCH */}
+              {/* ÁREA DO GRÁFICO */}
               <div className="h-64 flex items-end justify-between gap-1 md:gap-2 pb-4 border-b border-gray-100 relative">
                 <div className="absolute top-0 left-0 w-full border-t border-dashed border-gray-100"></div>
                 <div className="absolute top-1/2 left-0 w-full border-t border-dashed border-gray-100"></div>
@@ -384,7 +392,6 @@ export default function Dashboard() {
                       className="flex-1 flex flex-col items-center gap-1 group relative z-10 h-full justify-end cursor-pointer"
                       onClick={() => setMesExpandido(mesExpandido === index ? null : index)}
                     >
-                      {/* 🟢 BALÃOZINHO TOUCH/HOVER */}
                       <div className={`absolute -top-14 left-1/2 -translate-x-1/2 bg-gray-900 text-white p-2.5 rounded-xl text-[9px] md:text-[10px] whitespace-nowrap pointer-events-none transition-all z-30 shadow-2xl ${
                         mesExpandido === index ? 'opacity-100 translate-y-0 visible' : 'opacity-0 translate-y-2 invisible md:visible md:group-hover:opacity-100 md:group-hover:translate-y-0'
                       }`}>

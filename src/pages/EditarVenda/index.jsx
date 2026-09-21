@@ -1,11 +1,22 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
 import { useParams, useNavigate } from 'react-router-dom';
+
+// 🟢 ADICIONADO: Importando os hooks do React Query
+import { useVendas, useEditarVenda } from '../../hooks/useVendas';
+import { useClientes } from '../../hooks/useClientes';
+import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos';
 
 export default function EditarVenda() {
   const { id } = useParams(); 
   const navigate = useNavigate();
-  const { vendas, clientes, produtos, adicionarProduto, editarVenda } = useFinanceiro();
+  
+  // 🟢 AQUI: Puxando dados e mutações do React Query
+  const { data: vendas = [] } = useVendas();
+  const { data: clientes = [] } = useClientes();
+  const { data: produtos = [] } = useProdutos();
+  
+  const editarVendaMutation = useEditarVenda();
+  const adicionarProdutoMutation = useAdicionarProduto();
 
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
@@ -17,7 +28,7 @@ export default function EditarVenda() {
     metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0],
-    listaParcelasAntigas: [] // 🟢 Guarda as parcelas anteriores para não perder os pagamentos já feitos se mantiver crediário!
+    listaParcelasAntigas: [] 
   });
 
   const [itensCarrinho, setItensCarrinho] = useState([]);
@@ -41,7 +52,6 @@ export default function EditarVenda() {
     return Number(numeroLimpo) / 100;
   };
 
-  // 🟢 CARREGA OS DADOS DA VENDA EXISTENTE AO ABRIR A TELA
   useEffect(() => {
     if (vendas && vendas.length > 0 && id) {
       const vendaAtual = vendas.find(v => (v._id || v.id) === id);
@@ -106,7 +116,8 @@ export default function EditarVenda() {
 
   const salvarItemNoCatalogo = async (item) => {
     try {
-      await adicionarProduto({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
+      // 🟢 AQUI: Usando o React Query para salvar produto
+      await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
       mostrarToast(`"${item.nome}" salvo no catálogo! 📦`, "sucesso");
     } catch (err) {
       mostrarToast("Erro ao sincronizar item com o catálogo.", "erro");
@@ -125,7 +136,6 @@ export default function EditarVenda() {
     } else if (name === 'valorEntrada' || name === 'desconto') {
       setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
     } else if (name === 'metodoPagamento') {
-      // 🟢 CORREÇÃO: Aplica inteligência visual também na edição ao trocar a forma de pagamento
       const isAVista = value === 'Dinheiro' || value === 'Pix';
       setVenda({ 
         ...venda, 
@@ -146,7 +156,6 @@ export default function EditarVenda() {
     const valorEntradaNum = limparMoeda(venda.valorEntrada);
     const valorRestante = totalFinalVenda - valorEntradaNum;
     
-    // 🟢 REGRA DA EDIÇÃO ATUALIZADA: Só divide se o METODO ATUAL for Crediário!
     const isCrediario = venda.metodoPagamento === 'Boleto / Crediário';
     const isCartao = venda.metodoPagamento === 'Cartão de Crédito';
     const numParcelasGerar = isCrediario ? (Number(venda.parcelas) || 1) : 1;
@@ -156,7 +165,6 @@ export default function EditarVenda() {
     let novasParcelas = [];
     const parcelasAntigas = venda.listaParcelasAntigas || [];
 
-    // Recria a Entrada
     if (valorEntradaNum > 0) {
       const entradaAntiga = parcelasAntigas.find(p => p.numero === 0);
       novasParcelas.push({
@@ -169,7 +177,6 @@ export default function EditarVenda() {
       });
     }
 
-    // Recria as Parcelas divididas (ou parcela única no caso de Cartão/Pix)
     for (let i = 0; i < numParcelasGerar; i++) {
       const parcelaAntiga = parcelasAntigas.find(p => p.numero === i + 1);
       
@@ -177,7 +184,6 @@ export default function EditarVenda() {
       let dataVenc = new Date(dataBase + 'T00:00:00');
       dataVenc.setMonth(dataVenc.getMonth() + i);
 
-      // Se for Cartão/Pix, força a ser PAGA, ignorando como estava no passado
       const isPaga = !isCrediario ? true : (parcelaAntiga ? parcelaAntiga.paga : false);
       const dtPagto = isPaga ? (parcelaAntiga?.dataPagamento || venda.dataVenda) : null;
 
@@ -198,15 +204,16 @@ export default function EditarVenda() {
       valorTotal: totalFinalVenda,
       valorEntrada: valorEntradaNum,
       desconto: descontoNum,
-      listaParcelas: novasParcelas // 🟢 Injeta as novas parcelas corrigidas no banco!
+      listaParcelas: novasParcelas
     };
 
     try {
-      await editarVenda(id, dadosParaSalvar);
+      // 🟢 AQUI: React Query - editando venda
+      await editarVendaMutation.mutateAsync({ vendaId: id, dadosNovos: dadosParaSalvar });
       mostrarToast("Venda atualizada com sucesso!", "sucesso");
       
       setTimeout(() => {
-        navigate(-1); // Retorna automaticamente para a aba do cliente
+        navigate(-1); 
       }, 1500);
     } catch (error) {
       mostrarToast("Erro operacional ao atualizar a venda.", "erro");
@@ -216,7 +223,6 @@ export default function EditarVenda() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative animate-in fade-in">
       
-      {/* TOAST PREMIUM DA ÓTICA ELOS */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 ${toast.tipo === 'sucesso' ? 'bg-elos-verde text-white' : 'bg-red-900 text-red-100'}`}>
@@ -238,7 +244,6 @@ export default function EditarVenda() {
 
         <form onSubmit={handleAtualizar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
           
-          {/* DADOS DO CLIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
@@ -275,7 +280,6 @@ export default function EditarVenda() {
             </div>
           </div>
 
-          {/* CARRINHO DE COMPRAS INTEGRADO AO CATÁLOGO */}
           <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
             <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
             <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
@@ -350,7 +354,6 @@ export default function EditarVenda() {
             </div>
           </div>
 
-          {/* DETALHES TÉCNICOS E FOTOS */}
           <div className="space-y-4">
             <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -379,7 +382,6 @@ export default function EditarVenda() {
             </div>
           </div>
 
-          {/* FINANCEIRO */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
@@ -412,7 +414,6 @@ export default function EditarVenda() {
               </select>
             </div>
             
-            {/* 🟢 CORREÇÃO VISUAL APLICADA NA EDIÇÃO! */}
             <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
                 {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
@@ -436,8 +437,12 @@ export default function EditarVenda() {
             </div>
           )}
 
-          <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
-            Salvar Alterações
+          <button 
+            type="submit" 
+            disabled={editarVendaMutation.isPending}
+            className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6"
+          >
+            {editarVendaMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
           </button>
         </form>
       </div>

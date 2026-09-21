@@ -1,13 +1,18 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
+// 🟢 ADICIONADO: Hooks do React Query
+import { useOrdemServico, useSalvarOS } from '../../hooks/useOS';
+
 export default function NovaOrdemServico() {
-  // 🟢 AGORA CAPTURAMOS TANTO O NUMERO DO PEDIDO QUANTO O ID DA OS
   const { numeroPedido, id } = useParams();
   const navigate = useNavigate();
-  const modoEdicao = !!id; // Se tem ID, estamos no modo de edição
+  const modoEdicao = !!id; 
 
-  // Estado com todos os campos mapeados do modelo físico
+  // 🟢 AQUI: React Query busca a OS se estivermos no modo de edição
+  const { data: osBanco, isLoading: carregandoOS } = useOrdemServico(id);
+  const salvarOSMutation = useSalvarOS();
+
   const [dadosOS, setDadosOS] = useState({
     lente: '', tratamento: '', armacao: '',
     
@@ -31,40 +36,22 @@ export default function NovaOrdemServico() {
     medidas_ponte: '', medidas_diag: '',
     
     // Rodapé
-    observacoes: '', consultor: '', numeroPedido: numeroPedido || ''
+    observacoes: '', consultor: '', cliente: '', numeroPedido: numeroPedido || ''
   });
 
-  // 🟢 BUSCA OS DADOS SE ESTIVER NO MODO DE EDIÇÃO
+  // 🟢 PREENCHE O FORMULÁRIO QUANDO O REACT QUERY RETORNAR OS DADOS
   useEffect(() => {
-    if (modoEdicao) {
-      const carregarOS = async () => {
-        try {
-          const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
-          const response = await fetch(`${baseUrl}/ordens_servico/${id}`);
-          if (response.ok) {
-            const dadosBanco = await response.json();
-            
-            // Preenche o formulário substituindo valores nulos por string vazia
-            const dadosFormatados = {};
-            Object.keys(dadosOS).forEach(key => {
-              dadosFormatados[key] = dadosBanco[key] || '';
-            });
-            // Mantém o numeroPedido original caso não venha
-            if (dadosBanco.numeroPedido) dadosFormatados.numeroPedido = dadosBanco.numeroPedido;
-            
-            setDadosOS(dadosFormatados);
-          } else {
-            alert("Não foi possível carregar os dados desta OS.");
-          }
-        } catch (error) {
-          console.error("Erro ao buscar OS:", error);
-        }
-      };
-      carregarOS();
+    if (osBanco && modoEdicao) {
+      const dadosFormatados = { ...dadosOS };
+      Object.keys(dadosFormatados).forEach(key => {
+        dadosFormatados[key] = osBanco[key] || '';
+      });
+      if (osBanco.numeroPedido) dadosFormatados.numeroPedido = osBanco.numeroPedido;
+      setDadosOS(dadosFormatados);
     }
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [osBanco, modoEdicao]);
 
-  // Função inteligente que atualiza qualquer input usando o "name" dele
   const handleChange = (e) => {
     setDadosOS({
       ...dadosOS,
@@ -75,41 +62,27 @@ export default function NovaOrdemServico() {
   const salvarOS = async (e) => {
     e.preventDefault();
     
-    const osParaSalvar = {
-      ...dadosOS
-    };
+    const osParaSalvar = { ...dadosOS };
 
-    // Se for criação, garante que a data de criação vá junto
     if (!modoEdicao) {
       osParaSalvar.dataCriacao = new Date().toISOString();
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com'; 
+      // 🟢 AQUI: Chama a mutação do React Query
+      await salvarOSMutation.mutateAsync({ id, dadosOS: osParaSalvar });
       
-      // 🟢 ALTERA A ROTA E O MÉTODO DEPENDENDO SE É EDIÇÃO OU CRIAÇÃO
-      const url = modoEdicao ? `${baseUrl}/ordens_servico/${id}` : `${baseUrl}/ordens_servico`;
-      const metodo = modoEdicao ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: metodo,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(osParaSalvar),
-      });
-
-      if (response.ok) {
-        alert(`Ordem de Serviço ${modoEdicao ? 'atualizada' : 'cadastrada'} com sucesso!`);
-        navigate(-1); // Volta para a tela anterior (Histórico)
-      } else {
-        alert("Erro ao salvar a Ordem de Serviço no servidor.");
-      }
+      alert(`Ordem de Serviço ${modoEdicao ? 'atualizada' : 'cadastrada'} com sucesso!`);
+      navigate(-1); 
     } catch (error) {
       console.error("Erro ao salvar OS: ", error);
       alert("Erro de conexão ao salvar a Ordem de Serviço.");
     }
   };
+
+  if (modoEdicao && carregandoOS) {
+    return <div className="p-10 text-center text-gray-500 font-bold">Carregando Ordem de Serviço...</div>;
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto bg-gray-50 min-h-screen">
@@ -125,7 +98,6 @@ export default function NovaOrdemServico() {
         
         <form onSubmit={salvarOS} className="space-y-6">
           
-          {/* --- DADOS GERAIS DA LENTE/ARMAÇÃO --- */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-100 rounded-md">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">LENTE:</label>
@@ -141,13 +113,11 @@ export default function NovaOrdemServico() {
             </div>
           </div>
 
-          {/* --- TABELA DE GRAUS (RX) --- */}
           <div className="border border-gray-300 rounded-md overflow-hidden">
             <div className="bg-gray-200 text-center font-bold py-2 border-b border-gray-300">
               DADOS DA RX
             </div>
             
-            {/* Cabeçalho das Colunas */}
             <div className="grid grid-cols-6 text-center font-bold bg-gray-100 border-b border-gray-300 text-sm">
               <div className="p-2 border-r border-gray-300 col-span-2">RX</div>
               <div className="p-2 border-r border-gray-300">ESF</div>
@@ -156,7 +126,6 @@ export default function NovaOrdemServico() {
               <div className="p-2">DNP LONGE</div>
             </div>
 
-            {/* LONGE */}
             <div className="grid grid-cols-6 border-b border-gray-300 text-sm">
               <div className="p-2 border-r border-gray-300 flex items-center justify-center font-bold">LONGE</div>
               <div className="border-r border-gray-300">
@@ -181,7 +150,6 @@ export default function NovaOrdemServico() {
               </div>
             </div>
 
-            {/* ADIÇÃO */}
             <div className="grid grid-cols-6 border-b border-gray-300 text-sm bg-gray-50">
               <div className="p-2 border-r border-gray-300 col-span-2 font-bold flex items-center justify-center">ADIÇÃO</div>
               <div className="col-span-4 p-2">
@@ -189,7 +157,6 @@ export default function NovaOrdemServico() {
               </div>
             </div>
 
-            {/* CO */}
             <div className="grid grid-cols-6 border-b border-gray-300 text-sm">
               <div className="p-2 border-r border-gray-300 flex items-center justify-center font-bold">CO</div>
               <div className="border-r border-gray-300">
@@ -200,10 +167,9 @@ export default function NovaOrdemServico() {
                 <input type="text" name="co_od_esf" value={dadosOS.co_od_esf} onChange={handleChange} className="w-full border-b border-gray-300 p-2 text-center outline-none focus:bg-green-50" />
                 <input type="text" name="co_oe_esf" value={dadosOS.co_oe_esf} onChange={handleChange} className="w-full p-2 text-center outline-none focus:bg-green-50" />
               </div>
-              {/* Célula mesclada para Medidas da Armação */}
               <div className="col-span-3 grid grid-cols-3">
                  <div className="col-span-1 p-2 flex items-center justify-center font-bold text-center text-xs border-r border-gray-300">
-                    MEDIDAS DA ARMAÇÃO
+                   MEDIDAS DA ARMAÇÃO
                  </div>
                  <div className="col-span-2 grid grid-cols-2">
                     <div className="border-b border-r border-gray-300 p-1 flex flex-col items-center justify-center text-xs">
@@ -226,7 +192,6 @@ export default function NovaOrdemServico() {
               </div>
             </div>
 
-            {/* PERTO */}
             <div className="grid grid-cols-6 text-sm">
               <div className="p-2 border-r border-gray-300 flex items-center justify-center font-bold">PERTO</div>
               <div className="border-r border-gray-300">
@@ -252,7 +217,6 @@ export default function NovaOrdemServico() {
             </div>
           </div>
 
-          {/* --- OBSERVAÇÕES E CONSULTOR --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">OBSERVAÇÕES:</label>
@@ -264,13 +228,12 @@ export default function NovaOrdemServico() {
             </div>
           </div>
 
-          {/* --- BOTÕES --- */}
           <div className="flex justify-end space-x-4 pt-4 border-t">
             <button type="button" onClick={() => navigate(-1)} className="px-6 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">
               Cancelar
             </button>
-            <button type="submit" className="px-6 py-2 bg-green-700 rounded text-white font-bold hover:bg-green-800 transition">
-              {modoEdicao ? 'Salvar Alterações' : 'Salvar Ordem de Serviço'}
+            <button type="submit" disabled={salvarOSMutation.isPending} className="px-6 py-2 bg-green-700 rounded text-white font-bold hover:bg-green-800 transition disabled:opacity-50">
+              {salvarOSMutation.isPending ? 'Salvando...' : (modoEdicao ? 'Salvar Alterações' : 'Salvar Ordem de Serviço')}
             </button>
           </div>
           

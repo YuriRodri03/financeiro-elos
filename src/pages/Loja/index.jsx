@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
 import { useNavigate } from 'react-router-dom';
+
+// 🟢 ADICIONADO: Importando o hook do React Query no lugar do antigo Context
+import { useProdutos } from '../../hooks/useProdutos';
 
 // =======================================================
 // 🟢 COMPONENTE: MODAL DE TERMOS DE SERVIÇO
@@ -200,8 +202,11 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
 // 🟢 COMPONENTE PRINCIPAL: LOJA ONLINE
 // =======================================================
 export default function HomeLoja() {
-  const { produtos, carregando } = useFinanceiro();
   const navigate = useNavigate();
+
+  // 🟢 AQUI: Usando React Query para puxar os produtos do Catálogo!
+  const { data: produtos = [], isLoading: carregando } = useProdutos();
+  
   const [busca, setBusca] = useState('');
   
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
@@ -355,20 +360,17 @@ export default function HomeLoja() {
     return valor.substring(0, 9);
   };
 
-  // 🟢 FUNÇÃO SIMULADORA DE FRETE (ETAPA 1)
   const calcularFrete = async () => {
     if (cepFrete.replace(/\D/g, '').length !== 8) return alert("Digite um CEP válido com 8 dígitos.");
     setCalculandoFrete(true);
     setFreteSelecionado(null);
 
     try {
-      // Simula o tempo de resposta da API (1 segundo)
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const cepPrefixo = cepFrete.substring(0, 2);
       let opcoes = [];
       
-      // Se for do Ceará (Começa com 60, 61, 62, 63...)
       if (['60','61','62','63'].includes(cepPrefixo)) {
         opcoes.push({ id: 'retirada', nome: 'Retirar na Loja (Bela Vista)', valor: 0.00, prazo: 'Imediato' });
         opcoes.push({ id: 'motoboy', nome: 'Motoboy Fortaleza/Região', valor: 15.00, prazo: '1 dia útil' });
@@ -378,7 +380,7 @@ export default function HomeLoja() {
       opcoes.push({ id: 'sedex', nome: 'Correios Sedex', valor: 45.50, prazo: '2 a 3 dias úteis' });
       
       setOpcoesFrete(opcoes);
-      setFreteSelecionado(opcoes[0]); // Seleciona automaticamente o primeiro (mais barato/grátis)
+      setFreteSelecionado(opcoes[0]);
     } catch (e) {
       alert("Erro ao calcular frete.");
     } finally {
@@ -455,8 +457,8 @@ export default function HomeLoja() {
       clienteEndereco: enderecoFinal, 
       itens: carrinho.map(item => ({ id: item._id, nome: item.nome, preco: item.preco, referencia: item.referencia })),
       valorTotal: calculosCarrinho.totalFinal,
-      freteValor: calculosCarrinho.valorFrete, // 🟢 Envia o valor do frete para o banco
-      freteTipo: freteSelecionado ? freteSelecionado.nome : 'Não selecionado' // 🟢 Envia a modalidade escolhida
+      freteValor: calculosCarrinho.valorFrete, 
+      freteTipo: freteSelecionado ? freteSelecionado.nome : 'Não selecionado' 
     };
 
     try {

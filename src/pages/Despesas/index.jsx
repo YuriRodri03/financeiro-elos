@@ -1,8 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
+
+// 🟢 ADICIONADO: Importando os hooks do React Query
+import { useDespesas, useAdicionarDespesa, useDarBaixaDespesa, useExcluirDespesa } from '../../hooks/useDespesas';
 
 export default function Despesas() {
-  const { despesas, adicionarDespesa, excluirDespesa, darBaixaDespesa, carregando } = useFinanceiro();
+  // 🟢 AQUI: Puxando dados e mutações do React Query
+  const { data: despesas = [], isLoading: carregando } = useDespesas();
+  const adicionarDespesaMutation = useAdicionarDespesa();
+  const darBaixaDespesaMutation = useDarBaixaDespesa();
+  const excluirDespesaMutation = useExcluirDespesa();
 
   // --- ESTADOS DE FILTRO ---
   const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
@@ -16,7 +22,6 @@ export default function Despesas() {
     paga: false
   });
 
-  // --- ESTADOS PARA OS COMPONENTES CUSTOMIZADOS DE TOAST E CONFIRM ---
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
 
@@ -41,7 +46,6 @@ export default function Despesas() {
       .sort((a, b) => new Date(b.vencimento) - new Date(a.vencimento));
   }, [despesas, mesFiltro, anoFiltro]);
 
-  // --- MÁSCARAS E HANDLERS ---
   const aplicarMascaraMoeda = (valor) => {
     let v = valor.replace(/\D/g, '');
     if (!v) return '';
@@ -71,7 +75,8 @@ export default function Despesas() {
     }
 
     try {
-      await adicionarDespesa({ 
+      // 🟢 AQUI: Chama o mutateAsync ao invés do Context
+      await adicionarDespesaMutation.mutateAsync({ 
         ...novaDespesa, 
         valor: valorLimpo,
         categoria: novaDespesa.categoria.toUpperCase()
@@ -93,7 +98,6 @@ export default function Despesas() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
       
-      {/* TOAST PREMIUM DA ÓTICA ELOS */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
@@ -105,7 +109,6 @@ export default function Despesas() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO */}
       {confirmModal.visivel && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
@@ -141,7 +144,6 @@ export default function Despesas() {
             <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black">Controle de Saídas e Fluxo de Caixa</p>
           </div>
 
-          {/* FILTROS DE MÊS E ANO */}
           <div className="flex gap-4 bg-white p-4 rounded-2xl shadow-soft border border-elos-bege/10">
             <div className="flex flex-col">
               <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Mês</label>
@@ -168,7 +170,6 @@ export default function Despesas() {
           </div>
         </header>
 
-        {/* Formulário de Cadastro */}
         <div className="bg-white rounded-[2.5rem] shadow-soft p-8 md:p-12 mb-12 border border-elos-bege/10">
           <h3 className="text-lg font-bold text-elos-verde mb-8 flex items-center gap-3 font-tradicional italic">
             <span className="w-2 h-6 bg-elos-bege rounded-full"></span>
@@ -197,14 +198,13 @@ export default function Despesas() {
             </div>
 
             <div className="md:col-span-1 flex items-end">
-              <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest">
-                Registrar Gasto
+              <button type="submit" disabled={adicionarDespesaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase text-xs tracking-widest">
+                {adicionarDespesaMutation.isPending ? 'Salvando...' : 'Registrar Gasto'}
               </button>
             </div>
           </form>
         </div>
 
-        {/* Lista de Despesas Filtradas */}
         <div className="space-y-8">
           <div className="flex justify-between items-center ml-2">
             <h3 className="text-2xl font-tradicional text-elos-verde italic">Contas de {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][mesFiltro - 1]}/{anoFiltro}</h3>
@@ -247,7 +247,8 @@ export default function Despesas() {
                       {!d.paga && (
                         <button 
                           onClick={() => abrirConfirmacao(`Deseja efetuar a baixa de "${d.descricao}" no valor de R$ ${d.valor.toFixed(2).replace('.', ',')}?`, () => {
-                            darBaixaDespesa(d._id);
+                            // 🟢 AQUI: Chamada com React Query
+                            darBaixaDespesaMutation.mutate(d._id);
                             mostrarToast("Baixa realizada com sucesso!", "sucesso");
                           })} 
                           className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
@@ -258,7 +259,8 @@ export default function Despesas() {
                       <button 
                         onClick={() => { 
                           abrirConfirmacao(`Deseja remover permanentemente o registro de despesa "${d.descricao}"?`, () => {
-                            excluirDespesa(d._id);
+                            // 🟢 AQUI: Chamada com React Query
+                            excluirDespesaMutation.mutate(d._id);
                             mostrarToast("Despesa removida do sistema.", "sucesso");
                           });
                         }} 

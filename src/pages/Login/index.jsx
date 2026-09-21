@@ -47,14 +47,12 @@ export default function Login({ onLogin }) {
     return v;
   };
 
-  // 🟢 LÓGICA DE LOGIN 100% PELO BANCO DE DADOS
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
     const emailTratado = loginEmail.trim().toLowerCase();
 
     try {
-      // 1. TENTA LOGAR COMO FUNCIONÁRIO (PAINEL ADMIN)
       const resFunc = await fetch(`${import.meta.env.VITE_API_URL}/funcionarios/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +60,6 @@ export default function Login({ onLogin }) {
       });
 
       if (resFunc.ok) {
-        // Deu certo! É um funcionário (Admin ou Vendedor)
         const dadosFuncionario = await resFunc.json();
         onLogin(dadosFuncionario); 
         navigate('/admin');
@@ -70,7 +67,6 @@ export default function Login({ onLogin }) {
         return;
       }
 
-      // 2. SE NÃO FOR FUNCIONÁRIO, TENTA LOGAR COMO CLIENTE (LOJA VIRTUAL)
       const resCli = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
       if (!resCli.ok) throw new Error("Erro na resposta do servidor");
       const clientes = await resCli.json();
@@ -151,7 +147,6 @@ export default function Login({ onLogin }) {
     finally { setCarregando(false); }
   };
 
-  // SOLICITA O CÓDIGO NO E-MAIL
   const handleSolicitarCodigoEmail = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -172,7 +167,6 @@ export default function Login({ onLogin }) {
     }
   };
 
-  // VALIDA O CÓDIGO E SALVA NOVA SENHA
   const handleSalvarNovaSenha = async (e) => {
     e.preventDefault();
     setCarregando(true);
@@ -202,6 +196,16 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans overflow-hidden bg-gradient-to-br from-[#2a4537] via-[#1d3026] to-[#0a140f]">
+      
+      {/* 🟢 BOTÃO DE VOLTAR PARA A LOJA BEM VISÍVEL */}
+      <button 
+        onClick={() => navigate('/')} 
+        className="absolute top-6 left-6 z-50 flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-5 py-3 rounded-2xl border border-white/10 transition-all font-black uppercase text-[10px] tracking-widest shadow-lg group"
+      >
+        <span className="group-hover:-translate-x-1 transition-transform">←</span>
+        Voltar para a Loja
+      </button>
+
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#3a5a48] rounded-full blur-[120px] opacity-30"></div>
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#15241c] rounded-full blur-[100px] opacity-80"></div>
@@ -280,7 +284,6 @@ export default function Login({ onLogin }) {
           </form>
         )}
 
-        {/* 🟢 FORMULÁRIO 3: RECUPERAR SENHA VIA E-MAIL */}
         {modo === 'RECUPERAR' && (
           <form onSubmit={etapaRecuperacao === 1 ? handleSolicitarCodigoEmail : handleSalvarNovaSenha} className="p-8 sm:p-10 space-y-6 animate-in slide-in-from-left duration-300">
             

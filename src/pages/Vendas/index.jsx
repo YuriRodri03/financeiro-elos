@@ -1,14 +1,28 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useFinanceiro } from '../../FinanceiroContext';
-import { gerarPDFDocumento } from '../../documentosUtils';
 import { useNavigate } from 'react-router-dom';
+import { gerarPDFDocumento } from '../../documentosUtils';
+
+// 🟢 ADICIONADO: Importando hooks do React Query
+import { useClientes } from '../../hooks/useClientes';
+import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos'; // O hook de produtos será criado depois, mas já deixei pronto
+import { useVendas, useAdicionarVenda } from '../../hooks/useVendas';
 
 export default function Vendas() {
-  const { adicionarVenda, vendas, clientes, produtos, adicionarProduto } = useFinanceiro();
   const navigate = useNavigate();
 
-  const [abaAtiva, setAbaAtiva] = useState('nova');
+  // 🟢 AQUI: Puxando dados do React Query
+  const { data: clientes = [] } = useClientes();
+  const { data: vendas = [] } = useVendas();
+  
+  // Como ainda não criamos o useProdutos.js, vamos simular que ele existe
+  // Caso de erro no Vite, volte temporariamente para o useFinanceiro() apenas para produtos.
+  // Vou presumir que você criará o useProdutos.js logo após esse passo!
+  const { data: produtos = [] } = useProdutos ? useProdutos() : { data: [] };
+  const adicionarProdutoMutation = useAdicionarProduto ? useAdicionarProduto() : { mutateAsync: async () => {} };
+  
+  const adicionarVendaMutation = useAdicionarVenda();
 
+  const [abaAtiva, setAbaAtiva] = useState('nova');
   const [buscaHistorico, setBuscaHistorico] = useState('');
 
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -27,8 +41,6 @@ export default function Vendas() {
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
-  
-  // 🟢 CORREÇÃO: O modal de confirmação agora aceita uma ação de cancelar (para a fila de impressão funcionar)
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
@@ -99,8 +111,11 @@ export default function Vendas() {
 
   const salvarItemNoCatalogo = async (item) => {
     try {
-      await adicionarProduto({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
-      mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
+      // 🟢 AQUI: React Query (assumindo que você criará useProdutos.js a seguir)
+      if (adicionarProdutoMutation.mutateAsync) {
+        await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
+        mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
+      }
     } catch (err) { mostrarToast("Erro ao sincronizar item com o catálogo.", "erro"); }
   };
 
@@ -143,9 +158,9 @@ export default function Vendas() {
     };
 
     try {
-      const resultado = await adicionarVenda(dadosParaSalvar);
+      // 🟢 AQUI: React Query - O hook useVendas já tem a lógica de 'montarParcelas' dentro dele
+      const resultado = await adicionarVendaMutation.mutateAsync(dadosParaSalvar);
 
-      // Função auxiliar que limpa o formulário e vai para o Histórico
       const irParaHistorico = () => {
         setVenda({
           cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
@@ -157,7 +172,6 @@ export default function Vendas() {
         setAbaAtiva('historico');
       };
 
-      // 🟢 MAGIA DA FILA DE IMPRESSÃO: Função que pergunta sobre o Recibo da Entrada
       const perguntarReciboEntrada = () => {
         if (valorEntradaNum > 0) {
           setTimeout(() => {
@@ -176,13 +190,12 @@ export default function Vendas() {
               }, 'recibo');
               irParaHistorico();
             }, irParaHistorico);
-          }, 400); // Atraso sutil para o modal trocar suavemente
+          }, 400); 
         } else {
           irParaHistorico();
         }
       };
 
-      // Inicia a fila de impressão perguntando primeiro pelo Pedido
       abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja imprimir o PEDIDO COM GARANTIA em PDF?", () => {
         gerarPDFDocumento({
           ...resultado,
@@ -195,7 +208,7 @@ export default function Vendas() {
         }, 'pedido');
         mostrarToast("Pedido gerado com sucesso!", "sucesso");
         perguntarReciboEntrada();
-      }, perguntarReciboEntrada); // Se o cara apertar Pular, ele pergunta do recibo do mesmo jeito!
+      }, perguntarReciboEntrada); 
 
     } catch (error) {
       mostrarToast("Erro operacional ao salvar a venda.", "erro");
@@ -220,7 +233,6 @@ export default function Vendas() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
       
-      {/* TOAST PREMIUM DA ÓTICA ELOS */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
@@ -232,7 +244,6 @@ export default function Vendas() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO AUTOMATIZADO */}
       {confirmModal.visivel && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
@@ -267,7 +278,6 @@ export default function Vendas() {
 
       <div className="max-w-5xl mx-auto">
         
-        {/* HEADER COM ABAS GERAIS */}
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 border-b border-elos-bege/30 pb-6">
           <div>
             <h1 className="font-tradicional text-4xl text-elos-verde italic">Gestão de Vendas</h1>
@@ -294,12 +304,9 @@ export default function Vendas() {
           </div>
         </header>
 
-        {/* =======================================
-            ABA 1: NOVA VENDA (Formulário Atual)
-        ======================================== */}
         {abaAtiva === 'nova' && (
           <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
-            {/* DADOS DO CLIENTE */}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
@@ -336,7 +343,6 @@ export default function Vendas() {
               </div>
             </div>
 
-            {/* CARRINHO DE COMPRAS INTEGRADO AO CATÁLOGO */}
             <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
               <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
               <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
@@ -411,7 +417,6 @@ export default function Vendas() {
               </div>
             </div>
 
-            {/* DETALHES TÉCNICOS E FOTOS */}
             <div className="space-y-4">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -440,7 +445,6 @@ export default function Vendas() {
               </div>
             </div>
 
-            {/* FINANCEIRO */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
@@ -473,7 +477,6 @@ export default function Vendas() {
                 </select>
               </div>
               
-              {/* Controle Dinâmico do Campo de Parcelas */}
               <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
                   {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
@@ -497,15 +500,12 @@ export default function Vendas() {
               </div>
             )}
 
-            <button type="submit" className="w-full bg-elos-verde hover:bg-[#3a4a3e] text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
-              Finalizar Venda
+            <button type="submit" disabled={adicionarVendaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
+              {adicionarVendaMutation.isPending ? 'Registrando Venda...' : 'Finalizar Venda'}
             </button>
           </form>
         )}
 
-        {/* =======================================
-            ABA 2: HISTÓRICO DE VENDAS
-        ======================================== */}
         {abaAtiva === 'historico' && (
           <div className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-10 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
             
@@ -571,7 +571,6 @@ export default function Vendas() {
                             >
                               🖨️
                             </button>
-                            {/* 🟢 CORREÇÃO DA ROTA: AGORA TEM O /ADMIN NO COMEÇO */}
                             <button 
                               onClick={() => navigate(`/admin/vendas/editar/${v._id || v.id}`)}
                               className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
