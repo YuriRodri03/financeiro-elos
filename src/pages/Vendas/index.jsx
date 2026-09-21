@@ -47,23 +47,25 @@ export default function Vendas() {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
-  // 🟢 Sugestões de Clientes Baseadas Reativamente no input "cliente"
+  // 🟢 SUGESTÕES DE CLIENTES COM DIAGNÓSTICO E FILTRAGEM ROBUSTA
   const sugestoes = useMemo(() => {
-    if (!venda.cliente || !mostrarSugestoes) return [];
+    console.log("Clientes carregados no React Query:", clientes); 
+
+    if (!venda.cliente || venda.cliente.trim().length === 0 || !mostrarSugestoes) return [];
     
     const termo = venda.cliente.toLowerCase();
     const termoSomenteNumeros = termo.replace(/\D/g, '');
 
     return clientes.filter(c => {
-      if (!c.nome || !c.cpf) return false;
+      if (!c.nome) return false;
       const nomeMatch = c.nome.toLowerCase().includes(termo);
-      const cpfMatch = c.cpf.includes(termo) || (termoSomenteNumeros && c.cpf.replace(/\D/g, '').includes(termoSomenteNumeros));
+      const cpfMatch = c.cpf && (c.cpf.includes(termo) || (termoSomenteNumeros && c.cpf.replace(/\D/g, '').includes(termoSomenteNumeros)));
       return nomeMatch || cpfMatch;
     }).slice(0, 5);
   }, [venda.cliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
-    setVenda({ ...venda, cliente: c.nome, cpf: c.cpf });
+    setVenda({ ...venda, cliente: c.nome, cpf: c.cpf || '' });
     setMostrarSugestoes(false);
   };
 
@@ -348,16 +350,16 @@ export default function Vendas() {
                   className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-elos-bege/30 transition-all" 
                 />
       
-                {sugestoes.length > 0 && (
+                {mostrarSugestoes && sugestoes.length > 0 && (
                   <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
                     {sugestoes.map((c) => (
                       <div 
-                        key={c.cpf} 
+                        key={c.cpf || c._id} 
                         onClick={() => selecionarCliente(c)} 
                         className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
                       >
                         <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
-                        <span className="text-[10px] text-gray-400 font-black">{c.cpf}</span>
+                        <span className="text-[10px] text-gray-400 font-black">{c.cpf || 'Sem CPF'}</span>
                       </div>
                     ))}
                   </div>
