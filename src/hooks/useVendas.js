@@ -158,7 +158,27 @@ export function useDarBaixaParcela() {
       })
     }),
     onSuccess: () => {
+      // 🟢 O SEGREDO: Invalida AMBOS os caches para forçar o recálculo imediato na tela de Clientes!
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+    }
+  });
+}
+
+// 6. Estornar Baixa de Parcela
+export function useEstornarBaixaParcela() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ vendaId, numeroParcela }) => pedir(`/vendas/${vendaId}/parcela/${numeroParcela}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paga: false, dataPagamento: null })
+    }),
+    onSuccess: () => {
+      // 🟢 O SEGREDO: Invalida AMBOS os caches para forçar o recálculo imediato na tela de Clientes!
+      queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
   });
 }
