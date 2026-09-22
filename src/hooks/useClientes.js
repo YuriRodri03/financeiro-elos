@@ -13,7 +13,9 @@ export function useClientes() {
       const lista = Array.isArray(res) ? res : (res?.clientes || res?.data || []);
       return lista;
     },
-    staleTime: 1000 * 60 * 5, // Cache por 5 minutos
+    staleTime: 1000 * 60 * 5,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
   });
 }
 

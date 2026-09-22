@@ -2,7 +2,7 @@
 
 // Função inteligente que normaliza a URL do backend para sempre incluir /api no final
 const getApiUrl = () => {
-  let url = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com';
+  let url = import.meta.env.VITE_API_URL;
   // Remove barra no final se houver
   url = url.replace(/\/$/, '');
   // Se não terminar com /api, adiciona automaticamente
@@ -13,7 +13,7 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
-const TEMPO_LIMITE_MS = 50000;
+const TEMPO_LIMITE_MS = 120000;
 
 export async function pedir(caminho, opcoes = {}) {
   const { timeoutMs = TEMPO_LIMITE_MS, ...resto } = opcoes;
