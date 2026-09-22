@@ -13,7 +13,7 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
-const TEMPO_LIMITE_MS = 120000;
+const TEMPO_LIMITE_MS = 300000;
 
 export async function pedir(caminho, opcoes = {}) {
   const { timeoutMs = TEMPO_LIMITE_MS, ...resto } = opcoes;
