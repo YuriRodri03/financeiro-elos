@@ -9,6 +9,9 @@ import { useVendas, useAdicionarVenda } from '../../hooks/useVendas';
 export default function Vendas() {
   const navigate = useNavigate();
 
+  // Chave da API do ImgBB
+  const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
+
   const { data: clientes = [] } = useClientes();
   const { data: vendas = [] } = useVendas();
   const { data: produtos = [] } = useProdutos();
@@ -21,13 +24,14 @@ export default function Vendas() {
 
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
+  const [uploadingReceita, setUploadingReceita] = useState(false);
   
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
 
   const [venda, setVenda] = useState({
     cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-    metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
+    metodoPagamento: 'Dinheiro', observacoes: '', foto: '', // Aqui foto vai armazenar o LINK gerado pelo ImgBB
     dataVenda: new Date().toISOString().split('T')[0],
     dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
@@ -49,8 +53,6 @@ export default function Vendas() {
 
   // 🟢 SUGESTÕES DE CLIENTES COM DIAGNÓSTICO E FILTRAGEM ROBUSTA
   const sugestoes = useMemo(() => {
-    console.log("Clientes carregados no React Query:", clientes); 
-
     if (!venda.cliente || venda.cliente.trim().length === 0 || !mostrarSugestoes) return [];
     
     const termo = venda.cliente.toLowerCase();
@@ -93,13 +95,77 @@ export default function Vendas() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleFileChange = (e) => {
+  // 🟢 LÓGICA DE UPLOAD E COMPRESSÃO (Idêntica à de Produtos)
+  const handleUploadReceita = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setVenda({ ...venda, foto: reader.result });
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!imgBBKey) {
+      mostrarToast("Chave VITE_IMGBB_API_KEY não encontrada!", "erro");
+      return;
     }
+
+    setUploadingReceita(true);
+    mostrarToast("Comprimindo e enviando receita... ⏳", "sucesso");
+
+    const comprimirImagem = (imgFile) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(imgFile);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; 
+            const MAX_HEIGHT = 800;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+            } else {
+              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob((blob) => {
+              resolve(new File([blob], "receita_otimizada.webp", { type: 'image/webp' }));
+            }, 'image/webp', 0.8);
+          };
+        };
+      });
+    };
+
+    try {
+      const fotoSuperLeve = await comprimirImagem(file);
+      
+      const formData = new FormData();
+      formData.append("image", fotoSuperLeve);
+
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setVenda({ ...venda, foto: data.data.url });
+        mostrarToast("Receita anexada com sucesso! ✅", "sucesso");
+      } else {
+        mostrarToast("Falha no upload via ImgBB.", "erro");
+        console.error("Erro no ImgBB:", data);
+      }
+    } catch (error) {
+      mostrarToast("Erro ao processar imagem.", "erro");
+      console.error("Erro na requisição:", error);
+    }
+
+    setUploadingReceita(false);
   };
 
   const aplicarMascaraCPF = (valor) => valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
@@ -453,16 +519,34 @@ export default function Vendas() {
                 />
                 
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
-                  {venda.foto ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <img src={venda.foto} alt="Receita" className="max-h-32 rounded-xl shadow-lg border-2 border-white" />
-                      <button type="button" onClick={() => setVenda({...venda, foto: ''})} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Foto</button>
+                  {uploadingReceita ? (
+                    <div className="text-center">
+                      <span className="text-4xl block animate-bounce mb-2">⏳</span>
+                      <span className="text-[10px] font-black text-elos-verde uppercase tracking-widest">Otimizando e Enviando...</span>
+                    </div>
+                  ) : venda.foto ? (
+                    <div className="flex flex-col items-center gap-3 w-full h-full relative group/foto">
+                      <img src={venda.foto} alt="Receita" className="max-h-32 object-contain rounded-xl shadow-lg border-2 border-white" />
+                      <button 
+                        type="button" 
+                        onClick={() => setVenda({...venda, foto: ''})} 
+                        className="absolute inset-0 m-auto w-10 h-10 bg-red-600/90 text-white rounded-full text-xs font-black flex items-center justify-center opacity-0 group-hover/foto:opacity-100 transition-opacity"
+                        title="Remover Foto"
+                      >
+                        ✕
+                      </button>
                     </div>
                   ) : (
                     <>
                       <div className="text-4xl mb-2">📸</div>
                       <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
-                      <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleUploadReceita} 
+                        disabled={uploadingReceita} 
+                        className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                      />
                     </>
                   )}
                 </div>
@@ -524,7 +608,7 @@ export default function Vendas() {
               </div>
             )}
 
-            <button type="submit" disabled={adicionarVendaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
+            <button type="submit" disabled={uploadingReceita || adicionarVendaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
               {adicionarVendaMutation.isPending ? 'Registrando Venda...' : 'Finalizar Venda'}
             </button>
           </form>

@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// 🟢 REMOVIDO: import { useFinanceiro } from '../../FinanceiroContext';
-// 🟢 ADICIONADO: Importando os novos hooks do React Query
 import { useClientes, useEditarCliente, useExcluirCliente } from '../../hooks/useClientes';
 import { useVendas, useEditarVenda, useExcluirVenda, useDarBaixaParcela, useEstornarBaixaParcela } from '../../hooks/useVendas';
 
@@ -17,6 +15,40 @@ const aplicarMascaraMoeda = (valor) => {
     currency: 'BRL'
   });
   return v;
+};
+
+// --- COMPRESSÃO DE IMAGEM ---
+const comprimirImagem = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; 
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else {
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], "imagem_otimizada.webp", { type: 'image/webp' }));
+        }, 'image/webp', 0.8);
+      };
+    };
+  });
 };
 
 // --- COMPONENTE DE LINHA DE PARCELA ---
@@ -48,7 +80,6 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
   const dataVencimentoStr = p.dataVencimento || calcularVencimento();
 
   const handleBaixa = async () => {
-    // Tratamento robusto para vírgula
     let stringValor = String(valorRecebido).replace(',', '.');
     let valor = parseFloat(stringValor); 
     
@@ -59,7 +90,6 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
     valor = parseFloat(valor.toFixed(2));
     
     try {
-      // 🟢 AQUI ESTAVA O ERRO: Passando parâmetros soltos em vez de um objeto
       await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
       mostrarToast("Baixa registrada com sucesso!", "sucesso");
 
@@ -115,7 +145,6 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
           <button 
             onClick={async () => {
               try {
-                // 🟢 AQUI ESTAVA O ERRO DE ESTORNO
                 await estornarBaixaParcela(vendaId, p.numero);
                 mostrarToast("Estorno realizado com sucesso!", "sucesso");
               } catch (e) {
@@ -162,8 +191,8 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
   
-  // 🟢 AQUI: Usando o React Query em vez do useFinanceiro()
   const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
   const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
   
@@ -186,6 +215,7 @@ export default function Clientes() {
 
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
@@ -202,26 +232,6 @@ export default function Clientes() {
     setConfirmModal({ visivel: true, message: mensagem, acao });
   };
 
-  const handleExcluirOS = (idOS) => {
-    abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
-      try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; // Corrigido a URL da API
-        const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
-          method: 'DELETE'
-        });
-        
-        if (response.ok) {
-          mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
-          setTimeout(() => window.location.reload(), 1500); 
-        } else {
-          mostrarToast("Erro ao excluir OS no servidor.", "erro");
-        }
-      } catch (error) {
-        mostrarToast("Erro de conexão ao tentar excluir a OS.", "erro");
-      }
-    });
-  };
-
   const fecharModal = () => {
     setClienteSelecionadoCPF(null);
     setEditandoCadastro(null);
@@ -232,20 +242,41 @@ export default function Clientes() {
     setNovaFotoVenda('');   
   };
 
-  const converterParaBase64 = (file, callback) => {
-    const reader = new FileReader();
-    reader.onloadend = () => { callback(reader.result); };
-    reader.readAsDataURL(file);
-  };
-
-  const handleMudarFotoCliente = (e) => {
+  // 🟢 LOGICA UNIFICADA DE UPLOAD NO IMGBB PARA FOTOS E RECEITAS
+  const handleUploadImgBB = async (e, setFotoState) => {
     const file = e.target.files[0];
-    if (file) { converterParaBase64(file, setNovaFotoCliente); }
-  };
+    if (!file) return;
 
-  const handleMudarFotoVenda = (e) => {
-    const file = e.target.files[0];
-    if (file) { converterParaBase64(file, setNovaFotoVenda); }
+    if (!imgBBKey) {
+      mostrarToast("Chave VITE_IMGBB_API_KEY não encontrada!", "erro");
+      return;
+    }
+
+    setUploadingImage(true);
+    mostrarToast("Comprimindo e enviando arquivo... ⏳", "sucesso");
+
+    try {
+      const fotoSuperLeve = await comprimirImagem(file);
+      const formData = new FormData();
+      formData.append("image", fotoSuperLeve);
+
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setFotoState(data.data.url);
+        mostrarToast("Upload concluído com sucesso! ✅", "sucesso");
+      } else {
+        mostrarToast("Falha no upload do ImgBB.", "erro");
+      }
+    } catch (error) {
+      mostrarToast("Erro ao processar imagem.", "erro");
+    }
+
+    setUploadingImage(false);
   };
 
   const salvarEdicaoCadastro = async () => {
@@ -259,7 +290,6 @@ export default function Clientes() {
     };
 
     try {
-      // 🟢 AQUI: React Query espera um único objeto com as variáveis
       await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: dadosAtualizados });
       setClienteSelecionadoCPF(editandoCadastro.cpf);
       setEditandoCadastro(null);
@@ -277,7 +307,6 @@ export default function Clientes() {
     };
 
     try {
-      // 🟢 AQUI: Adaptado para React Query
       await editarVendaMutation.mutateAsync({ vendaId: editandoVenda.vendaId, dadosNovos: dadosAtualizados });
       setEditandoVenda(null);
       setNovaFotoVenda('');
@@ -289,7 +318,6 @@ export default function Clientes() {
     abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
       const idMongo = clienteNoModal?._id;
       try {
-        // 🟢 AQUI: Adaptado para React Query
         await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: { ...clienteNoModal, foto: '' } });
         mostrarToast("Foto de perfil removida.", "sucesso");
       } catch (err) { mostrarToast("Erro ao remover arquivo.", "erro"); }
@@ -299,10 +327,29 @@ export default function Clientes() {
   const handleExcluirFotoVenda = (vendaId, vendaAtual) => {
     abrirConfirmacao("Deseja remover permanentemente a receita digitalizada deste pedido?", async () => {
       try {
-        // 🟢 AQUI: Adaptado para React Query
         await editarVendaMutation.mutateAsync({ vendaId, dadosNovos: { ...vendaAtual, foto: '' } });
         mostrarToast("Receita óptica removida do histórico.", "sucesso");
       } catch (err) { mostrarToast("Erro ao limpar arquivo.", "erro"); }
+    });
+  };
+
+  const handleExcluirOS = (idOS) => {
+    abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; 
+        const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
+          setTimeout(() => window.location.reload(), 1500); 
+        } else {
+          mostrarToast("Erro ao excluir OS no servidor.", "erro");
+        }
+      } catch (error) {
+        mostrarToast("Erro de conexão ao tentar excluir a OS.", "erro");
+      }
     });
   };
 
@@ -436,7 +483,6 @@ export default function Clientes() {
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
-                    {/* 🟢 AQUI: Adaptado exclusão */}
                     <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
                   </div>
                 </td>
@@ -505,7 +551,7 @@ export default function Clientes() {
                           <div className="flex items-center gap-2 mb-3">
                             <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
                             
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer" onClick={() => navigate(`/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
+                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer" onClick={() => navigate(`/admin/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
                               {venda.dataVenda?.split('-').reverse().join('/')} ✏️ EDITAR
                             </small>
                           </div>
@@ -540,7 +586,7 @@ export default function Clientes() {
                         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                           
                           <button 
-                            onClick={() => navigate(`/nova-os/${numPed}`)} 
+                            onClick={() => navigate(`/admin/nova-os/${numPed}`)} 
                             className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
                           >
                             ➕ Nova OS
@@ -550,7 +596,6 @@ export default function Clientes() {
                             onClick={() => {
                               const valorTotalNum = Number(venda.valorTotal || 0);
                               const descontoNum = Number(venda.desconto || 0);
-                              
                               const subtotalBruto = valorTotalNum + descontoNum;
 
                               let itensRecalculados = [];
@@ -597,7 +642,6 @@ export default function Clientes() {
                             </button>
                           )}
 
-                          {/* 🟢 AQUI: Adaptado Exclusão de Venda */}
                           <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVendaMutation.mutate(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
                         </div>
                       </div>
@@ -624,7 +668,7 @@ export default function Clientes() {
                                     🖨️ Imprimir OS
                                   </button>
                                   <button
-                                    onClick={() => navigate(`/ordem-servico/editar/${os.idOS}`)}
+                                    onClick={() => navigate(`/admin/ordem-servico/editar/${os.idOS}`)}
                                     className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
                                   >
                                     ✏️ Editar
@@ -648,7 +692,6 @@ export default function Clientes() {
                             key={idx} 
                             p={p} 
                             venda={venda} 
-                            // 🟢 AQUI: Passamos as mutações envolvidas numa função para manter compatibilidade com a LinhaParcela original
                             darBaixaParcela={async (vendaId, numeroParcela, dataPagamento, valorPago) => {
                               return await darBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela, dataPagamento, valorPago });
                             }} 
@@ -678,8 +721,10 @@ export default function Clientes() {
             <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
               <img src={novaFotoCliente || editandoCadastro.foto || 'https://via.placeholder.com/150'} alt="Preview" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md" />
               <div className="relative">
-                <button type="button" className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold hover:bg-elos-verde">Alterar Foto 📸</button>
-                <input type="file" accept="image/*" capture="environment" onChange={handleMudarFotoCliente} className="absolute inset-0 opacity-0 cursor-pointer" />
+                <button type="button" disabled={uploadingImage} className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold hover:bg-elos-verde disabled:opacity-50">
+                  {uploadingImage ? 'Otimizando... ⏳' : 'Alterar Foto 📸'}
+                </button>
+                <input type="file" accept="image/*" capture="environment" disabled={uploadingImage} onChange={(e) => handleUploadImgBB(e, setNovaFotoCliente)} className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" />
               </div>
             </div>
 
@@ -693,7 +738,7 @@ export default function Clientes() {
               <div><label className="text-[10px] font-black uppercase text-gray-400">Observações</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
             </div>
             <div className="flex gap-4 pt-4">
-              <button onClick={salvarEdicaoCadastro} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold">Salvar</button>
+              <button onClick={salvarEdicaoCadastro} disabled={uploadingImage} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold disabled:bg-gray-400">Salvar</button>
               <button onClick={() => setEditandoCadastro(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
             </div>
           </div>
@@ -713,8 +758,10 @@ export default function Clientes() {
                 <div className="w-full h-20 bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 italic text-xs">Sem receita anexada</div>
               )}
               <div className="relative">
-                <button type="button" className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold">Alterar Receita 📸</button>
-                <input type="file" accept="image/*" capture="environment" onChange={handleMudarFotoVenda} className="absolute inset-0 opacity-0 cursor-pointer" />
+                <button type="button" disabled={uploadingImage} className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold disabled:opacity-50">
+                  {uploadingImage ? 'Otimizando... ⏳' : 'Alterar Receita 📸'}
+                </button>
+                <input type="file" accept="image/*" capture="environment" disabled={uploadingImage} onChange={(e) => handleUploadImgBB(e, setNovaFotoVenda)} className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" />
               </div>
             </div>
 
@@ -733,7 +780,7 @@ export default function Clientes() {
               </div>
             </div>
             <div className="flex gap-4 pt-4">
-              <button onClick={salvarEdicaoVenda} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold">Atualizar</button>
+              <button onClick={salvarEdicaoVenda} disabled={uploadingImage} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold disabled:bg-gray-400">Atualizar</button>
               <button onClick={() => setEditandoVenda(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
             </div>
           </div>
