@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
-
-// 🟢 REMOVIDO: import { useFinanceiro } from '../../FinanceiroContext';
-// 🟢 ADICIONADO: Importando a mutação do React Query
 import { useAdicionarCliente } from '../../hooks/useClientes';
 
 export default function CadastroClientes() {
-  // 🟢 AQUI: Usando o hook do React Query
   const adicionarClienteMutation = useAdicionarCliente();
 
+  // 🟢 ADICIONADO: campo 'origem' no estado
   const [novo, setNovo] = useState({
     nome: '', 
     cpf: '', 
     dataNascimento: '',
     telefone: '', 
     email: '', 
+    origem: '', // <-- Novo Campo
     endereco: '', 
     observacoes: '',
     foto: '' 
@@ -75,12 +73,11 @@ export default function CadastroClientes() {
     }
 
     try {
-      // 🟢 AQUI: Chama o mutateAsync ao invés da função do Context
       await adicionarClienteMutation.mutateAsync(novo);
       mostrarToast("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨", "sucesso");
-      setNovo({ nome: '', cpf: '', dataNascimento: '', telefone: '', email: '', endereco: '', observacoes: '', foto: '' });
+      // 🟢 ADICIONADO: 'origem' limpo após o sucesso
+      setNovo({ nome: '', cpf: '', dataNascimento: '', telefone: '', email: '', origem: '', endereco: '', observacoes: '', foto: '' });
     } catch (error) {
-      // O error.message agora traz exatamente a mensagem tratada da sua API
       mostrarToast(error.message || "Erro ao conectar com o banco de dados.", "erro");
     }
   };
@@ -116,26 +113,53 @@ export default function CadastroClientes() {
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Nome Completo</label>
               <input type="text" name="nome" value={novo.nome} onChange={handleChange} required placeholder="Ex: João Silva de Souza" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300"/>
             </div>
+            
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">CPF (Obrigatório)</label>
               <input type="text" name="cpf" value={novo.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
             </div>
+            
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Data de Nascimento</label>
               <input type="date" name="dataNascimento" value={novo.dataNascimento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all text-gray-500"/>
             </div>
+            
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Telefone / WhatsApp</label>
               <input type="text" name="telefone" value={novo.telefone} onChange={handleChange} placeholder="(88) 99999-9999" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
             </div>
+
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">E-mail</label>
               <input type="email" name="email" value={novo.email} onChange={handleChange} placeholder="cliente@email.com" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300"/>
             </div>
+
+            {/* 🟢 NOVO CAMPO: Origem do Cliente (Usando Datalist para ter sugestões + digitação livre) */}
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Origem (De onde veio?)</label>
+              <input 
+                list="opcoes-origem" 
+                name="origem" 
+                value={novo.origem} 
+                onChange={handleChange} 
+                placeholder="Ex: Instagram, Indicação da Maria..." 
+                className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"
+              />
+              <datalist id="opcoes-origem">
+                <option value="Instagram"></option>
+                <option value="Facebook"></option>
+                <option value="WhatsApp"></option>
+                <option value="Google"></option>
+                <option value="Passou em frente a Loja"></option>
+                <option value="Indicação"></option>
+              </datalist>
+            </div>
+
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Endereço Completo</label>
               <input type="text" name="endereco" value={novo.endereco} onChange={handleChange} placeholder="Rua, Número, Bairro e Cidade" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
             </div>
+
             <div className="md:col-span-2 space-y-4">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1 italic">Anexos e Observações Clínicas</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

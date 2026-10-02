@@ -242,7 +242,6 @@ export default function Clientes() {
     setNovaFotoVenda('');   
   };
 
-  // 🟢 LOGICA UNIFICADA DE UPLOAD NO IMGBB PARA FOTOS E RECEITAS
   const handleUploadImgBB = async (e, setFotoState) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -383,6 +382,7 @@ export default function Clientes() {
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
         email: dadosCad?.email || "Não cadastrado",
+        origem: dadosCad?.origem || "Não informada", // 🟢 NOVO CAMPO: Origem
         endereco: dadosCad?.endereco || "Não informado",
         dataNascimento: dadosCad?.dataNascimento || "",
         observacoes: dadosCad?.observacoes || "",
@@ -513,6 +513,10 @@ export default function Clientes() {
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">E-mail</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.email || "Não cadastrado"}</p></div>
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Data de Nascimento</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.dataNascimento ? clienteNoModal.dataNascimento.split('-').reverse().join('/') : "Não informada"}</p></div>
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
+                  
+                  {/* 🟢 NOVO CAMPO: Origem do Cliente renderizado na ficha */}
+                  <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Origem do Cliente</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.origem || "Não informada"}</p></div>
+
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
                 </div>
 
@@ -734,6 +738,27 @@ export default function Clientes() {
               <div><label className="text-[10px] font-black uppercase text-gray-400">Data de Nascimento</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none text-gray-500" type="date" value={editandoCadastro.dataNascimento || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, dataNascimento: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">E-mail</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="email" value={editandoCadastro.email || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, email: e.target.value})} /></div>
+              
+              {/* 🟢 NOVO CAMPO: Origem editável com datalist (Igual ao Cadastro) */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400">Origem (De onde veio?)</label>
+                <input 
+                  list="edit-opcoes-origem" 
+                  className="w-full p-3 bg-elos-fundo rounded-xl outline-none" 
+                  type="text" 
+                  value={editandoCadastro.origem || ''} 
+                  onChange={(e) => setEditandoCadastro({...editandoCadastro, origem: e.target.value})} 
+                />
+                <datalist id="edit-opcoes-origem">
+                  <option value="Instagram"></option>
+                  <option value="Facebook"></option>
+                  <option value="WhatsApp"></option>
+                  <option value="Google"></option>
+                  <option value="Passou em frente a Loja"></option>
+                  <option value="Indicação"></option>
+                </datalist>
+              </div>
+
               <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">Observações</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
             </div>
