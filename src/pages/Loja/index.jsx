@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-// 🟢 ADICIONADO: Importando o hook do React Query no lugar do antigo Context
 import { useProdutos } from '../../hooks/useProdutos';
 
 // =======================================================
@@ -9,11 +7,10 @@ import { useProdutos } from '../../hooks/useProdutos';
 // =======================================================
 function ModalTermos({ onClose }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
-      <div className="absolute inset-0 bg-[#1d3026]/40 backdrop-blur-md transition-opacity" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden border border-white/20">
-        
-        <div className="p-6 md:p-8 flex justify-between items-center bg-gradient-to-r from-[#1d3026] to-[#2a4537] text-white">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" style={{ animation: 'fadeUp 0.5s ease forwards' }}>
+      <div className="absolute inset-0 bg-[#1d3026]/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+      <div className="relative bg-[#F4F1EA] w-full max-w-2xl max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border border-white/20">
+        <div className="p-6 md:p-8 flex justify-between items-center bg-[#1d3026] text-[#F4F1EA]">
           <div>
             <h2 className="text-3xl font-tradicional italic font-bold">Termos de Serviço</h2>
             <p className="text-[10px] font-black text-[#c5a880] uppercase tracking-widest mt-1">Ótica Elos E-commerce</p>
@@ -22,31 +19,26 @@ function ModalTermos({ onClose }) {
             &times;
           </button>
         </div>
-        
-        <div className="p-6 md:p-10 overflow-y-auto flex-1 text-sm text-gray-600 space-y-8 leading-relaxed custom-scrollbar bg-[#f9f8f6]">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="p-6 md:p-10 overflow-y-auto flex-1 text-sm text-gray-700 space-y-8 leading-relaxed custom-scrollbar">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 1. Introdução</h3>
             <p>Bem-vindo ao e-commerce da Ótica Elos. Ao utilizar nossa loja virtual e finalizar uma compra, você concorda automaticamente com as diretrizes e regras estabelecidas neste documento.</p>
           </div>
-          
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 2. Lentes de Grau e Receituário</h3>
             <p>A confecção de lentes oftálmicas com grau requer o envio de uma receita oftalmológica atualizada (emitida há no máximo 1 ano) através do nosso canal oficial de WhatsApp logo após a compra. A Ótica Elos garante a fidelidade da lente em relação à receita enviada, mas não se responsabiliza por eventuais erros médicos na prescrição.</p>
           </div>
-          
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 3. Prazos, Entregas e Frete</h3>
             <p>O prazo de produção e entrega começa a ser contabilizado apenas após a confirmação do pagamento e o envio da receita médica (quando aplicável). <strong>Atenção ao Frete:</strong> O valor do frete não está incluso no valor final do pedido online. A taxa de entrega será calculada e cobrada no momento da entrega do seu produto.</p>
           </div>
-          
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 4. Trocas e Devoluções</h3>
             <p>Aceitamos a devolução de armações (sem grau) no prazo de até 7 dias corridos após o recebimento, desde que o produto retorne na embalagem original e sem marcas de uso. Lentes de grau são produtos personalizados e fabricados sob medida, portanto, não possuem direito a devolução, exceto em casos de defeitos.</p>
           </div>
         </div>
-        
-        <div className="p-6 bg-white border-t border-gray-100 flex justify-end">
-          <button onClick={onClose} className="px-10 py-4 bg-[#1d3026] text-white font-bold rounded-xl text-xs uppercase tracking-[0.2em] hover:bg-[#c5a880] active:scale-[0.98] transition-all shadow-lg hover:shadow-[#c5a880]/30">
+        <div className="p-6 bg-white border-t border-gray-200 flex justify-end">
+          <button onClick={onClose} className="px-10 py-4 bg-[#1d3026] text-[#F4F1EA] font-bold rounded-xl text-xs uppercase tracking-[0.2em] hover:bg-[#c5a880] active:scale-[0.98] transition-all shadow-lg hover:shadow-[#c5a880]/30">
             Estou de Acordo
           </button>
         </div>
@@ -93,10 +85,10 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
   };
 
   return (
-    <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:border-[#c5a880]/30 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative">
+    <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-200 hover:border-[#c5a880]/40 hover:shadow-[0_20px_40px_rgba(197,168,128,0.15)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative anim-texto-2">
       
       {precoPromocional && precoPromocional < produto.preco && (
-        <div className="absolute top-5 right-5 z-20 bg-red-600 backdrop-blur-md text-white border border-red-500 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
+        <div className="absolute top-5 right-5 z-20 bg-red-600/90 backdrop-blur-md text-white border border-red-500 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
           🔥 Promoção!
         </div>
       )}
@@ -111,7 +103,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="aspect-square bg-gradient-to-br from-gray-50 to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
+        className="aspect-square bg-gradient-to-br from-[#F4F1EA] to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
       >
         {!imgCarregada && fotoAtual && (
           <div className="absolute inset-0 flex items-center justify-center z-0">
@@ -136,7 +128,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
         ) : null}
         
         <span className={`text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.02] transition-colors duration-500 pointer-events-none z-10"></div>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-[#1d3026]/[0.03] transition-colors duration-500 pointer-events-none z-10"></div>
 
         {fotos.length > 1 && (
           <>
@@ -184,10 +176,10 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
             disabled={noCarrinho}
             className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-md ${
               noCarrinho 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
+                ? 'bg-[#F4F1EA] text-gray-400 cursor-not-allowed shadow-none border border-gray-200' 
                 : precoPromocional
                   ? 'bg-red-600 text-white hover:bg-red-700 hover:shadow-red-600/40 hover:-translate-y-1 active:scale-95'
-                  : 'bg-[#1d3026] text-white hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
+                  : 'bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
             }`}
           >
             {noCarrinho ? '✓' : '🛒'}
@@ -199,12 +191,130 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
 }
 
 // =======================================================
+// 🟢 COMPONENTE: HERO INTERATIVO (Vitrine 3D Completa SVG 360º)
+// =======================================================
+function HeroInterativo() {
+  return (
+    <div className="relative bg-gradient-to-b from-[#1d3026] via-[#243d31] to-[#F4F1EA] overflow-hidden min-h-[60vh] flex items-center justify-center pt-40 pb-16">
+      
+      {/* 🟢 ESTILOS CSS INJETADOS (Giro de 360 graus contínuo) */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes textoSobe {
+          0% { opacity: 0; transform: translateY(40px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        /* Rodando de 0 a 360 graus linearmente */
+        @keyframes vitrine360 {
+          0% { transform: rotateY(0deg) rotateX(5deg); }
+          100% { transform: rotateY(-360deg) rotateX(5deg); } 
+        }
+        /* Sombra pulsando suavemente para acompanhar a rotação */
+        @keyframes shadowPulse360 {
+          0% { transform: translateX(-50%) scale(1); opacity: 0.4; }
+          25% { transform: translateX(-50%) scale(0.7); opacity: 0.2; }
+          50% { transform: translateX(-50%) scale(1); opacity: 0.4; }
+          75% { transform: translateX(-50%) scale(0.7); opacity: 0.2; }
+          100% { transform: translateX(-50%) scale(1); opacity: 0.4; }
+        }
+        
+        .anim-texto-1 { animation: textoSobe 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        .anim-texto-2 { animation: textoSobe 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; animation-delay: 0.3s; }
+      `}} />
+
+      {/* Luzes de Fundo (Pulsante) */}
+      <div className="absolute top-[0%] left-[-5%] w-[60%] h-[60%] bg-[#c5a880] rounded-full mix-blend-screen filter blur-[140px] opacity-20 animate-pulse duration-1000"></div>
+
+      <div className="max-w-7xl mx-auto px-4 w-full flex flex-col md:flex-row items-center justify-between gap-12 relative z-10">
+        
+        {/* LADO ESQUERDO: TEXTOS */}
+        <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left z-20">
+          <span className="anim-texto-1 px-5 py-2 rounded-full border border-[#c5a880]/40 text-[#e6d0a7] bg-black/20 backdrop-blur-md text-[10px] font-black uppercase tracking-[0.2em] mb-6 shadow-sm flex items-center gap-2">
+            <span className="text-sm">🌟</span> Coleção Premium
+          </span>
+
+          <h1 className="anim-texto-2 font-tradicional text-5xl md:text-7xl lg:text-[6rem] italic leading-[1.1] font-light text-white drop-shadow-2xl">
+            O seu novo olhar <br/>
+            <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#c5a880] to-[#e6d0a7]">
+              começa aqui.
+            </span>
+          </h1>
+        </div>
+
+        {/* LADO DIREITO: ÓCULOS 3D (SVG Puro) GIRANDO 360 GRAUS SEM PARAR */}
+        <div className="anim-texto-2 flex-1 w-full flex flex-col items-center justify-center relative pt-12 md:pt-0" style={{ animationDelay: '0.6s' }}>
+          
+          <div className="relative w-[280px] sm:w-[320px] h-[100px]" style={{ perspective: '1000px' }}>
+            {/* O Container que faz o Giro 360 Completo e Contínuo (12s linear infinite) */}
+            <div className="w-full h-full relative" style={{ transformStyle: 'preserve-3d', animation: 'vitrine360 12s linear infinite' }}>
+              
+              {/* Lente Frontal e Aros */}
+              <div className="absolute inset-0" style={{ transform: 'translateZ(100px)' }}>
+                <svg viewBox="0 0 300 100" className="w-full h-full drop-shadow-[0_15px_15px_rgba(0,0,0,0.5)]">
+                  <defs>
+                    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#222"/>
+                      <stop offset="50%" stopColor="#0a0a0a"/>
+                      <stop offset="100%" stopColor="#111"/>
+                    </linearGradient>
+                    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#c5a880"/>
+                      <stop offset="50%" stopColor="#f3e0c0"/>
+                      <stop offset="100%" stopColor="#8b7355"/>
+                    </linearGradient>
+                    <linearGradient id="lensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="rgba(255,255,255,0.4)"/>
+                      <stop offset="50%" stopColor="rgba(255,255,255,0)"/>
+                      <stop offset="100%" stopColor="rgba(255,255,255,0.1)"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Lentes Vidro */}
+                  <rect x="10" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
+                  <rect x="160" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
+                  {/* Aros */}
+                  <rect x="10" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
+                  <rect x="160" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
+                  {/* Ponte Metálica Dourada */}
+                  <path d="M 140 30 Q 150 20 160 30" fill="none" stroke="url(#goldGrad)" strokeWidth="8"/>
+                  {/* Pinos laterais de ligação (Dobradiças) */}
+                  <rect x="-2" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
+                  <rect x="290" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
+                </svg>
+              </div>
+
+              {/* Haste Lateral Esquerda */}
+              <div className="absolute top-[28px] left-[5px] h-[8px] w-[180px] rounded-l-full"
+                   style={{ 
+                     background: 'linear-gradient(to right, #c5a880 0%, #111 20%, transparent 100%)',
+                     transformOrigin: 'left center',
+                     transform: 'translateZ(100px) rotateY(-85deg)'
+                   }}>
+              </div>
+
+              {/* Haste Lateral Direita */}
+              <div className="absolute top-[28px] right-[5px] h-[8px] w-[180px] rounded-r-full"
+                   style={{ 
+                     background: 'linear-gradient(to left, #c5a880 0%, #111 20%, transparent 100%)',
+                     transformOrigin: 'right center',
+                     transform: 'translateZ(100px) rotateY(85deg)'
+                   }}>
+              </div>
+            </div>
+          </div>
+          
+          {/* Sombra Dinâmica no chão adaptada para o giro contínuo */}
+          <div className="absolute -bottom-10 left-1/2 w-[220px] h-5 bg-black/40 blur-xl rounded-full" style={{ animation: 'shadowPulse360 12s linear infinite' }}></div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// =======================================================
 // 🟢 COMPONENTE PRINCIPAL: LOJA ONLINE
 // =======================================================
 export default function HomeLoja() {
   const navigate = useNavigate();
-
-  // 🟢 AQUI: Usando React Query para puxar os produtos do Catálogo!
   const { data: produtos = [], isLoading: carregando } = useProdutos();
   
   const [busca, setBusca] = useState('');
@@ -227,7 +337,6 @@ export default function HomeLoja() {
   const [cupomAtivo, setCupomAtivo] = useState(null); 
   const [validandoCupom, setValidandoCupom] = useState(false);
 
-  // 🟢 ESTADOS DO FRETE
   const [cepFrete, setCepFrete] = useState('');
   const [calculandoFrete, setCalculandoFrete] = useState(false);
   const [opcoesFrete, setOpcoesFrete] = useState([]);
@@ -249,7 +358,6 @@ export default function HomeLoja() {
     } else {
       precoComDesconto = precoComDesconto - valorDesconto;
     }
-    
     return Math.max(0, precoComDesconto);
   };
 
@@ -261,7 +369,7 @@ export default function HomeLoja() {
     if (temPromocaoNoCarrinho && cupomAtivo) {
       setCupomAtivo(null);
       setCupomDigitado('');
-      alert("⚠️ O cupom de desconto foi removido, pois você já possui itens em promoção no carrinho (Descontos não cumulativos).");
+      alert("⚠️ O cupom de desconto foi removido, pois você já possui itens em promoção no carrinho.");
     }
   }, [temPromocaoNoCarrinho, cupomAtivo]);
 
@@ -279,7 +387,6 @@ export default function HomeLoja() {
   const [etapaCheckout, setEtapaCheckout] = useState(0); 
   const [processando, setProcessando] = useState(false);
   const [pedidoFinalizado, setPedidoFinalizado] = useState(null);
-
   const [abaAtiva, setAbaAtiva] = useState('VITRINE'); 
   const [meusPedidos, setMeusPedidos] = useState([]);
 
@@ -316,7 +423,6 @@ export default function HomeLoja() {
 
     if (cupomAtivo && !temPromocaoNoCarrinho) {
       const valorElegivelCupom = carrinho.reduce((total, item) => total + Number(item.preco), 0);
-      
       if (cupomAtivo.tipo === 'PERCENTUAL') {
         descontoCupom = valorElegivelCupom * (Number(cupomAtivo.valor) / 100);
       } else {
@@ -367,7 +473,6 @@ export default function HomeLoja() {
 
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
       const cepPrefixo = cepFrete.substring(0, 2);
       let opcoes = [];
       
@@ -410,8 +515,8 @@ export default function HomeLoja() {
   }, [produtos, busca, categoriaAtiva]);
 
   const categorias = [
-    { id: 'TODAS', label: 'Tudo' },
-    { id: 'ARMAÇÃO', label: 'Óculos' },
+    { id: 'TODAS', label: 'Catálogo' },
+    { id: 'ARMAÇÃO', label: 'Armações' },
     { id: 'LENTE', label: 'Lentes' },
     { id: 'ÓCULOS DE SOL', label: 'Solar' },
     { id: 'ACESSÓRIOS', label: 'Acessórios' }
@@ -434,7 +539,6 @@ export default function HomeLoja() {
 
   const processarPedido = async (e) => {
     e.preventDefault();
-    
     const temArmacaoNoCarrinho = carrinho.some(i => i.categoria === 'ARMAÇÃO');
     if (temArmacaoNoCarrinho && dadosCliente.temGrau === null) {
       alert("Por favor, selecione nas opções abaixo se as suas lentes terão grau ou não.");
@@ -515,9 +619,9 @@ export default function HomeLoja() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f9f8f6]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F1EA]">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#1d3026] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-4 border-[#1d3026] border-t-[#c5a880] rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-[#1d3026] font-bold uppercase tracking-[0.2em] text-xs">Preparando Experiência...</p>
         </div>
       </div>
@@ -525,16 +629,16 @@ export default function HomeLoja() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f9f8f6] font-sans relative pb-20">
+    <div className="min-h-screen bg-[#F4F1EA] font-sans relative pb-20">
       
       {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
 
-      {/* NAVBAR */}
-      <nav className={`fixed w-full top-0 z-50 transition-all duration-500 ease-in-out ${isScrolled ? 'bg-white/80 backdrop-blur-xl shadow-sm border-b border-gray-100 py-2' : 'bg-transparent py-5'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      {/* NAVBAR PRINCIPAL (Altura 70px/80px exata para garantir o encaixe da barra de categorias) */}
+      <nav className={`fixed w-full top-0 z-[60] transition-all duration-500 ease-in-out flex items-center ${isScrolled ? 'bg-[#F4F1EA]/95 backdrop-blur-xl shadow-sm border-b border-gray-200/50 h-[70px]' : 'bg-transparent h-[80px]'}`}>
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center w-full">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setAbaAtiva('VITRINE')}>
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-all duration-500 group-hover:scale-105 ${isScrolled ? 'bg-[#1d3026]' : 'bg-white'}`}>
                 <img src="/favicon.png" alt="Logo" className="w-6 h-6 object-contain" />
               </div>
               <span className={`font-tradicional text-2xl italic font-bold transition-colors duration-500 ${isScrolled ? 'text-[#1d3026]' : 'text-white drop-shadow-md'}`}>Ótica Elos</span>
@@ -544,15 +648,15 @@ export default function HomeLoja() {
               <div className="hidden md:flex flex-col text-right">
                 {clienteLogado ? (
                   <>
-                    <span className={`text-xs font-bold transition-colors ${isScrolled ? 'text-gray-800' : 'text-white'}`}>{clienteLogado.nome.split(' ')[0]}</span>
+                    <span className={`text-xs font-bold transition-colors duration-500 ${isScrolled ? 'text-[#1d3026]' : 'text-white drop-shadow-sm'}`}>{clienteLogado.nome.split(' ')[0]}</span>
                     <div className="flex items-center gap-2 justify-end mt-0.5">
-                      <button onClick={() => verificarLoginEAvancar('HISTORICO')} className={`text-[9px] font-black uppercase tracking-widest transition-colors ${isScrolled ? 'text-[#c5a880] hover:text-[#1d3026]' : 'text-[#e6d0a7] hover:text-white'}`}>Pedidos</button>
-                      <span className={isScrolled ? 'text-gray-300' : 'text-white/30'}>|</span>
-                      <button onClick={handleSair} className={`text-[9px] font-black uppercase tracking-widest transition-colors ${isScrolled ? 'text-red-400 hover:text-red-600' : 'text-white/70 hover:text-red-300'}`}>Sair</button>
+                      <button onClick={() => verificarLoginEAvancar('HISTORICO')} className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-500 ${isScrolled ? 'text-[#c5a880] hover:text-[#1d3026]' : 'text-[#c5a880] hover:text-white'}`}>Pedidos</button>
+                      <span className={`transition-colors duration-500 ${isScrolled ? 'text-gray-300' : 'text-white/30'}`}>|</span>
+                      <button onClick={handleSair} className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-500 ${isScrolled ? 'text-red-400 hover:text-red-600' : 'text-red-300 hover:text-white'}`}>Sair</button>
                     </div>
                   </>
                 ) : (
-                  <button onClick={() => verificarLoginEAvancar('VITRINE')} className={`text-[10px] font-black uppercase tracking-[0.15em] transition-colors ${isScrolled ? 'text-[#1d3026] hover:text-[#c5a880]' : 'text-white hover:text-[#e6d0a7] drop-shadow-md'}`}>
+                  <button onClick={() => verificarLoginEAvancar('VITRINE')} className={`text-[10px] font-black uppercase tracking-[0.15em] transition-colors duration-500 ${isScrolled ? 'text-[#1d3026] hover:text-[#c5a880]' : 'text-white hover:text-[#c5a880] drop-shadow-sm'}`}>
                     Entrar / Cadastrar
                   </button>
                 )}
@@ -561,21 +665,21 @@ export default function HomeLoja() {
               <div className="md:hidden flex items-center">
                 <button 
                   onClick={() => verificarLoginEAvancar(clienteLogado ? 'HISTORICO' : 'VITRINE')} 
-                  className={`relative w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 ${isScrolled ? 'bg-gray-50 text-[#1d3026] border border-gray-200' : 'bg-white/10 text-white backdrop-blur-md border border-white/20'}`}
+                  className={`relative w-10 h-10 flex items-center justify-center rounded-full transition-colors duration-500 shadow-sm ${isScrolled ? 'bg-white text-[#1d3026] border border-gray-200' : 'bg-white/20 text-white backdrop-blur-sm border border-white/30'}`}
                 >
                   <span className="text-sm">👤</span>
                 </button>
               </div>
 
-              <div className={`hidden md:block h-8 w-px transition-colors ${isScrolled ? 'bg-gray-200' : 'bg-white/20'}`}></div>
+              <div className={`hidden md:block h-8 w-px transition-colors duration-500 ${isScrolled ? 'bg-gray-200' : 'bg-white/20'}`}></div>
               
               <button 
                 onClick={() => { setMostrarCarrinho(true); if(etapaCheckout === 2) setEtapaCheckout(0); }} 
-                className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:scale-105 ${isScrolled ? 'bg-gray-50 text-[#1d3026] hover:bg-gray-100 border border-gray-200 md:border-none' : 'bg-white/10 text-white backdrop-blur-md hover:bg-white/20 border border-white/20 md:border-white/10'}`}
+                className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:scale-105 shadow-sm ${isScrolled ? 'bg-white text-[#1d3026] hover:bg-[#c5a880] hover:text-white border border-gray-200' : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/30'}`}
               >
                 <span className="text-lg md:text-xl">🛒</span>
                 {carrinho.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#c5a880] text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg border-2 border-transparent">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-2 border-transparent">
                     {carrinho.length}
                   </span>
                 )}
@@ -585,78 +689,67 @@ export default function HomeLoja() {
         </div>
       </nav>
 
+      {/* 🟢 NAVBAR SECUNDÁRIA: CATEGORIAS E BUSCA */}
+      {abaAtiva === 'VITRINE' && (
+        <div className={`fixed w-full left-0 z-[50] py-3 transition-all duration-500 ${isScrolled ? 'top-[70px] bg-[#F4F1EA]/95 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'top-[80px] bg-transparent border-b border-white/10'}`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between gap-6">
+              
+              <div className="flex flex-1 gap-2 overflow-x-auto no-scrollbar pb-1">
+                {categorias.map(cat => (
+                  <button 
+                    key={cat.id} 
+                    onClick={() => {
+                       setCategoriaAtiva(cat.id);
+                       window.scrollTo({ top: window.innerHeight * 0.5, behavior: 'smooth' });
+                    }}
+                    className={`flex-shrink-0 flex items-center px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${
+                      categoriaAtiva === cat.id 
+                      ? (isScrolled ? 'bg-[#1d3026] text-[#F4F1EA] shadow-md scale-105' : 'bg-[#c5a880] text-white shadow-md scale-105')
+                      : (isScrolled ? 'bg-white text-gray-500 border border-gray-200/60 hover:border-[#c5a880]/50 hover:text-[#1d3026]' : 'bg-white/10 text-white/80 border border-white/20 hover:bg-white/20 hover:text-white')
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="hidden lg:block relative w-64 group">
+                <input 
+                  type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-[#c5a880] text-xs font-bold transition-all shadow-sm group-hover:shadow-md ${isScrolled ? 'bg-white border border-gray-200 text-gray-700' : 'bg-white/10 border border-white/20 text-white placeholder-white/50'}`}
+                />
+                <span className={`absolute left-4 top-2 text-sm transition-colors ${isScrolled ? 'text-gray-400' : 'text-white/50'}`}>🔍</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {abaAtiva === 'VITRINE' ? (
         <>
-          <div className="relative bg-[#1d3026] text-white overflow-hidden min-h-[65vh] flex items-center justify-center pt-20">
-            <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-[#c5a880] rounded-full mix-blend-screen filter blur-[180px] opacity-40 animate-pulse duration-1000"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-pulse duration-1000" style={{ animationDelay: '2s' }}></div>
-            <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at center, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+          {/* HERO BANNER - Degradê de Verde para o Branco Sujo com Vitrine Rotativa */}
+          <HeroInterativo />
 
-            <div className="max-w-4xl mx-auto px-4 relative z-10 w-full flex flex-col items-center text-center">
-              <span className="px-5 py-2 rounded-full border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase tracking-[0.2em] mb-8 backdrop-blur-md bg-emerald-900/40 shadow-lg flex items-center gap-2">
-                <span className="text-sm">🤟</span> Loja Acessível em Libras
-              </span>
-
-              <h1 className="font-tradicional text-5xl md:text-7xl lg:text-[5.5rem] italic leading-[1.1] font-light drop-shadow-2xl">
-                O seu novo olhar <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c5a880] to-[#e6d0a7] font-bold">
-                  começa aqui.
-                </span>
-              </h1>
-              <p className="mt-8 text-gray-300 max-w-lg mx-auto font-light leading-relaxed text-sm md:text-base">
-                Descubra a combinação perfeita entre design sofisticado, tecnologia visual e conforto para o seu dia a dia.
-              </p>
-            </div>
-            <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f9f8f6] to-transparent"></div>
-          </div>
-
-          <div className="sticky top-[64px] md:top-[80px] z-40 bg-[#f9f8f6]/90 backdrop-blur-xl border-b border-gray-200/60 py-4 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between gap-6">
-                <div className="flex flex-1 gap-2 overflow-x-auto no-scrollbar pb-1">
-                  {categorias.map(cat => (
-                    <button 
-                      key={cat.id} 
-                      onClick={() => setCategoriaAtiva(cat.id)}
-                      className={`flex-shrink-0 flex items-center px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${
-                        categoriaAtiva === cat.id 
-                        ? 'bg-[#1d3026] text-[#c5a880] shadow-md scale-105' 
-                        : 'bg-white text-gray-500 border border-gray-200 hover:border-[#c5a880]/50 hover:text-[#1d3026]'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="hidden lg:block relative w-64 group">
-                  <input 
-                    type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-[#c5a880]/40 focus:border-[#c5a880] text-xs font-bold text-gray-700 transition-all shadow-sm group-hover:shadow-md"
-                  />
-                  <span className="absolute left-4 top-2.5 text-gray-400 text-sm">🔍</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
+          {/* GRID DE PRODUTOS */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 relative z-20">
-            <div className="flex justify-between items-end mb-8">
+            <div className="flex justify-between items-end mb-8" style={{ animation: 'fadeUp 1s ease forwards', opacity: 0, animationDelay: '0.4s' }}>
               <div>
                 <h2 className="text-3xl font-tradicional text-[#1d3026] italic">
                   {categorias.find(c => c.id === categoriaAtiva)?.label}
                 </h2>
-                <p className="text-[10px] text-gray-400 uppercase tracking-[0.2em] font-black mt-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mt-2">
                   Mostrando {produtosLoja.length} resultados
                 </p>
               </div>
             </div>
 
             {produtosLoja.length === 0 ? (
-              <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-gray-100 flex flex-col items-center">
+              <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-gray-200/50 flex flex-col items-center" style={{ animation: 'fadeUp 1s ease forwards', opacity: 0, animationDelay: '0.6s' }}>
                 <span className="text-7xl opacity-10 mb-6 drop-shadow-sm">🛒</span>
                 <p className="text-gray-400 font-medium text-lg">Ainda não temos produtos nesta categoria.</p>
-                <button onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} className="mt-6 px-6 py-3 bg-gray-50 text-[#1d3026] hover:bg-gray-100 rounded-xl font-bold uppercase tracking-widest text-xs transition-colors">
+                <button onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} className="mt-6 px-6 py-3 bg-[#F4F1EA] text-[#1d3026] hover:bg-[#c5a880] hover:text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-colors">
                   Ver Todo o Catálogo
                 </button>
               </div>
@@ -677,20 +770,20 @@ export default function HomeLoja() {
           </main>
         </>
       ) : (
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-32 animate-in fade-in duration-500">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-32" style={{ animation: 'fadeUp 0.8s ease forwards' }}>
           <div className="flex flex-col items-center mb-12 text-center">
             <h2 className="text-4xl font-tradicional text-[#1d3026] italic">Seus Pedidos</h2>
-            <p className="text-xs text-gray-400 uppercase tracking-[0.2em] font-black mt-3 mb-6">Histórico de Compras e Entregas</p>
+            <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-black mt-3 mb-6">Histórico de Compras e Entregas</p>
             <button onClick={handleSair} className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-6 py-2.5 rounded-full transition-colors border border-red-100">
                Desconectar Minha Conta
             </button>
           </div>
 
           {meusPedidos.length === 0 ? (
-            <div className="text-center py-24 bg-white rounded-[3rem] shadow-sm border border-gray-100">
+            <div className="text-center py-24 bg-white rounded-[3rem] shadow-sm border border-gray-200/50">
               <span className="text-6xl opacity-10 block mb-6">📦</span>
               <p className="text-gray-400 font-medium mb-8">Sua jornada com a Elos ainda não começou.</p>
-              <button onClick={() => setAbaAtiva('VITRINE')} className="px-8 py-4 bg-[#1d3026] text-white rounded-xl text-xs font-bold uppercase tracking-[0.15em] hover:bg-[#c5a880] transition-colors shadow-lg active:scale-95">
+              <button onClick={() => setAbaAtiva('VITRINE')} className="px-8 py-4 bg-[#1d3026] text-[#F4F1EA] rounded-xl text-xs font-bold uppercase tracking-[0.15em] hover:bg-[#c5a880] transition-colors shadow-lg active:scale-95">
                 Explorar Vitrine
               </button>
             </div>
@@ -699,20 +792,20 @@ export default function HomeLoja() {
               {meusPedidos.map((pedido) => {
                 const infoStatus = getTextoStatus(pedido.status);
                 return (
-                  <div key={pedido._id} className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-8 justify-between hover:shadow-lg transition-shadow">
+                  <div key={pedido._id} className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-200/50 flex flex-col md:flex-row gap-8 justify-between hover:shadow-lg transition-shadow">
                     <div className="flex-1 space-y-4 w-full">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="text-2xl font-black text-[#1d3026] tracking-tight">#{pedido.numeroPedidoOnline}</span>
                         <span className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.15em] border ${infoStatus.cor}`}>{infoStatus.texto}</span>
                       </div>
-                      <p className="text-xs text-gray-400 font-medium">
+                      <p className="text-xs text-gray-500 font-medium">
                         Realizado em {new Date(pedido.dataPedido).toLocaleDateString('pt-BR')} às {new Date(pedido.dataPedido).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
                       </p>
-                      <div className="bg-[#f9f8f6] p-4 rounded-2xl w-full border border-gray-100">
-                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em] mb-2 border-b border-gray-200 pb-2">Itens do Pedido</p>
+                      <div className="bg-[#F4F1EA] p-4 rounded-2xl w-full border border-gray-200/50">
+                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.2em] mb-2 border-b border-gray-200 pb-2">Itens do Pedido</p>
                         <ul className="space-y-2">
                           {(pedido.itens || []).map((item, idx) => (
-                            <li key={idx} className="text-xs text-gray-700 font-bold flex gap-2">
+                            <li key={idx} className="text-xs text-gray-800 font-bold flex gap-2">
                               <span className="text-[#c5a880]">1x</span> {item.nome}
                             </li>
                           ))}
@@ -720,9 +813,9 @@ export default function HomeLoja() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col md:items-end justify-between gap-6 w-full md:w-auto md:border-l border-gray-100 md:pl-8">
+                    <div className="flex flex-col md:items-end justify-between gap-6 w-full md:w-auto md:border-l border-gray-200 md:pl-8">
                       <div className="md:text-right">
-                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em] mb-1">Total Pago</p>
+                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.2em] mb-1">Total Pago</p>
                         <p className="text-3xl font-tradicional italic font-bold text-[#1d3026]">{Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
 
@@ -732,7 +825,7 @@ export default function HomeLoja() {
                             Cancelar
                           </button>
                         )}
-                        <button onClick={() => avisarWhatsApp(pedido)} className="w-full px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] shadow-md hover:shadow-[#c5a880]/30 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                        <button onClick={() => avisarWhatsApp(pedido)} className="w-full px-6 py-3.5 bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] shadow-md hover:shadow-[#c5a880]/30 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
                           <span>💬</span> Atendimento em Vídeo ou Texto
                         </button>
                       </div>
@@ -745,13 +838,14 @@ export default function HomeLoja() {
         </main>
       )}
 
+      {/* CARRINHO LATERAL */}
       {mostrarCarrinho && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-[#1d3026]/40 backdrop-blur-sm transition-opacity" onClick={() => { if(!processando) setMostrarCarrinho(false) }}></div>
 
-          <div className="relative w-full max-w-[420px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 rounded-l-[2rem] overflow-hidden">
+          <div className="relative w-full max-w-[420px] bg-white h-full shadow-2xl flex flex-col rounded-l-[2rem] overflow-hidden" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
             
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-[#f9f8f6]">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-[#F4F1EA]">
               <div>
                 <h2 className="text-2xl font-tradicional italic font-bold text-[#1d3026]">
                   {etapaCheckout === 0 && "Seu Carrinho"}
@@ -761,7 +855,7 @@ export default function HomeLoja() {
                 <p className="text-[9px] uppercase tracking-widest text-[#c5a880] font-black mt-1">Ambiente Seguro</p>
               </div>
               {!processando && (
-                <button onClick={() => setMostrarCarrinho(false)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-red-500 text-2xl transition-all shadow-sm">
+                <button onClick={() => setMostrarCarrinho(false)} className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-red-500 text-2xl transition-all shadow-sm">
                   &times;
                 </button>
               )}
@@ -781,15 +875,15 @@ export default function HomeLoja() {
                       {carrinho.map(item => {
                         const fotoCapa = (item.fotos && item.fotos.length > 0) ? item.fotos[0] : item.foto;
                         return (
-                          <div key={item._id} className="flex items-center gap-4 bg-[#f9f8f6] p-4 rounded-2xl border border-transparent hover:border-[#c5a880]/30 transition-all group">
-                            <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100 p-2 relative shadow-sm">
+                          <div key={item._id} className="flex items-center gap-4 bg-[#F4F1EA] p-4 rounded-2xl border border-transparent hover:border-[#c5a880]/30 transition-all group">
+                            <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200 p-2 relative shadow-sm">
                               {fotoCapa ? (
                                 <img src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${item._id || item.id}/foto?v=1`} className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; }}/>
                               ) : null}
                             </div>
                             <div className="flex-1">
                               <h4 className="text-xs font-bold text-[#1d3026] line-clamp-2">{item.nome}</h4>
-                              <p className="text-[10px] font-black tracking-widest uppercase text-gray-400 mt-1 mb-2">Ref: {item.referencia || 'N/A'}</p>
+                              <p className="text-[10px] font-black tracking-widest uppercase text-gray-500 mt-1 mb-2">Ref: {item.referencia || 'N/A'}</p>
                               <div className="flex gap-2 items-baseline">
                                 <p className="text-sm font-tradicional italic font-bold text-[#c5a880]">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                                 {item.precoOriginal && (
@@ -797,13 +891,13 @@ export default function HomeLoja() {
                                 )}
                               </div>
                             </div>
-                            <button onClick={() => removerDoCarrinho(item._id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-red-500 transition-all text-lg shadow-sm bg-white">&times;</button>
+                            <button onClick={() => removerDoCarrinho(item._id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500 transition-all text-lg shadow-sm bg-white border border-gray-200">&times;</button>
                           </div>
                         );
                       })}
 
                       {produtoUpsell && carrinho.some(i => i.categoria === 'ARMAÇÃO') && !carrinho.some(i => i._id === produtoUpsell._id) && (
-                        <div className="mt-6 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-4 flex flex-col gap-3 animate-in slide-in-from-bottom-2 shadow-sm relative overflow-hidden">
+                        <div className="mt-6 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-4 flex flex-col gap-3 shadow-sm relative overflow-hidden" style={{ animation: 'fadeUp 0.5s ease forwards' }}>
                           <div className="absolute -right-4 -top-4 w-16 h-16 bg-orange-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
                           <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-yellow-200 rounded-full mix-blend-multiply opacity-50 blur-xl"></div>
 
@@ -815,7 +909,7 @@ export default function HomeLoja() {
                               </div>
                               <h4 className="text-sm font-black text-orange-900 tracking-tight leading-tight">Preço especial de Combo!</h4>
                               <p className="text-[10px] text-orange-800/80 font-medium mt-1.5 leading-relaxed">
-                                Como você escolheu uma armação, adicione a <strong className="text-orange-900">{produtoUpsell.nome}</strong> com desconto exclusivo! (Você nos diz na próxima tela se tem grau ou não).
+                                Como você escolheu uma armação, adicione a <strong className="text-orange-900">{produtoUpsell.nome}</strong> com desconto exclusivo!
                               </p>
                             </div>
                           </div>
@@ -828,9 +922,8 @@ export default function HomeLoja() {
                         </div>
                       )}
 
-                      {/* 🟢 ÁREA DE FRETE NO CARRINHO */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
-                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-3 ml-1">Calcular Frete</p>
+                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">Calcular Frete</p>
                         
                         <div className="flex gap-2 mb-4">
                           <input 
@@ -838,7 +931,7 @@ export default function HomeLoja() {
                             placeholder="00000-000" 
                             value={cepFrete}
                             onChange={e => setCepFrete(handleMascaraCep(e.target.value))}
-                            className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold tracking-widest text-[#1d3026]"
+                            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold tracking-widest text-[#1d3026]"
                           />
                           <button 
                             onClick={calcularFrete}
@@ -850,7 +943,7 @@ export default function HomeLoja() {
                         </div>
 
                         {opcoesFrete.length > 0 && (
-                          <div className="space-y-2 mt-4 animate-in fade-in">
+                          <div className="space-y-2 mt-4" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
                             {opcoesFrete.map(opcao => (
                               <label key={opcao.id} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${freteSelecionado?.id === opcao.id ? 'border-[#1d3026] bg-[#1d3026]/5 ring-1 ring-[#1d3026]' : 'border-gray-200 bg-white hover:border-[#c5a880]/50'}`}>
                                 <div className="flex items-center gap-3">
@@ -876,7 +969,7 @@ export default function HomeLoja() {
                       </div>
 
                       <div className="pt-6 mt-6 border-t border-gray-100">
-                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
+                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
                         
                         {temPromocaoNoCarrinho ? (
                           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
@@ -891,12 +984,12 @@ export default function HomeLoja() {
                               placeholder="Digite o código" 
                               value={cupomDigitado}
                               onChange={e => setCupomDigitado(e.target.value.toUpperCase())}
-                              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold uppercase tracking-widest text-[#1d3026]"
+                              className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold uppercase tracking-widest text-[#1d3026]"
                             />
                             <button 
                               onClick={validarCupomServidor}
                               disabled={validandoCupom || !cupomDigitado}
-                              className="px-5 bg-[#1d3026] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-50"
+                              className="px-5 bg-[#1d3026] text-[#F4F1EA] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-50"
                             >
                               {validandoCupom ? '...' : 'Aplicar'}
                             </button>
@@ -920,30 +1013,30 @@ export default function HomeLoja() {
               )}
 
               {etapaCheckout === 1 && (
-                <form id="formCheckout" onSubmit={processarPedido} className="space-y-6 animate-in fade-in pb-4">
+                <form id="formCheckout" onSubmit={processarPedido} className="space-y-6 pb-4" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
                   <div className="bg-[#1d3026]/5 p-5 rounded-2xl border border-[#1d3026]/10 mb-4 flex items-start gap-4">
                     <span className="text-xl">✨</span>
                     <p className="text-xs text-[#1d3026] font-medium leading-relaxed">Pronto para finalizar! Por favor, confirme os dados de entrega abaixo.</p>
                   </div>
 
                   {carrinho.some(i => i.categoria === 'ARMAÇÃO') && (
-                    <div className="space-y-3 pt-2 pb-4 border-b border-gray-100">
+                    <div className="space-y-3 pt-2 pb-4 border-b border-gray-200">
                       <label className="text-[9px] font-black text-[#c5a880] uppercase tracking-widest ml-2">Sobre suas lentes</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button 
                           type="button" 
                           onClick={() => setDadosCliente({...dadosCliente, temGrau: false})} 
-                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === false ? 'bg-[#1d3026] text-white border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
+                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === false ? 'bg-[#1d3026] text-[#F4F1EA] border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
                         >
-                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === false ? 'text-[#e6d0a7]' : 'text-gray-400'}`}>Sem Grau</span>
+                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === false ? 'text-[#c5a880]' : 'text-gray-400'}`}>Sem Grau</span>
                           <span className="text-xs font-bold">Apenas p/ Descanso</span>
                         </button>
                         <button 
                           type="button" 
                           onClick={() => setDadosCliente({...dadosCliente, temGrau: true})} 
-                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === true ? 'bg-[#1d3026] text-white border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
+                          className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === true ? 'bg-[#1d3026] text-[#F4F1EA] border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
                         >
-                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === true ? 'text-[#e6d0a7]' : 'text-gray-400'}`}>Com Grau</span>
+                          <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === true ? 'text-[#c5a880]' : 'text-gray-400'}`}>Com Grau</span>
                           <span className="text-xs font-bold">Vou enviar a receita</span>
                         </button>
                       </div>
@@ -951,30 +1044,30 @@ export default function HomeLoja() {
                   )}
                   
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2">Nome Completo</label>
-                    <input type="text" required value={dadosCliente.nome} onChange={e => setDadosCliente({...dadosCliente, nome: e.target.value})} className="w-full px-5 py-4 bg-[#f9f8f6] border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
+                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Nome Completo</label>
+                    <input type="text" required value={dadosCliente.nome} onChange={e => setDadosCliente({...dadosCliente, nome: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
                   
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2">WhatsApp</label>
-                    <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({...dadosCliente, telefone: handleMascaraTel(e.target.value)})} className="w-full px-5 py-4 bg-[#f9f8f6] border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
+                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">WhatsApp</label>
+                    <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({...dadosCliente, telefone: handleMascaraTel(e.target.value)})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
                   
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2">Endereço Completo (Entrega)</label>
-                    <textarea required rows="3" placeholder="Rua, Número, Bairro, Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} className="w-full px-5 py-4 bg-[#f9f8f6] border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
+                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Endereço Completo (Entrega)</label>
+                    <textarea required rows="3" placeholder="Rua, Número, Bairro, Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
                   </div>
                 </form>
               )}
 
               {etapaCheckout === 2 && pedidoFinalizado && (
-                <div className="text-center flex flex-col h-full animate-in zoom-in-95 duration-500 pt-4">
+                <div className="text-center flex flex-col h-full pt-4" style={{ animation: 'fadeUp 0.6s ease forwards' }}>
                   <div className="w-24 h-24 bg-[#1d3026] text-[#c5a880] rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl relative"><span className="text-4xl">✨</span></div>
                   <h3 className="font-tradicional text-4xl italic font-bold text-[#1d3026] mb-2">Perfeito!</h3>
                   <p className="text-sm text-gray-500 mb-8 px-4 leading-relaxed">Seu pedido <span className="font-black text-[#1d3026]">#{pedidoFinalizado.numeroPedidoOnline}</span> foi gerado com sucesso e os itens foram reservados.</p>
 
-                  <div className="bg-[#f9f8f6] p-6 rounded-3xl border border-gray-100 shadow-inner mb-8 text-center">
-                    <p className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2">Total a pagar</p>
+                  <div className="bg-[#F4F1EA] p-6 rounded-3xl border border-gray-200/50 shadow-inner mb-8 text-center">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-2">Total a pagar</p>
                     <p className="text-4xl font-tradicional italic font-bold text-[#1d3026] mb-2">{Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
 
@@ -1034,19 +1127,19 @@ export default function HomeLoja() {
                           setGerandoLink(false);
                         }
                       }} 
-                      className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-white font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-50"
+                      className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-[#F4F1EA] font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-50"
                     >
                       {gerandoLink ? <span className="animate-spin text-lg">⏳</span> : <><span className="text-xl">💳</span> Pagar na InfinitePay</>}
                     </button>
-                    <p className="text-[10px] text-gray-400 px-4">Pagamento Seguro via PIX ou Cartão.</p>
+                    <p className="text-[10px] text-gray-500 px-4 font-bold">Pagamento Seguro via PIX ou Cartão.</p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 🟢 RODAPÉ DO CARRINHO (RESUMO COM DESCONTOS) */}
+            {/* 🟢 RODAPÉ DO CARRINHO */}
             {etapaCheckout < 2 && carrinho.length > 0 && (
-              <div className="p-6 md:p-8 border-t border-gray-100 bg-[#f9f8f6] space-y-4">
+              <div className="p-6 md:p-8 border-t border-gray-200 bg-white space-y-4 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] relative z-20">
                 
                 {calculosCarrinho.descontoCupom > 0 && (
                   <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
@@ -1064,7 +1157,7 @@ export default function HomeLoja() {
                   </div>
                 )}
 
-                <div className="flex justify-between items-end pt-2 border-t border-gray-200/50">
+                <div className="flex justify-between items-end pt-2 border-t border-gray-100">
                   <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Final</span>
                   <div className="text-right">
                     {calculosCarrinho.descontoCupom > 0 && (
@@ -1082,14 +1175,14 @@ export default function HomeLoja() {
                       if (!freteSelecionado) return alert("Por favor, calcule e selecione o Frete antes de avançar.");
                       verificarLoginEAvancar('CHECKOUT');
                     }} 
-                    className="w-full bg-[#1d3026] text-[#e6d0a7] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] mt-4"
+                    className="w-full bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] mt-4"
                   >
                     Avançar Pagamento
                   </button>
                 ) : (
                   <div className="flex gap-3 mt-4">
                     <button onClick={() => setEtapaCheckout(0)} disabled={processando} className="w-1/3 bg-white text-gray-500 border border-gray-200 font-bold py-5 rounded-xl transition-all hover:bg-gray-50 text-[10px] uppercase tracking-widest">Voltar</button>
-                    <button type="submit" form="formCheckout" disabled={processando} className="w-2/3 bg-[#1d3026] text-white hover:bg-[#c5a880] font-bold py-5 rounded-xl shadow-xl transition-all active:scale-[0.98] text-[10px] uppercase tracking-widest flex justify-center items-center">
+                    <button type="submit" form="formCheckout" disabled={processando} className="w-2/3 bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] font-bold py-5 rounded-xl shadow-xl transition-all active:scale-[0.98] text-[10px] uppercase tracking-widest flex justify-center items-center">
                       {processando ? <span className="animate-spin text-lg">⏳</span> : 'Confirmar Pedido'}
                     </button>
                   </div>
@@ -1100,23 +1193,23 @@ export default function HomeLoja() {
         </div>
       )}
 
-      {/* FOOTER DA LOJA */}
-      <footer className="bg-white py-16 mt-auto border-t border-gray-100">
+      {/* FOOTER */}
+      <footer className="bg-white py-16 mt-auto border-t border-gray-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-10">
           <div className="text-center md:text-left">
             <h4 className="font-tradicional text-3xl text-[#1d3026] italic font-bold mb-2">Ótica Elos</h4>
             <p className="text-[9px] font-black text-[#c5a880] uppercase tracking-[0.2em] mb-4">E-commerce Oficial</p>
-            <p className="text-xs text-gray-500 font-medium">Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE</p>
+            <p className="text-xs text-gray-600 font-medium">Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE</p>
             <p className="text-[10px] text-gray-400 mt-2 font-bold tracking-wider">CNPJ: 52.294.947/0001-56</p>
           </div>
           
           <div className="flex flex-col items-center md:items-end">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Links Úteis & Atendimento</p>
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-              <button onClick={() => setMostrarTermos(true)} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#1d3026] transition-colors underline decoration-gray-200 hover:decoration-[#1d3026] underline-offset-4">
+              <button onClick={() => setMostrarTermos(true)} className="text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-[#1d3026] transition-colors underline decoration-gray-200 hover:decoration-[#1d3026] underline-offset-4">
                 Termos & Políticas
               </button>
-              <a href="https://wa.me/5585985506571" target="_blank" rel="noopener noreferrer" className="px-6 py-3.5 bg-[#1d3026] text-white hover:bg-[#c5a880] rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg hover:shadow-[#c5a880]/30 active:scale-95 flex items-center gap-3">
+              <a href="https://wa.me/5585985506571" target="_blank" rel="noopener noreferrer" className="px-6 py-3.5 bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg hover:shadow-[#c5a880]/30 active:scale-95 flex items-center gap-3">
                 <span className="text-lg">💬</span> Atendimento Vídeo/Texto
               </a>
             </div>

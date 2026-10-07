@@ -5,6 +5,7 @@ import { BrowserRouter as Router, useLocation, useNavigate, Routes, Route, Navig
 // Importações do React Query
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import Portal from './pages/Portal'; // 🟢 NOVO: Importando o Portal Mágico
 import HomeLoja from './pages/Loja';
 import Dashboard from './pages/Dashboard';
 import Operacoes from './pages/Operacoes';
@@ -219,12 +220,9 @@ function AppContent() {
     return null;
   });
 
-  // 🟢 NOVA LÓGICA DA SPLASH SCREEN ESTÉTICA
   const [mostrarSplash, setMostrarSplash] = useState(true);
 
   useEffect(() => {
-    // A tela some automaticamente após 4.5 segundos (4500 milissegundos)
-    // Se quiser alterar o tempo, mude o número 4500 abaixo:
     const timer = setTimeout(() => {
       setMostrarSplash(false);
     }, 4500); 
@@ -248,7 +246,6 @@ function AppContent() {
     localStorage.removeItem('otica_elos_dados_equipe');
   };
 
-  // 🟢 RENDERIZA A SPLASH SCREEN SE O TIMER AINDA ESTIVER RODANDO
   if (mostrarSplash) {
     return (
       <div className="fixed inset-0 flex flex-col justify-center items-center bg-elos-fundo text-elos-verde z-[9999] overflow-hidden transition-opacity duration-1000">
@@ -264,8 +261,11 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route path="/" element={<HomeLoja />} />
-      <Route path="/loja" element={<Navigate to="/" replace />} />
+      {/* 🟢 A RAIZ AGORA É O PORTAL MÁGICO */}
+      <Route path="/" element={<Portal />} />
+      
+      {/* 🟢 A SUA LOJA ATUAL FOI PARA A ROTA /loja */}
+      <Route path="/loja" element={<HomeLoja />} />
       
       <Route path="/login" element={<Login onLogin={realizarLoginAdmin} />} />
 
