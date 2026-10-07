@@ -85,16 +85,16 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
   };
 
   return (
-    <div className="group bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-200 hover:border-[#c5a880]/40 hover:shadow-[0_20px_40px_rgba(197,168,128,0.15)] hover:-translate-y-2 transition-all duration-500 flex flex-col relative anim-texto-2">
+    <div className="group bg-white rounded-3xl md:rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-200 hover:border-[#c5a880]/40 hover:shadow-[0_20px_40px_rgba(197,168,128,0.15)] hover:-translate-y-1 md:hover:-translate-y-2 transition-all duration-500 flex flex-col relative anim-texto-2">
       
       {precoPromocional && precoPromocional < produto.preco && (
-        <div className="absolute top-5 right-5 z-20 bg-red-600/90 backdrop-blur-md text-white border border-red-500 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
+        <div className="absolute top-3 right-3 md:top-5 md:right-5 z-20 bg-red-600/90 backdrop-blur-md text-white border border-red-500 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 md:px-3 py-1 md:py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
           🔥 Promoção!
         </div>
       )}
 
       {produto.referencia && !precoPromocional && (
-        <div className="absolute top-5 left-5 z-20 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm pointer-events-none">
+        <div className="absolute top-3 left-3 md:top-5 md:left-5 z-20 bg-white/90 backdrop-blur-md text-[#1d3026] border border-gray-100 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 md:px-4 py-1 md:py-1.5 rounded-full shadow-sm pointer-events-none">
           Ref: {produto.referencia}
         </div>
       )}
@@ -103,11 +103,11 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="aspect-square bg-gradient-to-br from-[#F4F1EA] to-white relative overflow-hidden flex items-center justify-center p-10 group/galeria cursor-pointer"
+        className="aspect-square bg-gradient-to-br from-[#F4F1EA] to-white relative overflow-hidden flex items-center justify-center p-4 md:p-10 group/galeria cursor-pointer"
       >
         {!imgCarregada && fotoAtual && (
           <div className="absolute inset-0 flex items-center justify-center z-0">
-            <div className="w-8 h-8 border-4 border-gray-200 border-t-[#c5a880] rounded-full animate-spin"></div>
+            <div className="w-6 h-6 md:w-8 md:h-8 border-4 border-gray-200 border-t-[#c5a880] rounded-full animate-spin"></div>
           </div>
         )}
 
@@ -127,42 +127,42 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
           />
         ) : null}
         
-        <span className={`text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
+        <span className={`text-5xl md:text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
         <div className="absolute inset-0 bg-black/0 group-hover:bg-[#1d3026]/[0.03] transition-colors duration-500 pointer-events-none z-10"></div>
 
         {fotos.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">‹</button>
-            <button onClick={nextImg} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-10 h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">›</button>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-full pointer-events-none">
+            <button onClick={prevImg} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">‹</button>
+            <button onClick={nextImg} className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">›</button>
+            <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 md:gap-2 opacity-100 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 bg-white/50 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-full pointer-events-none">
               {fotos.map((_, idx) => (
-                <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === imgIndex ? 'bg-[#1d3026] w-3' : 'bg-gray-400'}`} />
+                <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === imgIndex ? 'bg-[#1d3026] w-2 md:w-3' : 'bg-gray-400 w-1.5'}`} />
               ))}
             </div>
           </>
         )}
       </div>
       
-      <div className="p-6 flex flex-col flex-1 bg-white relative z-20">
-        <h3 className="font-sans font-bold text-[#1d3026] text-sm leading-relaxed line-clamp-2 mb-4 group-hover:text-[#c5a880] transition-colors">
+      <div className="p-4 md:p-6 flex flex-col flex-1 bg-white relative z-20">
+        <h3 className="font-sans font-bold text-[#1d3026] text-xs md:text-sm leading-relaxed line-clamp-2 mb-3 md:mb-4 group-hover:text-[#c5a880] transition-colors">
           {produto.nome}
         </h3>
         
-        <div className="mt-auto flex items-end justify-between">
+        <div className="mt-auto flex items-end justify-between gap-2">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
+            <span className="text-[8px] md:text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
             
             {precoPromocional && precoPromocional < produto.preco ? (
               <div className="flex flex-col">
-                <span className="text-xs text-gray-400 line-through font-bold">
+                <span className="text-[10px] md:text-xs text-gray-400 line-through font-bold">
                   {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
-                <span className="font-tradicional italic font-bold text-red-600 text-2xl tracking-tight leading-none mt-1">
+                <span className="font-tradicional italic font-bold text-red-600 text-lg md:text-2xl tracking-tight leading-none mt-0.5 md:mt-1">
                   {Number(precoPromocional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
             ) : (
-              <span className="font-tradicional italic font-bold text-[#1d3026] text-2xl tracking-tight leading-none mt-1">
+              <span className="font-tradicional italic font-bold text-[#1d3026] text-lg md:text-2xl tracking-tight leading-none mt-0.5 md:mt-1">
                 {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </span>
             )}
@@ -174,7 +174,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
               adicionarAoCarrinho(produtoParaCarrinho);
             }}
             disabled={noCarrinho}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-md ${
+            className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex-shrink-0 flex items-center justify-center transition-all duration-500 shadow-md ${
               noCarrinho 
                 ? 'bg-[#F4F1EA] text-gray-400 cursor-not-allowed shadow-none border border-gray-200' 
                 : precoPromocional
@@ -633,7 +633,7 @@ export default function HomeLoja() {
       
       {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
 
-      {/* NAVBAR PRINCIPAL (Altura 70px/80px exata para garantir o encaixe da barra de categorias) */}
+      {/* NAVBAR PRINCIPAL */}
       <nav className={`fixed w-full top-0 z-[60] transition-all duration-500 ease-in-out flex items-center ${isScrolled ? 'bg-[#F4F1EA]/95 backdrop-blur-xl shadow-sm border-b border-gray-200/50 h-[70px]' : 'bg-transparent h-[80px]'}`}>
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center w-full">
@@ -729,10 +729,10 @@ export default function HomeLoja() {
 
       {abaAtiva === 'VITRINE' ? (
         <>
-          {/* HERO BANNER - Degradê de Verde para o Branco Sujo com Vitrine Rotativa */}
+          {/* HERO BANNER - Degradê com Vitrine Rotativa (360) */}
           <HeroInterativo />
 
-          {/* GRID DE PRODUTOS */}
+          {/* 🟢 AQUI: GRID DE PRODUTOS AJUSTADO PARA O CELULAR (grid-cols-2) */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 relative z-20">
             <div className="flex justify-between items-end mb-8" style={{ animation: 'fadeUp 1s ease forwards', opacity: 0, animationDelay: '0.4s' }}>
               <div>
@@ -754,7 +754,7 @@ export default function HomeLoja() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8 px-1 md:px-0">
                 {produtosLoja.map((produto) => (
                   <ProdutoCard 
                     key={produto._id || produto.id} 
