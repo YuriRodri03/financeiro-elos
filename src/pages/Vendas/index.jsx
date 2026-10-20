@@ -29,15 +29,17 @@ export default function Vendas() {
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
 
+  // 🟢 ADICIONADO: dataEntrada no estado inicial
   const [venda, setVenda] = useState({
     cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-    metodoPagamento: 'Dinheiro', observacoes: '', foto: '', // Aqui foto vai armazenar o LINK gerado pelo ImgBB
+    metodoPagamento: 'Dinheiro', observacoes: '', foto: '', 
     dataVenda: new Date().toISOString().split('T')[0],
+    dataEntrada: new Date().toISOString().split('T')[0], // NOVO
     dataPrimeiraParcela: new Date().toISOString().split('T')[0]
   });
 
   const [itensCarrinho, setItensCarrinho] = useState([]);
-  const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
+  const [novoItem, setNovoItem] = useState({ nome: '', preco: '', desconto: '' });
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
@@ -51,7 +53,7 @@ export default function Vendas() {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
-  // 🟢 SUGESTÕES DE CLIENTES COM DIAGNÓSTICO E FILTRAGEM ROBUSTA
+  // 🟢 SUGESTÕES DE CLIENTES
   const sugestoes = useMemo(() => {
     if (!venda.cliente || venda.cliente.trim().length === 0 || !mostrarSugestoes) return [];
     
@@ -81,7 +83,8 @@ export default function Vendas() {
   const selecionarProdutoCat = (p) => {
     setNovoItem({ 
       nome: p.nome.toUpperCase(), 
-      preco: aplicarMascaraMoeda(String(p.preco * 100)) 
+      preco: aplicarMascaraMoeda(String(p.preco * 100)),
+      desconto: '' 
     });
     setMostrarSugestoesProd(false);
   };
@@ -95,7 +98,6 @@ export default function Vendas() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 🟢 LÓGICA DE UPLOAD E COMPRESSÃO (Idêntica à de Produtos)
   const handleUploadReceita = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -183,15 +185,29 @@ export default function Vendas() {
 
   const adicionarAoCarrinho = () => {
     if (!novoItem.nome || !novoItem.preco) return mostrarToast("Preencha a descrição do item e o preço correspondente.", "erro");
-    setItensCarrinho([...itensCarrinho, { id: Date.now(), nome: novoItem.nome.toUpperCase(), preco: limparMoeda(novoItem.preco) }]);
-    setNovoItem({ nome: '', preco: '' });
+    
+    const precoBruto = limparMoeda(novoItem.preco);
+    const descontoAplicado = limparMoeda(novoItem.desconto || '0');
+    const precoFinal = Math.max(0, precoBruto - descontoAplicado);
+
+    setItensCarrinho([
+      ...itensCarrinho, 
+      { 
+        id: Date.now(), 
+        nome: novoItem.nome.toUpperCase(), 
+        precoOriginal: precoBruto, 
+        descontoItem: descontoAplicado, 
+        preco: precoFinal 
+      }
+    ]);
+    setNovoItem({ nome: '', preco: '', desconto: '' });
   };
 
   const removerDoCarrinho = (id) => setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
 
   const salvarItemNoCatalogo = async (item) => {
     try {
-      await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.preco, categoria: 'ARMAÇÃO' });
+      await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.precoOriginal || item.preco, categoria: 'ARMAÇÃO' });
       mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
     } catch (err) { mostrarToast("Erro ao sincronizar item com o catálogo.", "erro"); }
   };
@@ -239,13 +255,70 @@ export default function Vendas() {
     const valorEntradaNum = limparMoeda(venda.valorEntrada);
     const carrinhoParaPDF = [...itensCarrinho];
 
+    // 🟢 INTELIGÊNCIA ARTIFICIAL: GERANDO AS PARCELAS AUTOMATICAMENTE PARA O BANCO DE DADOS
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const isEntradaPaga = venda.dataEntrada <= hojeStr;
+
+    let parcelasGeradas = [];
+    const valorRestante = totalFinalVenda - valorEntradaNum;
+    const numParcelas = Number(venda.parcelas) || 1;
+
+    // 1. Gera a Parcela Zero (Entrada / Sinal)
+    if (valorEntradaNum > 0) {
+      parcelasGeradas.push({
+        numero: 0,
+        valor: valorEntradaNum,
+        vencimentoOriginal: venda.dataEntrada,
+        dataVencimento: venda.dataEntrada,
+        paga: isEntradaPaga,
+        dataPagamento: isEntradaPaga ? venda.dataEntrada : null,
+        observacao: 'Entrada / Sinal'
+      });
+    }
+
+    // 2. Gera as Mensalidades (Restante)
+    if (valorRestante > 0) {
+      if (venda.metodoPagamento === 'Boleto / Crediário') {
+        const valorPorParcela = valorRestante / numParcelas;
+        let dataBase = new Date(venda.dataPrimeiraParcela + 'T12:00:00');
+        for (let i = 1; i <= numParcelas; i++) {
+          let venc = new Date(dataBase);
+          venc.setMonth(venc.getMonth() + (i - 1));
+          const vencStr = venc.toISOString().split('T')[0];
+          
+          parcelasGeradas.push({
+            numero: i,
+            valor: parseFloat(valorPorParcela.toFixed(2)),
+            vencimentoOriginal: vencStr,
+            dataVencimento: vencStr,
+            paga: false,
+            dataPagamento: null,
+            observacao: `Parcela ${i}/${numParcelas}`
+          });
+        }
+      } else {
+        // Se for Cartão/Pix/Dinheiro que passa na hora
+        const isCartao = venda.metodoPagamento === 'Cartão de Crédito';
+        parcelasGeradas.push({
+          numero: 1,
+          valor: valorRestante,
+          vencimentoOriginal: venda.dataVenda,
+          dataVencimento: venda.dataVenda,
+          paga: true,
+          dataPagamento: venda.dataVenda,
+          observacao: `Pagamento via ${venda.metodoPagamento}`
+        });
+      }
+    }
+
     const dadosParaSalvar = {
       ...venda,
       produto: itensCarrinho.map(i => i.nome).join(' + '), 
       itensCarrinho: itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: valorEntradaNum,
-      desconto: descontoNum 
+      desconto: descontoNum,
+      listaParcelas: parcelasGeradas // 🟢 Anexando as parcelas corretas para o Servidor
     };
 
     try {
@@ -256,6 +329,7 @@ export default function Vendas() {
           cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
           metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
           dataVenda: new Date().toISOString().split('T')[0],
+          dataEntrada: new Date().toISOString().split('T')[0],
           dataPrimeiraParcela: new Date().toISOString().split('T')[0]
         });
         setItensCarrinho([]);
@@ -263,13 +337,14 @@ export default function Vendas() {
       };
 
       const perguntarReciboEntrada = () => {
-        if (valorEntradaNum > 0) {
+        // 🟢 Só pergunta de recibo se a entrada foi PAGA HOJE
+        if (valorEntradaNum > 0 && isEntradaPaga) {
           setTimeout(() => {
-            abrirConfirmacao(`Deseja também imprimir o RECIBO DA ENTRADA de R$ ${valorEntradaNum.toFixed(2).replace('.',',')}?`, () => {
+            abrirConfirmacao(`A entrada constou como PAGA. Deseja imprimir o RECIBO de R$ ${valorEntradaNum.toFixed(2).replace('.',',')}?`, () => {
               gerarPDFDocumento({
                 ...resultado,
                 produto: `Entrada / Sinal (Pedido #${resultado.numeroPedido || 'S/N'})`,
-                dataRecibo: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : '',
+                dataRecibo: venda.dataEntrada.split('-').reverse().join('/'),
                 valorTotal: valorEntradaNum,
                 desconto: 0,
                 metodoPagamento: resultado.metodoPagamento,
@@ -288,7 +363,7 @@ export default function Vendas() {
 
       abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja imprimir o PEDIDO COM GARANTIA em PDF?", () => {
         gerarPDFDocumento({
-          ...resultado,
+          ...resultado, // Inclui o "listaParcelas" gerado pelo backend
           itensCarrinho: carrinhoParaPDF, 
           desconto: descontoNum,          
           data: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : venda.dataVenda.split('-').reverse().join('/'),
@@ -435,6 +510,7 @@ export default function Vendas() {
 
             <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
               <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
+              
               <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
                 
                 <div className="flex-1 relative">
@@ -466,13 +542,26 @@ export default function Vendas() {
                   )}
                 </div>
 
-                <input 
-                  type="text" 
-                  placeholder="R$ 0,00" 
-                  className="w-full md:w-32 px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
-                  value={novoItem.preco} 
-                  onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
-                />
+                <div className="w-full md:w-32">
+                  <input 
+                    type="text" 
+                    placeholder="Preço R$" 
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
+                    value={novoItem.preco} 
+                    onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
+                  />
+                </div>
+                
+                <div className="w-full md:w-32">
+                  <input 
+                    type="text" 
+                    placeholder="Desc. R$" 
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-red-400 placeholder:text-red-200" 
+                    value={novoItem.desconto} 
+                    onChange={(e) => setNovoItem({...novoItem, desconto: aplicarMascaraMoeda(e.target.value)})} 
+                  />
+                </div>
+
                 <button type="button" onClick={adicionarAoCarrinho} className="bg-elos-bege text-white px-6 py-3 rounded-xl font-bold hover:bg-elos-verde transition-all">Adicionar</button>
               </div>
 
@@ -482,8 +571,17 @@ export default function Vendas() {
 
                   return (
                     <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
+                      
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
+                          {item.descontoItem > 0 && (
+                            <span className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-0.5">
+                              Desconto de R$ {item.descontoItem.toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
+                        </div>
+                        
                         {!jaExisteNoCatalogo && (
                           <button
                             type="button"
@@ -497,9 +595,19 @@ export default function Vendas() {
                       </div>
                       
                       <div className="flex items-center gap-4">
-                        <span className="text-sm font-black text-elos-verde">R$ {item.preco.toFixed(2).replace('.',',')}</span>
+                        <div className="flex flex-col items-end">
+                          {item.descontoItem > 0 && (
+                            <span className="text-[10px] text-gray-400 line-through font-bold">
+                              R$ {item.precoOriginal.toFixed(2).replace('.',',')}
+                            </span>
+                          )}
+                          <span className="text-sm font-black text-elos-verde">
+                            R$ {item.preco.toFixed(2).replace('.',',')}
+                          </span>
+                        </div>
                         <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
                       </div>
+
                     </div>
                   );
                 })}
@@ -553,28 +661,26 @@ export default function Vendas() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
-                <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-red-400 uppercase tracking-tighter ml-1">Desconto</label>
-                <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-red-50 border border-red-100 text-red-900 font-bold rounded-2xl outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar</label>
-                <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
-                  R$ {totalFinalVenda.toFixed(2).replace('.',',')}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* 🟢 ADICIONADO: NOVA ORGANIZAÇÃO DE PAGAMENTOS COM A DATA DA ENTRADA */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Valor de Entrada</label>
                 <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
               </div>
+              
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Entrada</label>
+                <input 
+                  type="date" 
+                  name="dataEntrada" 
+                  value={venda.dataEntrada} 
+                  onChange={handleChange} 
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
+                  disabled={!venda.valorEntrada || limparMoeda(venda.valorEntrada) <= 0} 
+                  title="Só pode ser alterada se houver valor de entrada"
+                />
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Pagamento</label>
                 <select name="metodoPagamento" value={venda.metodoPagamento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none">
@@ -587,7 +693,7 @@ export default function Vendas() {
               
               <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
-                  {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Maquininha)' : 'Nº Parcelas (Mensais)'}
+                  {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Cartão)' : 'Nº Parcelas (Mensais)'}
                 </label>
                 <input 
                   type="number" 
@@ -601,9 +707,26 @@ export default function Vendas() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4 border-t border-elos-bege/20">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Venda</label>
+                <input type="date" name="dataVenda" value={venda.dataVenda} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-red-400 uppercase tracking-tighter ml-1">Desconto Final no Total</label>
+                <input type="text" name="desconto" value={venda.desconto} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-red-50 border border-red-100 text-red-900 font-bold rounded-2xl outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar (Final)</label>
+                <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
+                  R$ {totalFinalVenda.toFixed(2).replace('.',',')}
+                </div>
+              </div>
+            </div>
+
             {venda.metodoPagamento === 'Boleto / Crediário' && (
               <div className="bg-elos-verde text-white p-8 rounded-3xl shadow-xl animate-in slide-in-from-top duration-300">
-                <label className="font-tradicional italic text-lg mb-2 block">🗓️ Vencimento da 1ª Parcela</label>
+                <label className="font-tradicional italic text-lg mb-2 block">🗓️ Vencimento da 1ª Parcela do Carnê</label>
                 <input type="date" name="dataPrimeiraParcela" value={venda.dataPrimeiraParcela} onChange={handleChange} className="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-2xl text-white outline-none" />
               </div>
             )}

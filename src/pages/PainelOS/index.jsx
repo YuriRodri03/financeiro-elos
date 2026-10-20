@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gerarPDFOrdemServico } from '../../documentosUtils';
 
-// 🟢 ADICIONADO: Importando os hooks do React Query
 import { useVendas } from '../../hooks/useVendas';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,7 +9,6 @@ export default function PainelOS() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // 🟢 AQUI: Usando o React Query para buscar as vendas (que contêm as OS)
   const { data: vendas = [], isLoading: carregando } = useVendas();
 
   const [busca, setBusca] = useState('');
@@ -29,14 +27,13 @@ export default function PainelOS() {
   const handleExcluirOS = (idOS) => {
     abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; // Corrigido a rota
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; 
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
           method: 'DELETE'
         });
         
         if (response.ok) {
           mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
-          // 🟢 INVES DE RECARREGAR A PAGINA, APENAS INVALIDAMOS O CACHE PARA ATUALIZAR SOZINHO!
           queryClient.invalidateQueries({ queryKey: ['vendas'] }); 
         } else {
           mostrarToast("Erro ao excluir OS no servidor.", "erro");
@@ -47,7 +44,6 @@ export default function PainelOS() {
     });
   };
 
-  // 🟢 EXTRAI TODAS AS OSs DE TODAS AS VENDAS EM UMA LISTA ÚNICA
   const todasAsOS = useMemo(() => {
     let listaFlat = [];
     (vendas || []).forEach(venda => {
@@ -66,11 +62,9 @@ export default function PainelOS() {
       }
     });
     
-    // Ordena da mais recente para a mais antiga
     return listaFlat.sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda));
   }, [vendas]);
 
-  // 🟢 FILTRO DE BUSCA (Por cliente, número do pedido ou OS)
   const osExibidas = todasAsOS.filter(os => {
     const termo = busca.toLowerCase();
     return (
@@ -85,7 +79,6 @@ export default function PainelOS() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
       
-      {/* TOAST PREMIUM */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 ${
@@ -97,7 +90,6 @@ export default function PainelOS() {
         </div>
       )}
 
-      {/* CONFIRM MODAL */}
       {confirmModal.visivel && (
         <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl">
@@ -112,14 +104,22 @@ export default function PainelOS() {
         </div>
       )}
 
-      {/* HEADER */}
+      {/* HEADER ATUALIZADO */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
           <h1 className="font-tradicional text-4xl text-elos-verde italic">Ordens de Serviço</h1>
           <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black italic">Gestão centralizada de laboratório</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+          {/* 🟢 NOVO BOTÃO AQUI */}
+          <button 
+            onClick={() => navigate('/admin/nova-os')} 
+            className="w-full md:w-auto px-6 py-3 bg-elos-bege hover:bg-elos-verde text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-md flex items-center justify-center gap-2"
+          >
+            <span className="text-sm">➕</span> Nova OS
+          </button>
+          
           <input 
             type="text" 
             className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none text-sm w-full md:w-80" 

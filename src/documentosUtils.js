@@ -33,15 +33,12 @@ const gerarPayloadPix = (chave, valor) => {
     
     if (num.length === 11) {
       // Diferenciar CPF de Celular:
-      // Se tiver um ponto (.), temos certeza que o usuário digitou um CPF (ex: 123.456.789-00)
       if (limpa.includes('.')) {
         chavePronta = num; 
       } 
-      // Se não tem ponto, mas o 3º dígito é 9 (ex: 85988887777) ou tem parênteses, é Celular!
       else if (num[2] === '9' || limpa.includes('(')) {
         chavePronta = '+55' + num;
       } 
-      // Se for 11 números diretos sem o 9 no começo, assumimos que é CPF digitado sem ponto.
       else {
         chavePronta = num;
       }
@@ -210,6 +207,7 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
   const vDescNum = Number(dados.desconto || dados.valorDesconto || 0);
   const subtotal = vTotalNum + vDescNum;
 
+  // 🟢 NOVA LÓGICA DO PEDIDO BLINDADA PARA DATAS FUTURAS
   if (tipo === "pedido") {
     doc.setFont("helvetica", "normal");
     doc.text("Subtotal:", 130, y);
@@ -227,19 +225,41 @@ export const gerarPDFDocumento = async (dados, tipo = 'recibo') => {
     doc.text("TOTAL DO PEDIDO:", 130, y);
     doc.text("R$ " + totalFinal.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
-    const totalPago = (dados.listaParcelas || []).filter(p => p.paga).reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    // Exibe o Sinal/Entrada acordado de forma informativa
+    const vEntradaNum = Number(dados.valorEntrada || 0);
+    if (vEntradaNum > 0) {
+        y += 7;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 100, 100);
+        doc.text("Entrada / Sinal Acordado:", 130, y);
+        doc.text("R$ " + vEntradaNum.toFixed(2).replace(".", ","), 185, y, { align: "right" });
+    }
+
+    // Proteção: Se a Data da Venda for no futuro, a entrada NÃO foi paga hoje!
+    const hojeIso = new Date().toISOString().split('T')[0];
+    const dataVendaObj = dados.dataVenda || hojeIso;
+
+    const totalPago = (dados.listaParcelas || []).filter(p => {
+        // Se for a entrada (parcela 0) mas a venda foi jogada para outro dia no futuro, ignora da soma recebida.
+        if (p.numero === 0 && dataVendaObj > hojeIso) {
+            return false;
+        }
+        return p.paga;
+    }).reduce((acc, p) => acc + Number(p.valor || 0), 0);
+
     const saldoDevedor = totalFinal - totalPago;
 
     y += 7;
     doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
-    doc.text("Total Recebido (Entradas):", 130, y);
+    doc.setFont("helvetica", "bold");
+    doc.text("Total Já Recebido:", 130, y);
     doc.text("R$ " + totalPago.toFixed(2).replace(".", ","), 185, y, { align: "right" });
 
     y += 7;
-    doc.setTextColor(saldoDevedor > 0 ? 198 : verdeElos[0], saldoDevedor > 0 ? 40 : verdeElos[1], saldoDevedor > 0 ? 40 : verdeElos[2]);
+    doc.setTextColor(saldoDevedor > 0.01 ? 198 : verdeElos[0], saldoDevedor > 0.01 ? 40 : verdeElos[1], saldoDevedor > 0.01 ? 40 : verdeElos[2]);
     doc.setFontSize(12);
-    doc.text(saldoDevedor > 0 ? "SALDO DEVEDOR:" : "STATUS:", 130, y);
-    doc.text(saldoDevedor > 0 ? "R$ " + saldoDevedor.toFixed(2).replace(".", ",") : "PAGO", 185, y, { align: "right" });
+    doc.text(saldoDevedor > 0.01 ? "SALDO DEVEDOR:" : "STATUS:", 130, y);
+    doc.text(saldoDevedor > 0.01 ? "R$ " + saldoDevedor.toFixed(2).replace(".", ",") : "PAGO", 185, y, { align: "right" });
 
   } else {
     doc.setTextColor(verdeElos[0], verdeElos[1], verdeElos[2]);
@@ -658,20 +678,17 @@ export const gerarPDFCarne = async (dados, chavePixDigitada) => {
   for (let i = 0; i < totalParcelas; i++) {
     const p = parcelas[i];
 
-    // 🟢 GERA O PAYLOAD PIX E O QR CODE NATIVO PARA CADA PARCELA INDIVIDUAL
     let imgQrDataUrl = null;
     if (chavePix !== "Sem chave") {
       const payloadCopiaECola = gerarPayloadPix(chavePix, Number(p.valor));
       try {
         if (typeof QRCode !== 'undefined' && QRCode.toDataURL) {
-          // 🟢 FORÇA O AWAIT PRA ESPERAR A IMAGEM FICAR PRONTA!
           imgQrDataUrl = await QRCode.toDataURL(payloadCopiaECola, { margin: 1, width: 150 });
         } else {
           throw new Error("Erro na biblioteca QRCode");
         }
       } catch (err) {
         console.error("Erro na lib QRCode, usando fallback API:", err);
-        // Fallback seguro caso a biblioteca falhe localmente
         const urlFallback = `https://quickchart.io/qr?text=${encodeURIComponent(payloadCopiaECola)}&size=150`;
         imgQrDataUrl = await carregarImagem(urlFallback);
       }

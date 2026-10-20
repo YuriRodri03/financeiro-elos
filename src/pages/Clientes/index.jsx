@@ -382,7 +382,7 @@ export default function Clientes() {
         cpf: cpf,
         telefone: dadosCad?.telefone || "Não cadastrado",
         email: dadosCad?.email || "Não cadastrado",
-        origem: dadosCad?.origem || "Não informada", // 🟢 NOVO CAMPO: Origem
+        origem: dadosCad?.origem || "Não informada", 
         endereco: dadosCad?.endereco || "Não informado",
         dataNascimento: dadosCad?.dataNascimento || "",
         observacoes: dadosCad?.observacoes || "",
@@ -482,6 +482,17 @@ export default function Clientes() {
                 </td>
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
+                    {/* 🟢 BOTÃO DE NOVA VENDA ADICIONADO AQUI */}
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        navigate('/admin/nova-venda', { state: { clienteNome: cliente.nome, clienteCpf: cliente.cpf }});
+                      }} 
+                      className="px-4 py-2 bg-[#e6d0a7]/30 text-[#c5a880] rounded-xl font-bold text-xs hover:bg-[#c5a880] hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      🛒 Nova Venda
+                    </button>
+                    
                     <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
                     <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
                   </div>
@@ -514,7 +525,6 @@ export default function Clientes() {
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Data de Nascimento</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.dataNascimento ? clienteNoModal.dataNascimento.split('-').reverse().join('/') : "Não informada"}</p></div>
                   <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
                   
-                  {/* 🟢 NOVO CAMPO: Origem do Cliente renderizado na ficha */}
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Origem do Cliente</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.origem || "Não informada"}</p></div>
 
                   <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
