@@ -1,20 +1,27 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useClientes, useEditarCliente, useExcluirCliente } from '../../hooks/useClientes';
-import { useVendas, useEditarVenda, useExcluirVenda, useDarBaixaParcela, useEstornarBaixaParcela } from '../../hooks/useVendas';
+import { useVendas, useAdicionarVenda, useEditarVenda, useExcluirVenda, useDarBaixaParcela, useEstornarBaixaParcela } from '../../hooks/useVendas';
 
 import { gerarPDFDocumento, gerarPDFOrdemServico, gerarPDFCarne } from '../../documentosUtils';
 import CadastroClientes from '../CadastroClientes'; 
 
-// --- FUNÇÃO AUXILIAR PARA MOEDA ---
+// --- FUNÇÕES AUXILIARES PARA MOEDA ---
 const aplicarMascaraMoeda = (valor) => {
   let v = String(valor).replace(/\D/g, '');
+  if (!v) return '';
   v = (Number(v) / 100).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL'
   });
   return v;
+};
+
+const limparMoeda = (valor) => {
+  if (!valor) return 0;
+  if (typeof valor === 'number') return valor;
+  return Number(String(valor).replace(/[^\d]/g, '')) / 100;
 };
 
 // --- COMPRESSÃO DE IMAGEM ---
@@ -51,11 +58,16 @@ const comprimirImagem = (file) => {
   });
 };
 
-// --- COMPONENTE DE LINHA DE PARCELA ---
-function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrarToast, abrirConfirmacao }) {
+// --- COMPONENTE DE LINHA DE PARCELA (COM EDIÇÃO DE VALOR E DATA) ---
+function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, editarParcelaManual, mostrarToast, abrirConfirmacao }) {
   const vendaId = venda._id || venda.id;
   const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
+  const [modoEdicao, setModoEdicao] = useState(false);
+
+  useEffect(() => {
+    setValorRecebido(p?.valor || 0);
+  }, [p?.valor]);
 
   if (!p || !venda) return null;
 
@@ -77,7 +89,13 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
     }
   };
 
-  const dataVencimentoStr = p.dataVencimento || calcularVencimento();
+  const dataVencimentoStr = p.dataVencimento || p.vencimentoOriginal || calcularVencimento();
+  const [novoValorParcela, setNovoValorParcela] = useState(p?.valor || 0);
+  const [novoVencimentoParcela, setNovoVencimentoParcela] = useState(dataVencimentoStr);
+
+  // Verifica se está atrasada
+  const hojeIso = new Date().toISOString().split('T')[0];
+  const isAtrasada = !p.paga && !p.renegociada && !venda.renegociada && dataVencimentoStr && dataVencimentoStr < hojeIso;
 
   const handleBaixa = async () => {
     let stringValor = String(valorRecebido).replace(',', '.');
@@ -117,19 +135,42 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
       mostrarToast("Erro ao processar baixa.", "erro");
     }
   };
+
+  const salvarAlteracaoParcela = async () => {
+    const valNum = parseFloat(String(novoValorParcela).replace(',', '.'));
+    if (isNaN(valNum) || valNum <= 0) {
+      mostrarToast("Valor inválido para a parcela.", "erro");
+      return;
+    }
+    await editarParcelaManual(venda, p.numero, parseFloat(valNum.toFixed(2)), novoVencimentoParcela);
+    setModoEdicao(false);
+  };
   
   return (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4">
+    <div className={`flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4 ${p.renegociada ? 'opacity-50' : ''}`}>
       <div className="flex flex-col gap-1">
-        <span className="font-bold text-elos-texto">
-          {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
-          <span className="text-elos-verde ml-1 font-black">R$ {(p.valor || 0).toFixed(2).replace('.', ',')}</span>
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-bold text-elos-texto">
+            {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
+            <span className={`ml-1 font-black ${p.renegociada ? 'line-through text-gray-400' : 'text-elos-verde'}`}>
+              R$ {(p.valor || 0).toFixed(2).replace('.', ',')}
+            </span>
+          </span>
+          {isAtrasada && (
+            <span className="bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+              ⚠️ Atrasada
+            </span>
+          )}
+        </div>
         
         {dataVencimentoStr && (
-          <small className="text-gray-500 font-bold text-[10px] uppercase tracking-tighter">
+          <small className={`font-bold text-[10px] uppercase tracking-tighter ${isAtrasada ? 'text-red-500' : 'text-gray-500'}`}>
             ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
           </small>
+        )}
+
+        {p.observacao && (
+          <small className="text-gray-400 italic text-[10px]">{p.observacao}</small>
         )}
 
         {p.paga && (
@@ -139,21 +180,62 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
         )}
       </div>
 
+      {/* STATUS OU AÇÕES DA PARCELA */}
       {p.paga ? (
         <div className="flex items-center gap-3">
           <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">✅ Paga</span>
+          {!venda.renegociada && (
+            <button 
+              onClick={async () => {
+                try {
+                  await estornarBaixaParcela(vendaId, p.numero);
+                  mostrarToast("Estorno realizado com sucesso!", "sucesso");
+                } catch (e) {
+                  mostrarToast("Falha ao estornar parcela.", "erro");
+                }
+              }} 
+              className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors font-bold"
+            >
+              (Estornar)
+            </button>
+          )}
+        </div>
+      ) : (p.renegociada || venda.renegociada) ? (
+        <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+          🔄 Renegociada
+        </span>
+      ) : modoEdicao ? (
+        <div className="flex flex-wrap gap-2 items-end bg-amber-50/70 p-3 rounded-xl border border-amber-200 w-full md:w-auto">
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-black text-amber-800 uppercase">Novo Valor (R$)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className="w-24 p-2 bg-white rounded-lg text-xs border border-amber-200 font-bold"
+              value={novoValorParcela} 
+              onChange={(e) => setNovoValorParcela(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-black text-amber-800 uppercase">Novo Vencimento</label>
+            <input 
+              type="date" 
+              className="p-2 bg-white rounded-lg text-xs border border-amber-200 font-bold"
+              value={novoVencimentoParcela} 
+              onChange={(e) => setNovoVencimentoParcela(e.target.value)}
+            />
+          </div>
           <button 
-            onClick={async () => {
-              try {
-                await estornarBaixaParcela(vendaId, p.numero);
-                mostrarToast("Estorno realizado com sucesso!", "sucesso");
-              } catch (e) {
-                mostrarToast("Falha ao estornar parcela.", "erro");
-              }
-            }} 
-            className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors font-bold"
+            onClick={salvarAlteracaoParcela}
+            className="bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition-all"
           >
-            (Estornar)
+            Salvar
+          </button>
+          <button 
+            onClick={() => setModoEdicao(false)}
+            className="bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all"
+          >
+            ✕
           </button>
         </div>
       ) : (
@@ -183,6 +265,18 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
           >
             Confirmar
           </button>
+          <button 
+            type="button"
+            onClick={() => {
+              setNovoValorParcela(p.valor);
+              setNovoVencimentoParcela(dataVencimentoStr);
+              setModoEdicao(true);
+            }}
+            className="p-2 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded-lg text-xs transition-colors"
+            title="Editar Valor ou Data de Vencimento desta parcela"
+          >
+            ✏️
+          </button>
         </div>
       )}
     </div>
@@ -192,26 +286,37 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, mostrar
 export default function Clientes() {
   const navigate = useNavigate();
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
+  const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
   
   const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
   const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
   
   const editarClienteMutation = useEditarCliente();
   const excluirClienteMutation = useExcluirCliente();
+  const adicionarVendaMutation = useAdicionarVenda();
   const editarVendaMutation = useEditarVenda();
   const excluirVendaMutation = useExcluirVenda();
   const darBaixaParcelaMutation = useDarBaixaParcela();
   const estornarBaixaParcelaMutation = useEstornarBaixaParcela();
 
-  const carregando = carregandoClientes || carregandoVendas;
-  
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
   const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
-  const [modalCarne, setModalCarne] = useState(null);
+
+  // 🟢 CHAVE PIX PERSISTENTE (Salva uma única vez no navegador e no servidor)
+  const [chavePixPadrao, setChavePixPadrao] = useState(() => {
+    return localStorage.getItem('chavePixElos') || '(85) 8550-6571';
+  });
+  const [modalConfigPix, setModalConfigPix] = useState(false);
+  const [inputNovaChavePix, setInputNovaChavePix] = useState('');
+  const [vendaAguardandoCarne, setVendaAguardandoCarne] = useState(null);
+
+  // 🟢 ESTADO DO MODAL DE RENEGOCIAÇÃO DE DÍVIDA
+  const [modalRenegociacao, setModalRenegociacao] = useState(null);
+  const [processandoRenegociacao, setProcessandoRenegociacao] = useState(false);
 
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
   const [novaFotoVenda, setNovaFotoVenda] = useState('');
@@ -219,7 +324,50 @@ export default function Clientes() {
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
-  const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
+  const [confirmModal, setConfirmModal] = useState({ visivel: false, message: '', acao: null });
+
+  // Busca chave PIX salva no servidor (caso o usuário troque de computador/celular)
+  useEffect(() => {
+    fetch(`${baseUrl}/whatsapp/mensagens`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.chave_pix_carne) {
+          setChavePixPadrao(data.chave_pix_carne);
+          localStorage.setItem('chavePixElos', data.chave_pix_carne);
+        }
+      })
+      .catch(() => {});
+  }, [baseUrl]);
+
+  const salvarChavePixGlobal = async () => {
+    const chaveLimpa = inputNovaChavePix.trim();
+    if (!chaveLimpa) {
+      mostrarToast("Informe uma chave PIX válida!", "erro");
+      return;
+    }
+
+    localStorage.setItem('chavePixElos', chaveLimpa);
+    setChavePixPadrao(chaveLimpa);
+    setModalConfigPix(false);
+    mostrarToast("Chave PIX salva como padrão! ✅", "sucesso");
+
+    // Se o usuário clicou em "Gerar Carnê" e não tinha chave ainda, gera agora automaticamente
+    if (vendaAguardandoCarne && clienteNoModal) {
+      gerarPDFCarne({ ...vendaAguardandoCarne, cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf }, chaveLimpa);
+      setVendaAguardandoCarne(null);
+    }
+  };
+
+  const handleEmitirCarneDireto = (venda) => {
+    const chaveAtual = localStorage.getItem('chavePixElos') || chavePixPadrao;
+    if (!chaveAtual) {
+      setInputNovaChavePix('');
+      setVendaAguardandoCarne(venda);
+      setModalConfigPix(true);
+    } else {
+      gerarPDFCarne({ ...venda, cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf }, chaveAtual);
+    }
+  };
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
@@ -237,7 +385,7 @@ export default function Clientes() {
     setEditandoCadastro(null);
     setEditandoVenda(null);
     setModalRecibo(null);
-    setModalCarne(null); 
+    setModalRenegociacao(null);
     setNovaFotoCliente(''); 
     setNovaFotoVenda('');   
   };
@@ -313,6 +461,213 @@ export default function Clientes() {
     } catch (err) { mostrarToast("Erro ao sincronizar modificações do pedido.", "erro"); }
   };
 
+  // 🟢 FUNÇÃO PARA EDITAR VALOR E DATA DE UMA PARCELA INDIVIDUALMENTE
+  const handleEditarParcelaManual = async (vendaAlvo, numeroParcela, novoValor, novoVencimento) => {
+    const vendaId = vendaAlvo._id || vendaAlvo.id;
+    const novasParcelas = (vendaAlvo.listaParcelas || []).map(p => {
+      if (String(p.numero) === String(numeroParcela)) {
+        return {
+          ...p,
+          valor: novoValor,
+          dataVencimento: novoVencimento,
+          vencimentoOriginal: novoVencimento
+        };
+      }
+      return p;
+    });
+
+    const novoTotalVenda = novasParcelas.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+
+    try {
+      await editarVendaMutation.mutateAsync({
+        vendaId,
+        dadosNovos: {
+          ...vendaAlvo,
+          valorTotal: parseFloat(novoTotalVenda.toFixed(2)),
+          listaParcelas: novasParcelas
+        }
+      });
+      mostrarToast("Parcela atualizada com sucesso! ✅", "sucesso");
+    } catch (err) {
+      mostrarToast("Erro ao atualizar parcela.", "erro");
+    }
+  };
+
+  // 🟢 FUNÇÕES DE RENEGOCIAÇÃO DE DÍVIDA
+  const gerarParcelasPreviasRenegociacao = (valorTotal, valorEntrada, dataEntrada, qtdParcelas, dataPrimeira) => {
+    const hojeIso = new Date().toISOString().split('T')[0];
+    const lista = [];
+    const restante = Math.max(0, valorTotal - valorEntrada);
+    const numParc = Math.max(1, Number(qtdParcelas) || 1);
+
+    if (valorEntrada > 0) {
+      const pagaHoje = dataEntrada <= hojeIso;
+      lista.push({
+        numero: 0,
+        valor: parseFloat(valorEntrada.toFixed(2)),
+        dataVencimento: dataEntrada,
+        vencimentoOriginal: dataEntrada,
+        paga: pagaHoje,
+        dataPagamento: pagaHoje ? dataEntrada : null,
+        observacao: 'Entrada de Renegociação'
+      });
+    }
+
+    if (restante > 0) {
+      const valorBase = Math.floor((restante / numParc) * 100) / 100;
+      const diferencaCentavos = parseFloat((restante - (valorBase * numParc)).toFixed(2));
+      const dtBase = new Date((dataPrimeira || hojeIso) + 'T12:00:00');
+
+      for (let i = 1; i <= numParc; i++) {
+        const dtVenc = new Date(dtBase);
+        dtVenc.setMonth(dtVenc.getMonth() + (i - 1));
+        const vencStr = dtVenc.toISOString().split('T')[0];
+        const valParcela = i === numParc ? parseFloat((valorBase + diferencaCentavos).toFixed(2)) : valorBase;
+
+        lista.push({
+          numero: i,
+          valor: valParcela,
+          dataVencimento: vencStr,
+          vencimentoOriginal: vencStr,
+          paga: false,
+          dataPagamento: null,
+          observacao: `Renegociação ${i}/${numParc}`
+        });
+      }
+    }
+
+    return lista;
+  };
+
+  const abrirModalRenegociar = (vendaOriginal) => {
+    const parcelasPendentes = (vendaOriginal.listaParcelas || []).filter(p => !p.paga && !p.renegociada);
+    const saldoAberto = parcelasPendentes.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+
+    const hojeIso = new Date().toISOString().split('T')[0];
+    const proximoMes = new Date();
+    proximoMes.setMonth(proximoMes.getMonth() + 1);
+    const proximoMesIso = proximoMes.toISOString().split('T')[0];
+
+    const parcelasIniciais = gerarParcelasPreviasRenegociacao(saldoAberto, 0, hojeIso, 3, proximoMesIso);
+
+    setModalRenegociacao({
+      vendaOriginal,
+      saldoOriginal: saldoAberto,
+      novoValorTotalFmt: aplicarMascaraMoeda(String(Math.round(saldoAberto * 100))),
+      valorEntradaFmt: '',
+      dataEntrada: hojeIso,
+      parcelas: 3,
+      dataPrimeiraParcela: proximoMesIso,
+      metodoPagamento: 'Boleto / Crediário',
+      observacoes: `Acordo referente ao Pedido #${vendaOriginal.numeroPedido || 'S/N'} (Saldo anterior: R$ ${saldoAberto.toFixed(2).replace('.', ',')})`,
+      parcelasPrevias: parcelasIniciais
+    });
+  };
+
+  const atualizarParametrosRenegociacao = (novosCampos) => {
+    setModalRenegociacao(prev => {
+      const atualizado = { ...prev, ...novosCampos };
+      const vTotal = limparMoeda(atualizado.novoValorTotalFmt);
+      const vEntrada = limparMoeda(atualizado.valorEntradaFmt);
+      const novasPrevias = gerarParcelasPreviasRenegociacao(
+        vTotal,
+        vEntrada,
+        atualizado.dataEntrada,
+        atualizado.parcelas,
+        atualizado.dataPrimeiraParcela
+      );
+      return { ...atualizado, parcelasPrevias: novasPrevias };
+    });
+  };
+
+  const editarLinhaPreviaRenegociacao = (idx, campo, valor) => {
+    setModalRenegociacao(prev => {
+      const copia = [...prev.parcelasPrevias];
+      if (campo === 'valor') {
+        copia[idx] = { ...copia[idx], valor: parseFloat(valor) || 0 };
+      } else if (campo === 'dataVencimento') {
+        copia[idx] = { ...copia[idx], dataVencimento: valor, vencimentoOriginal: valor };
+      }
+      const somaTotal = copia.reduce((acc, item) => acc + Number(item.valor || 0), 0);
+      return {
+        ...prev,
+        parcelasPrevias: copia,
+        novoValorTotalFmt: aplicarMascaraMoeda(String(Math.round(somaTotal * 100)))
+      };
+    });
+  };
+
+  const confirmarRenegociacao = async () => {
+    if (!modalRenegociacao) return;
+    const { vendaOriginal, parcelasPrevias, metodoPagamento, observacoes, dataPrimeiraParcela, valorEntradaFmt } = modalRenegociacao;
+
+    if (!parcelasPrevias || parcelasPrevias.length === 0) {
+      mostrarToast("Gere ao menos uma parcela para a renegociação.", "erro");
+      return;
+    }
+
+    setProcessandoRenegociacao(true);
+    const hojeIso = new Date().toISOString().split('T')[0];
+    const vendaOriginalId = vendaOriginal._id || vendaOriginal.id;
+    const numPedAntigo = vendaOriginal.numeroPedido || 'S/N';
+
+    // 1. Congela as parcelas antigas não pagas marcando como renegociadas
+    const parcelasAntigasCongeladas = (vendaOriginal.listaParcelas || []).map(p => {
+      if (!p.paga) {
+        return {
+          ...p,
+          renegociada: true,
+          observacao: `${p.observacao ? p.observacao + ' | ' : ''}Renegociada em ${hojeIso.split('-').reverse().join('/')}`
+        };
+      }
+      return p;
+    });
+
+    const totalNovoAcordo = parseFloat(parcelasPrevias.reduce((acc, p) => acc + Number(p.valor || 0), 0).toFixed(2));
+    const entradaNum = limparMoeda(valorEntradaFmt);
+
+    try {
+      // Atualiza contrato antigo para "Dívida Renegociada"
+      await editarVendaMutation.mutateAsync({
+        vendaId: vendaOriginalId,
+        dadosNovos: {
+          ...vendaOriginal,
+          renegociada: true,
+          renegociadaEm: hojeIso,
+          listaParcelas: parcelasAntigasCongeladas,
+          observacoes: `${vendaOriginal.observacoes ? vendaOriginal.observacoes + '\n' : ''}🔄 DÍVIDA RENEGOCIADA EM ${hojeIso.split('-').reverse().join('/')}.`
+        }
+      });
+
+      // 2. Cria a Nova Conta (Renegociação) ativa para dar baixa
+      const nomeAcordo = `🔄 RENEGOCIAÇÃO (REF. PEDIDO #${numPedAntigo})`;
+      const novaVendaRenegociada = {
+        cliente: clienteNoModal.nome,
+        cpf: clienteNoModal.cpf,
+        produto: nomeAcordo,
+        itensCarrinho: [{ nome: nomeAcordo, preco: totalNovoAcordo }],
+        valorTotal: totalNovoAcordo,
+        valorEntrada: entradaNum,
+        desconto: 0,
+        parcelas: parcelasPrevias.filter(p => p.numero > 0).length || 1,
+        listaParcelas: parcelasPrevias,
+        dataVenda: hojeIso,
+        dataPrimeiraParcela: dataPrimeiraParcela,
+        metodoPagamento: metodoPagamento,
+        observacoes: observacoes
+      };
+
+      await adicionarVendaMutation.mutateAsync(novaVendaRenegociada);
+
+      setModalRenegociacao(null);
+      mostrarToast("Dívida renegociada! Novo acordo ativo criado com sucesso.", "sucesso");
+    } catch (error) {
+      mostrarToast("Erro ao processar a renegociação.", "erro");
+    } finally {
+      setProcessandoRenegociacao(false);
+    }
+  };
+
   const handleExcluirFotoCliente = () => {
     abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
       const idMongo = clienteNoModal?._id;
@@ -335,7 +690,6 @@ export default function Clientes() {
   const handleExcluirOS = (idOS) => {
     abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; 
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
           method: 'DELETE'
         });
@@ -365,15 +719,25 @@ export default function Clientes() {
         .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
         .map(venda => {
           const osVenda = venda.ordensServico || [];
+          const foiRenegociada = venda.renegociada === true || (venda.observacoes && venda.observacoes.includes('DÍVIDA RENEGOCIADA'));
           return {
             ...venda,
+            renegociada: foiRenegociada,
             ordensServico: osVenda.map(os => ({
               ...os,
               idOS: os.idOS || os._id 
             }))
           };
         });
-      const totalDevido = vendasCli.reduce((acc, v) => acc + (v.listaParcelas || []).filter(p => !p.paga).reduce((soma, p) => soma + (p.valor || 0), 0), 0);
+
+      // 🟢 SALDO DEVEDOR IGNORA VENDAS/PARCELAS QUE JÁ FORAM RENEGOCIADAS
+      const totalDevido = vendasCli.reduce((acc, v) => {
+        if (v.renegociada) return acc;
+        const somaAberta = (v.listaParcelas || [])
+          .filter(p => !p.paga && !p.renegociada)
+          .reduce((soma, p) => soma + (p.valor || 0), 0);
+        return acc + somaAberta;
+      }, 0);
 
       return {
         ...dadosCad,
@@ -427,8 +791,8 @@ export default function Clientes() {
             <h3 className="font-tradicional text-xl italic text-elos-verde">Confirmar Ação</h3>
             <p className="text-xs text-gray-400 leading-relaxed">{confirmModal.message}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmModal({ visivel: false, mensagem: '', acao: null })} className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase">Não</button>
-              <button onClick={() => { if (confirmModal.acao) confirmModal.acao(); setConfirmModal({ visivel: false, mensagem: '', acao: null }); }} className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase shadow-lg">Sim, Confirmar</button>
+              <button onClick={() => setConfirmModal({ visivel: false, message: '', acao: null })} className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase">Não</button>
+              <button onClick={() => { if (confirmModal.acao) confirmModal.acao(); setConfirmModal({ visivel: false, message: '', acao: null }); }} className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase shadow-lg">Sim, Confirmar</button>
             </div>
           </div>
         </div>
@@ -441,11 +805,27 @@ export default function Clientes() {
           <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black italic">Base de dados unificada (A-Z)</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+        <div className="flex flex-wrap md:flex-row gap-3 w-full md:w-auto items-center">
+          {/* 🟢 BOTÃO PARA CONFIGURAR A CHAVE PIX UMA ÚNICA VEZ */}
+          <button 
+            type="button" 
+            onClick={() => {
+              setInputNovaChavePix(chavePixPadrao);
+              setVendaAguardandoCarne(null);
+              setModalConfigPix(true);
+            }} 
+            className="px-4 py-3 bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-2"
+            title={`Chave atual: ${chavePixPadrao}`}
+          >
+            🔑 Chave PIX Carnê
+          </button>
+
           <button type="button" onClick={() => setMostrarFormCadastro(!mostrarFormCadastro)} className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all ${mostrarFormCadastro ? 'bg-elos-bege text-white' : 'bg-elos-verde text-white'}`}>
             {mostrarFormCadastro ? '📁 Ocultar Cadastro' : '➕ Cadastrar Cliente'}
           </button>
-          <input type="text" className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none text-sm w-full md:w-80" placeholder="🔍 Buscar por nome ou CPF..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+          
+          <input type="text" className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none text-sm w-full md:w-72" placeholder="🔍 Buscar por nome ou CPF..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+          
           <div className="flex bg-white p-1 rounded-2xl border border-elos-bege/10">
             <button onClick={() => setFiltro('todos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${filtro === 'todos' ? 'bg-elos-verde text-white' : 'text-gray-400'}`}>TODOS</button>
             <button onClick={() => setFiltro('pendentes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${filtro === 'pendentes' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>⚠️ PENDENTES</button>
@@ -461,46 +841,45 @@ export default function Clientes() {
 
       {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
-      <div className="w-full overflow-x-auto no-scrollbar">
-        <table className="w-full text-left">
-          <thead className="bg-elos-fundo/50 border-b border-gray-100">
-            <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <th className="px-8 py-5">Cliente (Ordem A-Z)</th>
-              <th className="px-8 py-5 text-center">Saldo Devedor</th>
-              <th className="px-8 py-5 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {clientesExibidos.map((cliente) => (
-              <tr key={cliente.cpf} className="hover:bg-elos-fundo/30 transition-colors group">
-                <td className="px-8 py-5">
-                  <div className="font-bold text-elos-verde cursor-pointer" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>{cliente.nome}</div>
-                  <div className="text-[10px] text-gray-400">{cliente.cpf}</div>
-                </td>
-                <td className={`px-8 py-5 text-center font-black ${cliente.totalGeralDevido > 0 ? 'text-red-600' : 'text-elos-verde'}`}>
-                  R$ {cliente.totalGeralDevido.toFixed(2).replace('.', ',')}
-                </td>
-                <td className="px-8 py-5 text-right">
-                  <div className="flex justify-end gap-2">
-                    {/* 🟢 BOTÃO DE NOVA VENDA ADICIONADO AQUI */}
-                    <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        navigate('/admin/nova-venda', { state: { clienteNome: cliente.nome, clienteCpf: cliente.cpf }});
-                      }} 
-                      className="px-4 py-2 bg-[#e6d0a7]/30 text-[#c5a880] rounded-xl font-bold text-xs hover:bg-[#c5a880] hover:text-white transition-colors flex items-center gap-1"
-                    >
-                      🛒 Nova Venda
-                    </button>
-                    
-                    <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
-                    <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
-                  </div>
-                </td>
+        <div className="w-full overflow-x-auto no-scrollbar">
+          <table className="w-full text-left">
+            <thead className="bg-elos-fundo/50 border-b border-gray-100">
+              <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <th className="px-8 py-5">Cliente (Ordem A-Z)</th>
+                <th className="px-8 py-5 text-center">Saldo Devedor</th>
+                <th className="px-8 py-5 text-right">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {clientesExibidos.map((cliente) => (
+                <tr key={cliente.cpf} className="hover:bg-elos-fundo/30 transition-colors group">
+                  <td className="px-8 py-5">
+                    <div className="font-bold text-elos-verde cursor-pointer" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>{cliente.nome}</div>
+                    <div className="text-[10px] text-gray-400">{cliente.cpf}</div>
+                  </td>
+                  <td className={`px-8 py-5 text-center font-black ${cliente.totalGeralDevido > 0 ? 'text-red-600' : 'text-elos-verde'}`}>
+                    R$ {cliente.totalGeralDevido.toFixed(2).replace('.', ',')}
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          navigate('/admin/nova-venda', { state: { clienteNome: cliente.nome, clienteCpf: cliente.cpf }});
+                        }} 
+                        className="px-4 py-2 bg-[#e6d0a7]/30 text-[#c5a880] rounded-xl font-bold text-xs hover:bg-[#c5a880] hover:text-white transition-colors flex items-center gap-1"
+                      >
+                        🛒 Nova Venda
+                      </button>
+                      
+                      <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
+                      <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -510,10 +889,18 @@ export default function Clientes() {
           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
             <button onClick={fecharModal} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-elos-fundo rounded-full text-2xl text-gray-400 hover:text-red-500 z-10">&times;</button>
             
-            <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20">
-              <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">{clienteNoModal.nome}</h2>
-              <div className="flex gap-2 mt-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest border px-2 py-0.5 rounded-md">CPF: {clienteNoModal.cpf}</span>
+            <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20 flex flex-col md:flex-row justify-between md:items-center gap-4">
+              <div>
+                <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">{clienteNoModal.nome}</h2>
+                <div className="flex gap-2 mt-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest border px-2 py-0.5 rounded-md">CPF: {clienteNoModal.cpf}</span>
+                </div>
+              </div>
+              <div className="bg-white px-5 py-3 rounded-2xl border border-elos-bege/20 text-right mr-8">
+                <span className="text-[9px] font-black uppercase text-gray-400 block">Saldo Devedor Ativo</span>
+                <span className={`text-xl font-black ${clienteNoModal.totalGeralDevido > 0 ? 'text-red-600' : 'text-elos-verde'}`}>
+                  R$ {clienteNoModal.totalGeralDevido.toFixed(2).replace('.', ',')}
+                </span>
               </div>
             </header>
             
@@ -547,39 +934,74 @@ export default function Clientes() {
 
               <div className="flex flex-wrap gap-4">
                 <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="flex-1 py-4 bg-white border-2 border-elos-bege/30 text-elos-verde font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Cadastro</button>
-                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(clienteNoModal.totalGeralDevido * 100)), produto: "Pagamento de saldo devedor", data: new Date().toISOString().split('T')[0], metodo: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
+                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(Math.round(clienteNoModal.totalGeralDevido * 100))), produto: "Pagamento de saldo devedor", data: new Date().toISOString().split('T')[0], metodo: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
               </div>
 
               <div className="space-y-6 pt-4">
-                <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos</h3>
+                <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos & Acordos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
                   const numPed = venda.numeroPedido || "S/N";
                   const produtosLista = venda.itensCarrinho && venda.itensCarrinho.length > 0 
                     ? venda.itensCarrinho.map(item => item.nome)
                     : String(venda.produto || '').split('+').map(p => p.trim());
 
+                  const saldoAbertoDestaVenda = venda.renegociada 
+                    ? 0 
+                    : (venda.listaParcelas || []).filter(p => !p.paga && !p.renegociada).reduce((acc, p) => acc + Number(p.valor || 0), 0);
+
+                  const isAcordoRenegociacao = String(venda.produto || '').includes('RENEGOCIAÇÃO');
+
                   return (
-                    <div key={venda._id || index} className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 relative shadow-sm mb-6">
+                    <div 
+                      key={venda._id || index} 
+                      className={`p-6 md:p-8 rounded-[32px] border relative shadow-sm mb-6 transition-all ${
+                        venda.renegociada 
+                          ? 'bg-gray-50/80 border-amber-200/80 opacity-75' 
+                          : isAcordoRenegociacao 
+                            ? 'bg-amber-50/20 border-amber-300 ring-1 ring-amber-200/50' 
+                            : 'bg-white border-gray-100'
+                      }`}
+                    >
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
                         <div className="flex-1 w-full">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="bg-elos-verde text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase">PEDIDO #{numPed}</span>
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <span className={`${isAcordoRenegociacao ? 'bg-amber-600' : 'bg-elos-verde'} text-white text-[10px] font-black px-2.5 py-1 rounded-md uppercase`}>
+                              {isAcordoRenegociacao ? `ACORDO #${numPed}` : `PEDIDO #${numPed}`}
+                            </span>
+
+                            {/* 🟢 SELO DE DÍVIDA RENEGOCIADA */}
+                            {venda.renegociada && (
+                              <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                                🔄 Dívida Renegociada {venda.renegociadaEm ? `em ${venda.renegociadaEm.split('-').reverse().join('/')}` : ''}
+                              </span>
+                            )}
                             
-                            <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer" onClick={() => navigate(`/admin/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
-                              {venda.dataVenda?.split('-').reverse().join('/')} ✏️ EDITAR
-                            </small>
+                            {!venda.renegociada && (
+                              <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-verde" onClick={() => navigate(`/admin/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
+                                {venda.dataVenda?.split('-').reverse().join('/')} ✏️ EDITAR
+                              </small>
+                            )}
                           </div>
 
                           <div className="flex flex-wrap gap-2 mb-3">
                             {produtosLista.map((prodNome, pIdx) => (
                               <div key={pIdx} className="flex items-center bg-elos-fundo border border-elos-bege/30 px-3.5 py-1.5 rounded-xl">
-                                <span className="text-xs font-black text-elos-texto tracking-wide uppercase">👓 {prodNome}</span>
+                                <span className="text-xs font-black text-elos-texto tracking-wide uppercase">
+                                  {isAcordoRenegociacao ? '🤝' : '👓'} {prodNome}
+                                </span>
                               </div>
                             ))}
                           </div>
 
-                          <div className="mt-2 text-elos-verde font-black text-sm uppercase">
-                            Valor Total: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}
+                          <div className="flex flex-wrap gap-4 mt-2 items-center">
+                            <span className="text-elos-verde font-black text-sm uppercase">
+                              Valor do Contrato: R$ {Number(venda.valorTotal).toFixed(2).replace('.', ',')}
+                            </span>
+                            {!venda.renegociada && saldoAbertoDestaVenda > 0 && (
+                              <span className="text-red-600 font-black text-xs uppercase bg-red-50 px-2.5 py-1 rounded-lg border border-red-100">
+                                Em Aberto: R$ {saldoAbertoDestaVenda.toFixed(2).replace('.', ',')}
+                              </span>
+                            )}
                           </div>
                           
                           {venda.foto && (
@@ -591,20 +1013,31 @@ export default function Clientes() {
                           )}
 
                           {venda.observacoes && (
-                            <p className="mt-3 text-xs text-gray-500 italic bg-gray-50 p-3 rounded-xl border-l-4 border-elos-bege">
+                            <p className="mt-3 text-xs text-gray-500 italic bg-gray-50 p-3 rounded-xl border-l-4 border-elos-bege whitespace-pre-wrap">
                               {venda.observacoes}
                             </p>
                           )}
                         </div>
                         
-                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                          
-                          <button 
-                            onClick={() => navigate(`/admin/nova-os/${numPed}`)} 
-                            className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
-                          >
-                            ➕ Nova OS
-                          </button>
+                        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                          {/* 🟢 BOTÃO DE RENEGOCIAR DÍVIDA */}
+                          {!venda.renegociada && saldoAbertoDestaVenda > 0.01 && (
+                            <button 
+                              onClick={() => abrirModalRenegociar(venda)}
+                              className="flex-1 md:flex-none bg-amber-500 text-white hover:bg-amber-600 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5"
+                            >
+                              🔄 Renegociar
+                            </button>
+                          )}
+
+                          {!venda.renegociada && (
+                            <button 
+                              onClick={() => navigate(`/admin/nova-os/${numPed}`)} 
+                              className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+                            >
+                              ➕ Nova OS
+                            </button>
+                          )}
 
                           <button 
                             onClick={() => {
@@ -637,20 +1070,17 @@ export default function Clientes() {
                                 data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR'),
                               }, 'pedido');
                             }} 
-                            className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
+                            className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
                           >
-                            📄 Reemitir Pedido
+                            📄 Pedido PDF
                           </button>
 
-                          {venda.metodoPagamento === 'Boleto / Crediário' && (
+                          {/* 🟢 BOTÃO GERAR CARNÊ DIRETO (USA A CHAVE PIX SALVA SEM PERGUNTAR TODA VEZ) */}
+                          {!venda.renegociada && (venda.metodoPagamento === 'Boleto / Crediário' || (venda.listaParcelas || []).some(p => p.numero > 0 && !p.paga)) && (
                             <button 
-                              onClick={() => {
-                                setModalCarne({
-                                  vendaBase: venda,
-                                  chavePix: "(85) 8550-6571"
-                                });
-                              }}
-                              className="flex-1 md:flex-none bg-orange-50 text-orange-600 border-2 border-orange-100 hover:bg-orange-500 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
+                              onClick={() => handleEmitirCarneDireto(venda)}
+                              className="flex-1 md:flex-none bg-orange-50 text-orange-600 border-2 border-orange-100 hover:bg-orange-500 hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
+                              title={`Imprimir Carnê (Chave PIX: ${chavePixPadrao})`}
                             >
                               🎟️ Gerar Carnê
                             </button>
@@ -711,7 +1141,8 @@ export default function Clientes() {
                             }} 
                             estornarBaixaParcela={async (vendaId, numeroParcela) => {
                               return await estornarBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela });
-                            }} 
+                            }}
+                            editarParcelaManual={handleEditarParcelaManual}
                             mostrarToast={mostrarToast} 
                             abrirConfirmacao={abrirConfirmacao} 
                           />
@@ -721,6 +1152,200 @@ export default function Clientes() {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 MODAL DE RENEGOCIAÇÃO DE DÍVIDA */}
+      {modalRenegociacao && (
+        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[90] p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[32px] p-6 md:p-8 space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto border border-amber-200">
+            <div className="flex justify-between items-start border-b border-gray-100 pb-4">
+              <div>
+                <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                  🔄 Novo Acordo Financeiro
+                </span>
+                <h2 className="font-tradicional text-2xl md:text-3xl text-elos-verde italic mt-2">
+                  Renegociar Pedido #{modalRenegociacao.vendaOriginal.numeroPedido || 'S/N'}
+                </h2>
+                <p className="text-xs text-gray-400 mt-1">
+                  O pedido antigo ficará marcado como <strong>Dívida Renegociada</strong> e este novo acordo assumirá as cobranças.
+                </p>
+              </div>
+              <button onClick={() => setModalRenegociacao(null)} className="text-2xl text-gray-400 hover:text-red-500">&times;</button>
+            </div>
+
+            {/* RESUMO E PARÂMETROS DO ACORDO */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
+              <div>
+                <span className="text-[10px] font-black uppercase text-gray-400 block">Saldo Devedor Original</span>
+                <span className="text-lg font-black text-red-600">
+                  R$ {modalRenegociacao.saldoOriginal.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-[10px] font-black uppercase text-amber-800 block mb-1">
+                  Novo Valor Total Negociado (Com Juros ou Desconto)
+                </label>
+                <input 
+                  type="text"
+                  className="w-full p-3 bg-white border border-amber-300 rounded-xl font-black text-elos-verde text-base outline-none focus:ring-2 focus:ring-amber-400"
+                  value={modalRenegociacao.novoValorTotalFmt}
+                  onChange={(e) => atualizarParametrosRenegociacao({ novoValorTotalFmt: aplicarMascaraMoeda(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nova Entrada (Opcional)</label>
+                <input 
+                  type="text"
+                  placeholder="R$ 0,00"
+                  className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold text-elos-verde outline-none"
+                  value={modalRenegociacao.valorEntradaFmt}
+                  onChange={(e) => atualizarParametrosRenegociacao({ valorEntradaFmt: aplicarMascaraMoeda(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Data da Entrada</label>
+                <input 
+                  type="date"
+                  className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold outline-none"
+                  value={modalRenegociacao.dataEntrada}
+                  onChange={(e) => atualizarParametrosRenegociacao({ dataEntrada: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nº de Parcelas</label>
+                <input 
+                  type="number"
+                  min="1"
+                  max="36"
+                  className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold outline-none"
+                  value={modalRenegociacao.parcelas}
+                  onChange={(e) => atualizarParametrosRenegociacao({ parcelas: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">1º Vencimento</label>
+                <input 
+                  type="date"
+                  className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold outline-none"
+                  value={modalRenegociacao.dataPrimeiraParcela}
+                  onChange={(e) => atualizarParametrosRenegociacao({ dataPrimeiraParcela: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* PRÉVIA EDITÁVEL DE CADA PARCELA */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="text-[10px] font-black uppercase text-elos-verde tracking-widest">
+                  📋 Ajuste Fino das Novas Parcelas (Você pode editar valores e datas individualmente)
+                </h4>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2 max-h-60 overflow-y-auto">
+                {modalRenegociacao.parcelasPrevias.map((parc, idx) => (
+                  <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-3 rounded-xl border border-gray-100 gap-3">
+                    <span className="text-xs font-black text-elos-verde min-w-[90px]">
+                      {parc.numero === 0 ? '⚡ Entrada' : `${parc.numero}ª Parcela`}
+                    </span>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">R$</span>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        className="w-28 p-2 bg-elos-fundo rounded-lg text-xs font-bold text-elos-texto outline-none"
+                        value={parc.valor}
+                        onChange={(e) => editarLinhaPreviaRenegociacao(idx, 'valor', e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Venc:</span>
+                      <input 
+                        type="date"
+                        className="p-2 bg-elos-fundo rounded-lg text-xs font-bold text-elos-texto outline-none"
+                        value={parc.dataVencimento}
+                        onChange={(e) => editarLinhaPreviaRenegociacao(idx, 'dataVencimento', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Observações do Acordo</label>
+              <textarea 
+                rows="2"
+                className="w-full p-3 bg-elos-fundo rounded-xl text-xs outline-none resize-none"
+                value={modalRenegociacao.observacoes}
+                onChange={(e) => setModalRenegociacao({ ...modalRenegociacao, observacoes: e.target.value })}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                type="button"
+                onClick={() => setModalRenegociacao(null)} 
+                className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-bold uppercase text-xs tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                disabled={processandoRenegociacao}
+                onClick={confirmarRenegociacao}
+                className="flex-[1.5] py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all"
+              >
+                {processandoRenegociacao ? 'Processando Acordo...' : '✅ Confirmar Renegociação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 MODAL DE CONFIGURAR CHAVE PIX PADRÃO DO CARNÊ (UMA ÚNICA VEZ) */}
+      {modalConfigPix && (
+        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[95] p-4">
+          <div className="bg-white p-8 rounded-[32px] max-w-sm w-full border border-orange-100 shadow-2xl">
+            <div className="text-center">
+              <div className="text-4xl text-orange-500 mb-2">🔑</div>
+              <h2 className="font-tradicional text-2xl text-elos-verde italic">Chave PIX do Carnê</h2>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1 mb-6">
+                Ficará salva automaticamente para todos os carnês
+              </p>
+            </div>
+            <div className="space-y-2 mb-6">
+              <label className="text-[10px] font-black text-orange-600 uppercase tracking-tighter ml-1">
+                Chave PIX da Loja (Celular, CPF, CNPJ ou E-mail)
+              </label>
+              <input 
+                type="text" 
+                className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl font-bold text-elos-texto text-sm outline-none focus:ring-2 focus:ring-orange-200" 
+                value={inputNovaChavePix} 
+                onChange={(e) => setInputNovaChavePix(e.target.value)} 
+                placeholder="Ex: (85) 8550-6571"
+              />
+              <p className="text-[9px] text-gray-400 italic ml-1 mt-1">
+                Você não precisará digitar novamente ao clicar em "Gerar Carnê".
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { setModalConfigPix(false); setVendaAguardandoCarne(null); }} 
+                className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={salvarChavePixGlobal} 
+                className="flex-[1.5] bg-orange-500 text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+              >
+                Salvar Padrão
+              </button>
             </div>
           </div>
         </div>
@@ -749,7 +1374,6 @@ export default function Clientes() {
               <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-gray-400">E-mail</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="email" value={editandoCadastro.email || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, email: e.target.value})} /></div>
               
-              {/* 🟢 NOVO CAMPO: Origem editável com datalist (Igual ao Cadastro) */}
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400">Origem (De onde veio?)</label>
                 <input 
@@ -817,42 +1441,6 @@ export default function Clientes() {
             <div className="flex gap-4 pt-4">
               <button onClick={salvarEdicaoVenda} disabled={uploadingImage} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold disabled:bg-gray-400">Atualizar</button>
               <button onClick={() => setEditandoVenda(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🟢 MODAL DE DIGITAR CHAVE PIX PARA O CARNÊ */}
-      {modalCarne && (
-        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
-          <div className="bg-white p-8 rounded-[32px] max-w-sm w-full border border-orange-100 shadow-2xl">
-            <div className="text-center">
-              <div className="text-4xl text-orange-500 mb-2">🎟️</div>
-              <h2 className="font-tradicional text-2xl text-elos-verde italic">Gerar Carnê</h2>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1 mb-6">QR Code de Pagamento</p>
-            </div>
-            <div className="space-y-2 mb-6">
-              <label className="text-[10px] font-black text-orange-600 uppercase tracking-tighter ml-1">Chave PIX da Loja (Celular, CPF ou CNPJ)</label>
-              <input 
-                type="text" 
-                className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl font-bold text-elos-texto text-sm outline-none focus:ring-2 focus:ring-orange-200" 
-                value={modalCarne.chavePix} 
-                onChange={(e) => setModalCarne({...modalCarne, chavePix: e.target.value})} 
-                placeholder="Ex: 85988887777"
-              />
-              <p className="text-[9px] text-gray-400 italic ml-1 mt-1">O QR Code impresso no carnê apontará para esta chave.</p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setModalCarne(null)} className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
-              <button 
-                onClick={() => {
-                  gerarPDFCarne({ ...modalCarne.vendaBase, cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf }, modalCarne.chavePix);
-                  setModalCarne(null);
-                }} 
-                className="flex-[1.5] bg-orange-500 text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
-              >
-                Imprimir Carnê
-              </button>
             </div>
           </div>
         </div>
