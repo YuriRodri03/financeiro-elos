@@ -737,7 +737,7 @@ export default function HomeLoja() {
 
     const isRetiradaNaLoja = freteSelecionado?.id === 'retirada';
     let enderecoFinal = isRetiradaNaLoja 
-      ? 'RETIRADA NA LOJA FÍSICA (Rua Viriato Ribeiro, 321 - Bela Vista)' 
+      ? 'RETIRADA NA LOJA FÍSICA (Rua Viriato Ribeiro, 321A - Bela Vista)' 
       : dadosCliente.endereco;
 
     if (temArmacaoNoCarrinho) {
