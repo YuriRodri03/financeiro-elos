@@ -2,6 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProdutos } from '../../hooks/useProdutos';
 
+// Opção fixa de retirada na loja sempre disponível
+const OPCAO_RETIRADA_FIXA = {
+  id: 'retirada',
+  nome: 'Retirar na Loja (Bela Vista)',
+  valor: 0.00,
+  prazo: 'Disponível p/ retirada'
+};
+
 // =======================================================
 // 🟢 COMPONENTE: MODAL DE TERMOS DE SERVIÇO
 // =======================================================
@@ -30,7 +38,7 @@ function ModalTermos({ onClose }) {
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 3. Prazos, Entregas e Frete</h3>
-            <p>O prazo de produção e entrega começa a ser contabilizado apenas após a confirmação do pagamento e o envio da receita médica (quando aplicável). <strong>Atenção ao Frete:</strong> O valor do frete não está incluso no valor final do pedido online. A taxa de entrega será calculada e cobrada no momento da entrega do seu produto.</p>
+            <p>O prazo de produção e entrega começa a ser contabilizado apenas após a confirmação do pagamento e o envio da receita médica (quando aplicável). Você pode optar por retirar gratuitamente em nossa loja física ou calcular o frete de entrega.</p>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200/50 hover:border-[#c5a880]/30 transition-colors">
             <h3 className="text-[#1d3026] font-bold uppercase tracking-widest text-[11px] mb-3 flex items-center gap-2"><span className="text-[#c5a880]">✦</span> 4. Trocas e Devoluções</h3>
@@ -48,9 +56,165 @@ function ModalTermos({ onClose }) {
 }
 
 // =======================================================
+// 🟢 COMPONENTE: MODAL DE DETALHES E ZOOM DO PRODUTO
+// =======================================================
+function ModalDetalhesProduto({ produto, precoPromocional, noCarrinho, adicionarAoCarrinho, apiUrl, onClose }) {
+  const [imgIndex, setImgIndex] = useState(0);
+  const [superZoom, setSuperZoom] = useState(false);
+
+  if (!produto) return null;
+
+  const productId = produto._id || produto.id;
+  const fotos = (produto.fotos && produto.fotos.length > 0) ? produto.fotos : (produto.foto ? [produto.foto] : []);
+
+  const getUrlFotoAlta = (f) => {
+    if (!f) return '';
+    if (f.startsWith('http')) {
+      const urlLimpa = f.replace(/^https?:\/\//, '');
+      return `https://wsrv.nl/?url=${urlLimpa}&w=1000&output=webp&q=85`;
+    }
+    if (f.startsWith('data:')) return f;
+    return `${apiUrl.replace(/\/$/, '')}/produtos/${productId}/foto?v=1`;
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md"
+      style={{ animation: 'fadeUp 0.3s ease forwards' }}
+      onClick={onClose}
+    >
+      <div 
+        className="relative bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] border border-white/20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 z-30 w-10 h-10 bg-white/90 hover:bg-red-500 hover:text-white text-[#1d3026] rounded-full flex items-center justify-center shadow-md text-2xl transition-all"
+        >
+          &times;
+        </button>
+
+        {/* LADO ESQUERDO: GALERIA COM ZOOM */}
+        <div className="md:w-1/2 bg-gradient-to-br from-[#F4F1EA] to-white flex flex-col justify-between p-6 relative">
+          <div className="relative flex-1 min-h-[260px] max-h-[380px] overflow-auto flex items-center justify-center rounded-2xl">
+            {fotos[imgIndex] ? (
+              <img 
+                src={getUrlFotoAlta(fotos[imgIndex])} 
+                alt={produto.nome}
+                onClick={() => setSuperZoom(!superZoom)}
+                className={`transition-transform duration-300 object-contain ${
+                  superZoom ? 'scale-[2] cursor-zoom-out m-auto' : 'w-full h-full max-h-[320px] cursor-zoom-in drop-shadow-xl'
+                }`}
+              />
+            ) : (
+              <span className="text-7xl opacity-10">👓</span>
+            )}
+
+            <button 
+              type="button"
+              onClick={() => setSuperZoom(!superZoom)}
+              className="absolute bottom-2 right-2 bg-white/85 backdrop-blur-sm text-[#1d3026] px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border border-gray-200 hover:bg-[#1d3026] hover:text-white transition-colors"
+            >
+              {superZoom ? '🔍 1x' : '🔎 Zoom 2x'}
+            </button>
+          </div>
+
+          {fotos.length > 1 && (
+            <div className="flex gap-2 justify-center mt-4 overflow-x-auto pb-1">
+              {fotos.map((f, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => { setSuperZoom(false); setImgIndex(idx); }}
+                  className={`w-14 h-14 rounded-xl overflow-hidden border-2 bg-white flex-shrink-0 transition-all ${
+                    idx === imgIndex ? 'border-[#1d3026] scale-105 shadow-sm' : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <img src={getUrlFotoAlta(f)} alt="" className="w-full h-full object-contain p-1" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* LADO DIREITO: INFORMAÇÕES E DESCRIÇÃO */}
+        <div className="md:w-1/2 p-6 md:p-8 flex flex-col justify-between overflow-y-auto bg-white">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest bg-[#F4F1EA] text-[#1d3026] px-3 py-1 rounded-full">
+                {produto.categoria}
+              </span>
+              {produto.referencia && (
+                <span className="text-[9px] font-black uppercase tracking-widest bg-[#c5a880]/15 text-[#8b7355] px-3 py-1 rounded-full">
+                  Ref: {produto.referencia}
+                </span>
+              )}
+            </div>
+
+            <h2 className="font-tradicional text-2xl md:text-3xl italic font-bold text-[#1d3026] leading-tight">
+              {produto.nome}
+            </h2>
+
+            <div className="pt-2">
+              {precoPromocional && precoPromocional < produto.preco ? (
+                <div className="flex items-baseline gap-3">
+                  <span className="font-tradicional italic font-bold text-red-600 text-3xl">
+                    {Number(precoPromocional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                  <span className="text-sm text-gray-400 line-through font-bold">
+                    {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+              ) : (
+                <span className="font-tradicional italic font-bold text-[#1d3026] text-3xl">
+                  {Number(produto.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              )}
+            </div>
+
+            {produto.descricao ? (
+              <div className="bg-[#F4F1EA]/70 p-4 rounded-2xl border border-gray-200/60 mt-4">
+                <h4 className="text-[9px] font-black uppercase tracking-widest text-[#c5a880] mb-1.5">
+                  Detalhes & Especificações
+                </h4>
+                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {produto.descricao}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic pt-2">
+                Peça selecionada com garantia de qualidade e autenticidade Ótica Elos.
+              </p>
+            )}
+          </div>
+
+          <div className="pt-6 mt-6 border-t border-gray-100">
+            <button
+              onClick={() => {
+                const produtoParaCarrinho = precoPromocional ? { ...produto, preco: precoPromocional, precoOriginal: produto.preco } : produto;
+                adicionarAoCarrinho(produtoParaCarrinho);
+                onClose();
+              }}
+              disabled={noCarrinho}
+              className={`w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-[0.2em] transition-all shadow-lg flex items-center justify-center gap-2 ${
+                noCarrinho
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                  : 'bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:text-white active:scale-95'
+              }`}
+            >
+              {noCarrinho ? '✓ Já está no seu carrinho' : '🛒 Adicionar ao Carrinho'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =======================================================
 // 🟢 COMPONENTE: CARD DE PRODUTO
 // =======================================================
-function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPromocional }) {
+function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, apiUrl, precoPromocional }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
@@ -100,10 +264,12 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
       )}
       
       <div 
+        onClick={() => abrirDetalhes(produto)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         className="aspect-square bg-gradient-to-br from-[#F4F1EA] to-white relative overflow-hidden flex items-center justify-center p-4 md:p-10 group/galeria cursor-pointer"
+        title="Clique para ampliar e ver detalhes"
       >
         {!imgCarregada && fotoAtual && (
           <div className="absolute inset-0 flex items-center justify-center z-0">
@@ -130,6 +296,11 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
         <span className={`text-5xl md:text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
         <div className="absolute inset-0 bg-black/0 group-hover:bg-[#1d3026]/[0.03] transition-colors duration-500 pointer-events-none z-10"></div>
 
+        {/* Ícone sutil de Lupa indicando que pode clicar para dar zoom */}
+        <div className="absolute bottom-2.5 right-2.5 md:bottom-4 md:right-4 z-20 w-7 h-7 rounded-full bg-white/80 backdrop-blur-sm text-[#1d3026] flex items-center justify-center text-xs opacity-70 md:opacity-0 md:group-hover/galeria:opacity-100 transition-opacity shadow-sm pointer-events-none">
+          🔍
+        </div>
+
         {fotos.length > 1 && (
           <>
             <button onClick={prevImg} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white backdrop-blur-sm text-[#1d3026] w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-lg opacity-40 md:opacity-0 md:group-hover/galeria:opacity-100 transition-all duration-300 z-30 hover:scale-110">‹</button>
@@ -144,11 +315,23 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
       </div>
       
       <div className="p-4 md:p-6 flex flex-col flex-1 bg-white relative z-20">
-        <h3 className="font-sans font-bold text-[#1d3026] text-xs md:text-sm leading-relaxed line-clamp-2 mb-3 md:mb-4 group-hover:text-[#c5a880] transition-colors">
+        <h3 
+          onClick={() => abrirDetalhes(produto)}
+          className="font-sans font-bold text-[#1d3026] text-xs md:text-sm leading-relaxed line-clamp-2 mb-1 group-hover:text-[#c5a880] transition-colors cursor-pointer"
+        >
           {produto.nome}
         </h3>
+
+        {produto.descricao && (
+          <p 
+            onClick={() => abrirDetalhes(produto)}
+            className="text-[10px] text-gray-400 line-clamp-1 mb-2 cursor-pointer"
+          >
+            {produto.descricao}
+          </p>
+        )}
         
-        <div className="mt-auto flex items-end justify-between gap-2">
+        <div className="mt-auto pt-2 flex items-end justify-between gap-2">
           <div className="flex flex-col">
             <span className="text-[8px] md:text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
             
@@ -195,20 +378,17 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, apiUrl, precoPr
 // =======================================================
 function HeroInterativo() {
   return (
-    <div className="relative bg-gradient-to-b from-[#1d3026] via-[#243d31] to-[#F4F1EA] overflow-hidden min-h-[60vh] flex items-center justify-center pt-40 pb-16">
+    <div className="relative bg-gradient-to-b from-[#1d3026] via-[#243d31] to-[#F4F1EA] overflow-hidden min-h-[60vh] flex items-center justify-center pt-44 pb-16">
       
-      {/* 🟢 ESTILOS CSS INJETADOS (Giro de 360 graus contínuo) */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes textoSobe {
           0% { opacity: 0; transform: translateY(40px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        /* Rodando de 0 a 360 graus linearmente */
         @keyframes vitrine360 {
           0% { transform: rotateY(0deg) rotateX(5deg); }
           100% { transform: rotateY(-360deg) rotateX(5deg); } 
         }
-        /* Sombra pulsando suavemente para acompanhar a rotação */
         @keyframes shadowPulse360 {
           0% { transform: translateX(-50%) scale(1); opacity: 0.4; }
           25% { transform: translateX(-50%) scale(0.7); opacity: 0.2; }
@@ -221,7 +401,6 @@ function HeroInterativo() {
         .anim-texto-2 { animation: textoSobe 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; animation-delay: 0.3s; }
       `}} />
 
-      {/* Luzes de Fundo (Pulsante) */}
       <div className="absolute top-[0%] left-[-5%] w-[60%] h-[60%] bg-[#c5a880] rounded-full mix-blend-screen filter blur-[140px] opacity-20 animate-pulse duration-1000"></div>
 
       <div className="max-w-7xl mx-auto px-4 w-full flex flex-col md:flex-row items-center justify-between gap-12 relative z-10">
@@ -244,7 +423,6 @@ function HeroInterativo() {
         <div className="anim-texto-2 flex-1 w-full flex flex-col items-center justify-center relative pt-12 md:pt-0" style={{ animationDelay: '0.6s' }}>
           
           <div className="relative w-[280px] sm:w-[320px] h-[100px]" style={{ perspective: '1000px' }}>
-            {/* O Container que faz o Giro 360 Completo e Contínuo (12s linear infinite) */}
             <div className="w-full h-full relative" style={{ transformStyle: 'preserve-3d', animation: 'vitrine360 12s linear infinite' }}>
               
               {/* Lente Frontal e Aros */}
@@ -267,15 +445,11 @@ function HeroInterativo() {
                       <stop offset="100%" stopColor="rgba(255,255,255,0.1)"/>
                     </linearGradient>
                   </defs>
-                  {/* Lentes Vidro */}
                   <rect x="10" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
                   <rect x="160" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
-                  {/* Aros */}
                   <rect x="10" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
                   <rect x="160" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
-                  {/* Ponte Metálica Dourada */}
                   <path d="M 140 30 Q 150 20 160 30" fill="none" stroke="url(#goldGrad)" strokeWidth="8"/>
-                  {/* Pinos laterais de ligação (Dobradiças) */}
                   <rect x="-2" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
                   <rect x="290" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
                 </svg>
@@ -301,7 +475,6 @@ function HeroInterativo() {
             </div>
           </div>
           
-          {/* Sombra Dinâmica no chão adaptada para o giro contínuo */}
           <div className="absolute -bottom-10 left-1/2 w-[220px] h-5 bg-black/40 blur-xl rounded-full" style={{ animation: 'shadowPulse360 12s linear infinite' }}></div>
         </div>
 
@@ -328,6 +501,7 @@ export default function HomeLoja() {
   
   const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
   const [mostrarTermos, setMostrarTermos] = useState(false);
+  const [produtoEmDestaque, setProdutoEmDestaque] = useState(null);
 
   const [carrinho, setCarrinho] = useState(() => {
     try { return JSON.parse(localStorage.getItem('carrinhoVirtualElos')) || []; } catch (e) { return []; }
@@ -337,10 +511,11 @@ export default function HomeLoja() {
   const [cupomAtivo, setCupomAtivo] = useState(null); 
   const [validandoCupom, setValidandoCupom] = useState(false);
 
+  // 🟢 FRETE: Retirada na Loja já começa visível e pré-selecionada!
   const [cepFrete, setCepFrete] = useState('');
   const [calculandoFrete, setCalculandoFrete] = useState(false);
-  const [opcoesFrete, setOpcoesFrete] = useState([]);
-  const [freteSelecionado, setFreteSelecionado] = useState(null);
+  const [opcoesFrete, setOpcoesFrete] = useState([OPCAO_RETIRADA_FIXA]);
+  const [freteSelecionado, setFreteSelecionado] = useState(OPCAO_RETIRADA_FIXA);
 
   const promocoesAtivas = useMemo(() => {
     return (produtos || []).filter(p => p.categoria === 'PROMO_CATE');
@@ -466,18 +641,17 @@ export default function HomeLoja() {
     return valor.substring(0, 9);
   };
 
+  // 🟢 CALCULA OPÇÕES DE ENTREGA MANTENDO A RETIRADA NA LOJA SEMPRE VISÍVEL
   const calcularFrete = async () => {
     if (cepFrete.replace(/\D/g, '').length !== 8) return alert("Digite um CEP válido com 8 dígitos.");
     setCalculandoFrete(true);
-    setFreteSelecionado(null);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 700));
       const cepPrefixo = cepFrete.substring(0, 2);
-      let opcoes = [];
+      let opcoes = [OPCAO_RETIRADA_FIXA];
       
       if (['60','61','62','63'].includes(cepPrefixo)) {
-        opcoes.push({ id: 'retirada', nome: 'Retirar na Loja (Bela Vista)', valor: 0.00, prazo: 'Imediato' });
         opcoes.push({ id: 'motoboy', nome: 'Motoboy Fortaleza/Região', valor: 15.00, prazo: '1 dia útil' });
       }
       
@@ -485,7 +659,8 @@ export default function HomeLoja() {
       opcoes.push({ id: 'sedex', nome: 'Correios Sedex', valor: 45.50, prazo: '2 a 3 dias úteis' });
       
       setOpcoesFrete(opcoes);
-      setFreteSelecionado(opcoes[0]);
+      // Seleciona automaticamente a primeira opção de envio calculada (Motoboy ou PAC)
+      setFreteSelecionado(opcoes[1] || opcoes[0]);
     } catch (e) {
       alert("Erro ao calcular frete.");
     } finally {
@@ -509,7 +684,14 @@ export default function HomeLoja() {
       p.categoria !== 'UPSELL' && 
       p.categoria !== 'PROMO_CATE'
     );
-    if (busca) filtrados = filtrados.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.referencia || '').toLowerCase().includes(busca.toLowerCase()));
+    if (busca) {
+      const termo = busca.toLowerCase();
+      filtrados = filtrados.filter(p => 
+        (p.nome || '').toLowerCase().includes(termo) || 
+        (p.referencia || '').toLowerCase().includes(termo) ||
+        (p.descricao || '').toLowerCase().includes(termo)
+      );
+    }
     if (categoriaAtiva !== 'TODAS') filtrados = filtrados.filter(p => p.categoria === categoriaAtiva);
     return filtrados;
   }, [produtos, busca, categoriaAtiva]);
@@ -533,8 +715,14 @@ export default function HomeLoja() {
     setCarrinho(carrinho.filter(item => item._id !== idProduto));
     if (carrinho.length === 1) {
       setEtapaCheckout(0);
-      setFreteSelecionado(null);
     }
+  };
+
+  const limparCarrinhoCompleto = () => {
+    if (!window.confirm("Deseja remover todos os itens do carrinho?")) return;
+    setCarrinho([]);
+    setEtapaCheckout(0);
+    setCupomAtivo(null);
   };
 
   const processarPedido = async (e) => {
@@ -547,7 +735,11 @@ export default function HomeLoja() {
 
     setProcessando(true);
 
-    let enderecoFinal = dadosCliente.endereco;
+    const isRetiradaNaLoja = freteSelecionado?.id === 'retirada';
+    let enderecoFinal = isRetiradaNaLoja 
+      ? 'RETIRADA NA LOJA FÍSICA (Rua Viriato Ribeiro, 321 - Bela Vista)' 
+      : dadosCliente.endereco;
+
     if (temArmacaoNoCarrinho) {
       enderecoFinal += dadosCliente.temGrau 
         ? '\n\n[ÓCULOS COM GRAU - Cliente enviará a Receita]' 
@@ -562,7 +754,7 @@ export default function HomeLoja() {
       itens: carrinho.map(item => ({ id: item._id, nome: item.nome, preco: item.preco, referencia: item.referencia })),
       valorTotal: calculosCarrinho.totalFinal,
       freteValor: calculosCarrinho.valorFrete, 
-      freteTipo: freteSelecionado ? freteSelecionado.nome : 'Não selecionado' 
+      freteTipo: freteSelecionado ? freteSelecionado.nome : 'Retirar na Loja (Bela Vista)' 
     };
 
     try {
@@ -575,7 +767,7 @@ export default function HomeLoja() {
         setCarrinho([]); 
         setCupomAtivo(null);
         setCupomDigitado('');
-        setFreteSelecionado(null);
+        setFreteSelecionado(OPCAO_RETIRADA_FIXA);
         setEtapaCheckout(2); 
       } else alert("Ops! Tivemos um problema.");
     } catch (err) { alert("Erro ao conectar com o servidor."); } 
@@ -599,7 +791,7 @@ export default function HomeLoja() {
       ? "Meu óculos é *SEM GRAU*, quero a lente apenas para descanso/estética." 
       : "Estou enviando minha *Receita Médica* para a produção das minhas lentes.";
 
-    const texto = `*OLÁ! GOSTARIA DE FALAR SOBRE O MEU PEDIDO!* 📦✨\n\n*Número do Pedido:* #${p.numeroPedidoOnline}\n*Meu Nome:* ${p.clienteNome}\n*Valor:* R$ ${Number(p.valorTotal).toFixed(2).replace('.', ',')}\n\n${txtReceita}\n\nAqui está o comprovante de pagamento.`;
+    const texto = `*OLÁ! GOSTARIA DE FALAR SOBRE O MEU PEDIDO!* 📦✨\n\n*Número do Pedido:* #${p.numeroPedidoOnline}\n*Meu Nome:* ${p.clienteNome}\n*Modalidade:* ${p.freteTipo || 'Retirada/Entrega'}\n*Valor:* R$ ${Number(p.valorTotal).toFixed(2).replace('.', ',')}\n\n${txtReceita}\n\nAqui está o comprovante de pagamento.`;
     
     window.open(`https://wa.me/5585985506571?text=${encodeURIComponent(texto)}`, '_blank');
   };
@@ -632,6 +824,18 @@ export default function HomeLoja() {
     <div className="min-h-screen bg-[#F4F1EA] font-sans relative pb-20">
       
       {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
+
+      {/* MODAL DE ZOOM E DETALHES DO PRODUTO */}
+      {produtoEmDestaque && (
+        <ModalDetalhesProduto 
+          produto={produtoEmDestaque}
+          precoPromocional={obterPrecoPromocional(produtoEmDestaque)}
+          noCarrinho={carrinho.some(item => item._id === (produtoEmDestaque._id || produtoEmDestaque.id))}
+          adicionarAoCarrinho={adicionarAoCarrinho}
+          apiUrl={apiUrl}
+          onClose={() => setProdutoEmDestaque(null)}
+        />
+      )}
 
       {/* NAVBAR PRINCIPAL */}
       <nav className={`fixed w-full top-0 z-[60] transition-all duration-500 ease-in-out flex items-center ${isScrolled ? 'bg-[#F4F1EA]/95 backdrop-blur-xl shadow-sm border-b border-gray-200/50 h-[70px]' : 'bg-transparent h-[80px]'}`}>
@@ -689,13 +893,13 @@ export default function HomeLoja() {
         </div>
       </nav>
 
-      {/* 🟢 NAVBAR SECUNDÁRIA: CATEGORIAS E BUSCA */}
+      {/* 🟢 NAVBAR SECUNDÁRIA: CATEGORIAS E BUSCA (Visível no Desktop e Mobile) */}
       {abaAtiva === 'VITRINE' && (
-        <div className={`fixed w-full left-0 z-[50] py-3 transition-all duration-500 ${isScrolled ? 'top-[70px] bg-[#F4F1EA]/95 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'top-[80px] bg-transparent border-b border-white/10'}`}>
+        <div className={`fixed w-full left-0 z-[50] py-2.5 transition-all duration-500 ${isScrolled ? 'top-[70px] bg-[#F4F1EA]/95 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'top-[80px] bg-transparent border-b border-white/10'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between gap-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-6">
               
-              <div className="flex flex-1 gap-2 overflow-x-auto no-scrollbar pb-1">
+              <div className="flex flex-1 gap-2 overflow-x-auto no-scrollbar pb-0.5">
                 {categorias.map(cat => (
                   <button 
                     key={cat.id} 
@@ -703,7 +907,7 @@ export default function HomeLoja() {
                        setCategoriaAtiva(cat.id);
                        window.scrollTo({ top: window.innerHeight * 0.5, behavior: 'smooth' });
                     }}
-                    className={`flex-shrink-0 flex items-center px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${
+                    className={`flex-shrink-0 flex items-center px-4 sm:px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${
                       categoriaAtiva === cat.id 
                       ? (isScrolled ? 'bg-[#1d3026] text-[#F4F1EA] shadow-md scale-105' : 'bg-[#c5a880] text-white shadow-md scale-105')
                       : (isScrolled ? 'bg-white text-gray-500 border border-gray-200/60 hover:border-[#c5a880]/50 hover:text-[#1d3026]' : 'bg-white/10 text-white/80 border border-white/20 hover:bg-white/20 hover:text-white')
@@ -714,12 +918,17 @@ export default function HomeLoja() {
                 ))}
               </div>
 
-              <div className="hidden lg:block relative w-64 group">
+              <div className="relative w-full sm:w-64 group">
                 <input 
-                  type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-[#c5a880] text-xs font-bold transition-all shadow-sm group-hover:shadow-md ${isScrolled ? 'bg-white border border-gray-200 text-gray-700' : 'bg-white/10 border border-white/20 text-white placeholder-white/50'}`}
+                  type="text" placeholder="Buscar modelo ou ref..." value={busca} onChange={(e) => setBusca(e.target.value)}
+                  className={`w-full pl-9 pr-8 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-[#c5a880] text-xs font-bold transition-all shadow-sm ${isScrolled ? 'bg-white border border-gray-200 text-gray-700' : 'bg-white/15 border border-white/20 text-white placeholder-white/60 backdrop-blur-md'}`}
                 />
-                <span className={`absolute left-4 top-2 text-sm transition-colors ${isScrolled ? 'text-gray-400' : 'text-white/50'}`}>🔍</span>
+                <span className={`absolute left-3.5 top-2 text-xs transition-colors ${isScrolled ? 'text-gray-400' : 'text-white/60'}`}>🔍</span>
+                {busca && (
+                  <button onClick={() => setBusca('')} className={`absolute right-3 top-1.5 text-sm font-bold ${isScrolled ? 'text-gray-400 hover:text-red-500' : 'text-white/70 hover:text-white'}`}>
+                    &times;
+                  </button>
+                )}
               </div>
 
             </div>
@@ -729,10 +938,8 @@ export default function HomeLoja() {
 
       {abaAtiva === 'VITRINE' ? (
         <>
-          {/* HERO BANNER - Degradê com Vitrine Rotativa (360) */}
           <HeroInterativo />
 
-          {/* 🟢 AQUI: GRID DE PRODUTOS AJUSTADO PARA O CELULAR (grid-cols-2) */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 relative z-20">
             <div className="flex justify-between items-end mb-8" style={{ animation: 'fadeUp 1s ease forwards', opacity: 0, animationDelay: '0.4s' }}>
               <div>
@@ -761,6 +968,7 @@ export default function HomeLoja() {
                     produto={produto} 
                     noCarrinho={carrinho.some(item => item._id === (produto._id || produto.id))}
                     adicionarAoCarrinho={adicionarAoCarrinho}
+                    abrirDetalhes={(prod) => setProdutoEmDestaque(prod)}
                     apiUrl={apiUrl}
                     precoPromocional={obterPrecoPromocional(produto)} 
                   />
@@ -843,22 +1051,37 @@ export default function HomeLoja() {
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-[#1d3026]/40 backdrop-blur-sm transition-opacity" onClick={() => { if(!processando) setMostrarCarrinho(false) }}></div>
 
-          <div className="relative w-full max-w-[420px] bg-white h-full shadow-2xl flex flex-col rounded-l-[2rem] overflow-hidden" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
+          <div className="relative w-full max-w-[430px] bg-white h-full shadow-2xl flex flex-col rounded-l-[2rem] overflow-hidden" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
             
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-[#F4F1EA]">
+            <div className="p-6 md:p-8 border-b border-gray-100 flex justify-between items-center bg-[#F4F1EA]">
               <div>
                 <h2 className="text-2xl font-tradicional italic font-bold text-[#1d3026]">
                   {etapaCheckout === 0 && "Seu Carrinho"}
-                  {etapaCheckout === 1 && "Seus Dados"}
+                  {etapaCheckout === 1 && "Finalizar Pedido"}
                   {etapaCheckout === 2 && "Tudo Certo!"}
                 </h2>
-                <p className="text-[9px] uppercase tracking-widest text-[#c5a880] font-black mt-1">Ambiente Seguro</p>
+                <p className="text-[9px] uppercase tracking-widest text-[#c5a880] font-black mt-1">
+                  {etapaCheckout === 0 && `${carrinho.length} ${carrinho.length === 1 ? 'item selecionado' : 'itens selecionados'}`}
+                  {etapaCheckout === 1 && "Confirme seus dados"}
+                  {etapaCheckout === 2 && "Reserva concluída"}
+                </p>
               </div>
-              {!processando && (
-                <button onClick={() => setMostrarCarrinho(false)} className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-red-500 text-2xl transition-all shadow-sm">
-                  &times;
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {etapaCheckout === 0 && carrinho.length > 1 && (
+                  <button 
+                    onClick={limparCarrinhoCompleto} 
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-full text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                    title="Esvaziar carrinho"
+                  >
+                    Limpar
+                  </button>
+                )}
+                {!processando && (
+                  <button onClick={() => setMostrarCarrinho(false)} className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-red-500 text-2xl transition-all shadow-sm">
+                    &times;
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white custom-scrollbar">
@@ -866,9 +1089,16 @@ export default function HomeLoja() {
               {etapaCheckout === 0 && (
                 <div className="space-y-4">
                   {carrinho.length === 0 ? (
-                    <div className="text-center text-gray-400 py-20">
-                      <span className="text-6xl opacity-10 block mb-6">🛒</span>
-                      <p className="text-sm font-medium">Seu carrinho está vazio.</p>
+                    <div className="text-center text-gray-400 py-16 flex flex-col items-center">
+                      <span className="text-6xl opacity-10 block mb-4">🛒</span>
+                      <p className="text-sm font-bold text-[#1d3026] mb-1">Seu carrinho está vazio</p>
+                      <p className="text-xs text-gray-400 mb-6">Explore nossa vitrine e escolha sua nova armação.</p>
+                      <button 
+                        onClick={() => setMostrarCarrinho(false)}
+                        className="px-6 py-3 bg-[#1d3026] text-[#F4F1EA] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors"
+                      >
+                        Continuar Comprando
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -922,50 +1152,69 @@ export default function HomeLoja() {
                         </div>
                       )}
 
+                      {/* 🟢 ENTREGA OU RETIRADA (RETIRADA SEMPRE VISÍVEL MESMO ANTES DO CEP) */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
-                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">Calcular Frete</p>
-                        
-                        <div className="flex gap-2 mb-4">
-                          <input 
-                            type="text" 
-                            placeholder="00000-000" 
-                            value={cepFrete}
-                            onChange={e => setCepFrete(handleMascaraCep(e.target.value))}
-                            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold tracking-widest text-[#1d3026]"
-                          />
-                          <button 
-                            onClick={calcularFrete}
-                            disabled={calculandoFrete || cepFrete.length < 9}
-                            className="px-5 bg-gray-200 text-gray-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-300 transition-colors disabled:opacity-50"
-                          >
-                            {calculandoFrete ? '⏳' : 'OK'}
-                          </button>
+                        <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">
+                          Como deseja receber?
+                        </p>
+
+                        {/* Lista de opções (Já começa com "Retirar na Loja" visível) */}
+                        <div className="space-y-2 mb-4">
+                          {opcoesFrete.map(opcao => (
+                            <label 
+                              key={opcao.id} 
+                              className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                                freteSelecionado?.id === opcao.id 
+                                  ? 'border-[#1d3026] bg-[#1d3026]/5 ring-1 ring-[#1d3026]' 
+                                  : 'border-gray-200 bg-white hover:border-[#c5a880]/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <input 
+                                  type="radio" 
+                                  name="frete" 
+                                  checked={freteSelecionado?.id === opcao.id} 
+                                  onChange={() => setFreteSelecionado(opcao)}
+                                  className="w-4 h-4 text-[#1d3026] focus:ring-[#1d3026]"
+                                />
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-[#1d3026] flex items-center gap-1.5">
+                                    {opcao.id === 'retirada' ? '🏪' : '🚚'} {opcao.nome}
+                                  </span>
+                                  <span className="text-[9px] text-gray-500 uppercase tracking-wider">
+                                    {opcao.id === 'retirada' ? 'Rua Viriato Ribeiro, 321 - Bela Vista' : `Prazo: ${opcao.prazo}`}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className={`text-xs font-black ${opcao.valor === 0 ? 'text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200' : 'text-[#1d3026]'}`}>
+                                {opcao.valor === 0 ? 'GRÁTIS' : Number(opcao.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                            </label>
+                          ))}
                         </div>
 
-                        {opcoesFrete.length > 0 && (
-                          <div className="space-y-2 mt-4" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
-                            {opcoesFrete.map(opcao => (
-                              <label key={opcao.id} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${freteSelecionado?.id === opcao.id ? 'border-[#1d3026] bg-[#1d3026]/5 ring-1 ring-[#1d3026]' : 'border-gray-200 bg-white hover:border-[#c5a880]/50'}`}>
-                                <div className="flex items-center gap-3">
-                                  <input 
-                                    type="radio" 
-                                    name="frete" 
-                                    checked={freteSelecionado?.id === opcao.id} 
-                                    onChange={() => setFreteSelecionado(opcao)}
-                                    className="w-4 h-4 text-[#1d3026] focus:ring-[#1d3026]"
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-[#1d3026]">{opcao.nome}</span>
-                                    <span className="text-[9px] text-gray-500 uppercase tracking-wider">{opcao.prazo}</span>
-                                  </div>
-                                </div>
-                                <span className="text-xs font-black text-[#1d3026]">
-                                  {opcao.valor === 0 ? 'GRÁTIS' : Number(opcao.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </span>
-                              </label>
-                            ))}
+                        {/* Campo de CEP para quem prefere entrega em casa */}
+                        <div className="bg-[#F4F1EA]/70 p-3.5 rounded-2xl border border-gray-200/60">
+                          <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider block mb-2">
+                            Prefere receber em casa? Calcule o frete por CEP:
+                          </span>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="Digite seu CEP (00000-000)" 
+                              value={cepFrete}
+                              onChange={e => setCepFrete(handleMascaraCep(e.target.value))}
+                              className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold tracking-widest text-[#1d3026]"
+                            />
+                            <button 
+                              onClick={calcularFrete}
+                              disabled={calculandoFrete || cepFrete.length < 9}
+                              className="px-4 bg-[#1d3026] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-40"
+                            >
+                              {calculandoFrete ? '⏳' : 'Calcular'}
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       <div className="pt-6 mt-6 border-t border-gray-100">
@@ -1016,7 +1265,9 @@ export default function HomeLoja() {
                 <form id="formCheckout" onSubmit={processarPedido} className="space-y-6 pb-4" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
                   <div className="bg-[#1d3026]/5 p-5 rounded-2xl border border-[#1d3026]/10 mb-4 flex items-start gap-4">
                     <span className="text-xl">✨</span>
-                    <p className="text-xs text-[#1d3026] font-medium leading-relaxed">Pronto para finalizar! Por favor, confirme os dados de entrega abaixo.</p>
+                    <p className="text-xs text-[#1d3026] font-medium leading-relaxed">
+                      Pronto para finalizar! Confirme seus dados de contato abaixo.
+                    </p>
                   </div>
 
                   {carrinho.some(i => i.categoria === 'ARMAÇÃO') && (
@@ -1053,10 +1304,25 @@ export default function HomeLoja() {
                     <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({...dadosCliente, telefone: handleMascaraTel(e.target.value)})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
                   
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Endereço Completo (Entrega)</label>
-                    <textarea required rows="3" placeholder="Rua, Número, Bairro, Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
-                  </div>
+                  {/* Se for Retirada na Loja, mostra o endereço da loja em vez de obrigar o cliente a digitar endereço */}
+                  {freteSelecionado?.id === 'retirada' ? (
+                    <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-1">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 block">
+                        🏪 Modalidade: Retirada na Loja (Grátis)
+                      </span>
+                      <p className="text-xs font-bold text-[#1d3026]">
+                        Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        Avisaremos no seu WhatsApp assim que seu pedido estiver separado para retirada.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Endereço Completo (Entrega)</label>
+                      <textarea required rows="3" placeholder="Rua, Número, Bairro, Complemento e Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
+                    </div>
+                  )}
                 </form>
               )}
 
@@ -1069,9 +1335,10 @@ export default function HomeLoja() {
                   <div className="bg-[#F4F1EA] p-6 rounded-3xl border border-gray-200/50 shadow-inner mb-8 text-center">
                     <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-2">Total a pagar</p>
                     <p className="text-4xl font-tradicional italic font-bold text-[#1d3026] mb-2">{Number(pedidoFinalizado.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <span className="text-[10px] font-bold text-[#c5a880] uppercase tracking-widest">{pedidoFinalizado.freteTipo}</span>
                   </div>
 
-                  <div className="mt-auto space-y-4">
+                  <div className="mt-auto space-y-3">
                     <button 
                       disabled={gerandoLink}
                       onClick={async () => { 
@@ -1131,6 +1398,14 @@ export default function HomeLoja() {
                     >
                       {gerandoLink ? <span className="animate-spin text-lg">⏳</span> : <><span className="text-xl">💳</span> Pagar na InfinitePay</>}
                     </button>
+
+                    <button 
+                      onClick={() => avisarWhatsApp(pedidoFinalizado)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2"
+                    >
+                      <span>💬</span> Enviar Receita / Falar no WhatsApp
+                    </button>
+
                     <p className="text-[10px] text-gray-500 px-4 font-bold">Pagamento Seguro via PIX ou Cartão.</p>
                   </div>
                 </div>
@@ -1151,9 +1426,9 @@ export default function HomeLoja() {
                 )}
 
                 {freteSelecionado && (
-                  <div className="flex justify-between items-center text-gray-600 px-3 py-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest">Frete ({freteSelecionado.nome})</span>
-                    <span className="text-xs font-bold">{freteSelecionado.valor === 0 ? 'GRÁTIS' : Number(freteSelecionado.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  <div className="flex justify-between items-center text-gray-600 px-3 py-2 bg-[#F4F1EA]/60 rounded-xl">
+                    <span className="text-[9px] font-black uppercase tracking-widest">{freteSelecionado.nome}</span>
+                    <span className="text-xs font-bold text-[#1d3026]">{freteSelecionado.valor === 0 ? 'GRÁTIS' : Number(freteSelecionado.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                   </div>
                 )}
 
@@ -1172,7 +1447,7 @@ export default function HomeLoja() {
                 {etapaCheckout === 0 ? (
                   <button 
                     onClick={() => {
-                      if (!freteSelecionado) return alert("Por favor, calcule e selecione o Frete antes de avançar.");
+                      if (!freteSelecionado) return alert("Por favor, selecione uma opção de retirada ou entrega.");
                       verificarLoginEAvancar('CHECKOUT');
                     }} 
                     className="w-full bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] mt-4"
