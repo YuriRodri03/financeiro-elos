@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 // 🟢 Data de hoje no fuso de Fortaleza (YYYY-MM-DD)
 const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
 
+// 🟢 Constante para representar uso ilimitado sem quebrar a validação do backend
+const LIMITE_ILIMITADO = 999999;
+
 export default function Operacoes() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
@@ -94,22 +97,21 @@ export default function Operacoes() {
   ];
 
   // =====================================
-  // 2. ESTADOS E LÓGICA - CUPONS (COM LIMITE DE USO)
+  // 2. ESTADOS E LÓGICA - CUPONS (COM OPÇÃO ILIMITADO)
   // =====================================
   const [cupons, setCupons] = useState([]);
   const [carregandoCupons, setCarregandoCupons] = useState(false);
   
-  // 🟢 limiteUso inicia fixo em 1, podendo ser ajustado
+  // 🟢 Adicionado flag 'ilimitado' no estado do formulário
   const [formCupom, setFormCupom] = useState({ 
     codigo: '', 
     tipo: 'PERCENTUAL', 
     valor: '', 
     dataFim: '', 
-    limiteUso: 1 
+    limiteUso: 1,
+    ilimitado: false
   });
 
-  // O servidor já salva dataFim como 23:59:59 no fuso de Fortaleza,
-  // então basta comparar direto com o momento atual.
   const verificarCupomExpirado = (dataFimStr) => {
     if (!dataFimStr) return false;
     return new Date() > new Date(dataFimStr);
@@ -143,22 +145,27 @@ export default function Operacoes() {
       return alert("A data de validade não pode estar no passado.");
     }
     
-    const limiteNum = Math.max(1, parseInt(formCupom.limiteUso) || 1);
+    // 🟢 Se estiver marcado como ilimitado, envia 999999 para o backend nunca esgotar antes da dataFim
+    const limiteNum = formCupom.ilimitado 
+      ? LIMITE_ILIMITADO 
+      : Math.max(1, parseInt(formCupom.limiteUso) || 1);
 
     try {
       const res = await fetch(`${API_URL}/cupons`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({
-          ...formCupom,
+          codigo: formCupom.codigo,
+          tipo: formCupom.tipo,
           valor: valorNum,
+          dataFim: formCupom.dataFim,
           limiteUso: limiteNum,
           usosAtuais: 0,
           ativo: true
         }) 
       });
       if (res.ok) { 
-        setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '', limiteUso: 1 }); 
+        setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '', limiteUso: 1, ilimitado: false }); 
         buscarCupons(); 
       } else { 
         const err = await res.json(); 
@@ -178,7 +185,7 @@ export default function Operacoes() {
     } catch (e) {}
   };
 
-  // 🟢 Permite ajustar o limite de usos (+ ou -) ou zerar a contagem de um cupom já criado
+  // 🟢 Permite ajustar o limite de usos (+, - ou alternar Ilimitado) ou zerar a contagem
   const ajustarLimiteCupom = async (cupom, novoLimite, novosUsos = cupom.usosAtuais || 0) => {
     const limiteFinal = Math.max(1, Number(novoLimite) || 1);
     const usosFinais = Math.max(0, Number(novosUsos) || 0);
@@ -233,7 +240,6 @@ export default function Operacoes() {
     e.preventDefault();
     if (!formPromo.valorDesconto) return alert("Preencha o valor do desconto!");
 
-    // 🟢 Porcentagem não pode passar de 100
     const valorPromoNum = Number(formPromo.valorDesconto);
     if (formPromo.tipoDesconto === 'PERCENTUAL' && (valorPromoNum <= 0 || valorPromoNum > 100)) {
       return alert("A porcentagem da promoção deve estar entre 1 e 100.");
@@ -396,7 +402,6 @@ export default function Operacoes() {
                             </ul>
                           </div>
 
-                          {/* 🟢 NOVO: ENTREGA, FRETE E CUPOM DO PEDIDO */}
                           <div className="mb-5 bg-blue-50/50 p-3 rounded-xl border border-blue-100 space-y-1">
                             <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest">🚚 Entrega</p>
                             <p className="text-xs font-bold text-elos-texto">
@@ -543,7 +548,7 @@ export default function Operacoes() {
         )}
 
         {/* ======================================================== */}
-        {/* 🟢 ABA 3: GERENCIADOR DE CUPONS (COM LIMITE DE USOS) */}
+        {/* 🟢 ABA 3: GERENCIADOR DE CUPONS (COM OPÇÃO ILIMITADO) */}
         {/* ======================================================== */}
         {abaAtiva === 'CUPONS' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -593,34 +598,57 @@ export default function Operacoes() {
                   </div>
                 </div>
 
-                {/* 🟢 CAMPO DE LIMITE DE USOS (Inicia fixo em 1, mas pode ser alterado) */}
+                {/* 🟢 CAMPO DE LIMITE DE USOS + SELETOR DE ILIMITADO */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Limite de Usos</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      value={formCupom.limiteUso} 
-                      onChange={e => setFormCupom({...formCupom, limiteUso: Math.max(1, parseInt(e.target.value) || 1)})} 
-                      required 
-                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm text-center transition-all" 
-                    />
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Limite</label>
+                      <button
+                        type="button"
+                        onClick={() => setFormCupom(prev => ({ ...prev, ilimitado: !prev.ilimitado }))}
+                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md transition-colors border ${
+                          formCupom.ilimitado 
+                            ? 'bg-elos-verde text-white border-elos-verde' 
+                            : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
+                        }`}
+                      >
+                        ∞ Ilimitado
+                      </button>
+                    </div>
+
+                    {formCupom.ilimitado ? (
+                      <div className="w-full bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 font-black text-emerald-700 text-xs text-center flex items-center justify-center h-[50px]">
+                        ∞ Sem limite
+                      </div>
+                    ) : (
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={formCupom.limiteUso} 
+                        onChange={e => setFormCupom({...formCupom, limiteUso: Math.max(1, parseInt(e.target.value) || 1)})} 
+                        required 
+                        className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm text-center transition-all h-[50px]" 
+                      />
+                    )}
                   </div>
+
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Válido até</label>
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1 block">Válido até</label>
                     <input 
                       type="date" 
                       min={hojeBR()}
                       value={formCupom.dataFim} 
                       onChange={e => setFormCupom({...formCupom, dataFim: e.target.value})} 
                       required 
-                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-xs transition-all" 
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-xs transition-all h-[50px]" 
                     />
                   </div>
                 </div>
 
                 <p className="text-[10px] text-gray-400 italic leading-relaxed px-1">
-                  💡 Por padrão o limite é de <strong>1 uso</strong>. Quando atingir a quantidade máxima na loja, o cupom é bloqueado automaticamente.
+                  {formCupom.ilimitado 
+                    ? "💡 Modo Ilimitado ativo: o cupom ficará disponível para todos os clientes e só deixará de funcionar após a data de validade."
+                    : "💡 Quando atingir a quantidade máxima de usos na loja ou passar da data de validade, o cupom é bloqueado automaticamente."}
                 </p>
 
                 <button type="submit" className="w-full bg-[#c5a880] hover:bg-[#b0946d] text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-lg active:scale-95 transition-all">
@@ -640,24 +668,25 @@ export default function Operacoes() {
               ) : (
                 cupons.map(cupom => {
                   const limiteTotal = cupom.limiteUso ?? 1;
+                  const ehIlimitado = limiteTotal >= LIMITE_ILIMITADO;
                   const usosFeitos = cupom.usosAtuais ?? 0;
-                  const esgotado = usosFeitos >= limiteTotal;
+                  const esgotado = !ehIlimitado && usosFeitos >= limiteTotal;
                   const expirado = verificarCupomExpirado(cupom.dataFim);
 
                   const statusCor = !cupom.ativo 
                     ? 'bg-red-50 text-red-600 border-red-200' 
-                    : esgotado 
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : expirado 
-                        ? 'bg-gray-100 text-gray-500 border-gray-200' 
+                    : expirado 
+                      ? 'bg-gray-100 text-gray-500 border-gray-200' 
+                      : esgotado 
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : 'bg-emerald-50 text-emerald-600 border-emerald-200';
 
                   const textoStatus = !cupom.ativo 
                     ? 'Pausado' 
-                    : esgotado 
-                      ? 'Limite Atingido' 
-                      : expirado 
-                        ? 'Expirado' 
+                    : expirado 
+                      ? 'Expirado' 
+                      : esgotado 
+                        ? 'Limite Atingido' 
                         : 'Ativo';
 
                   return (
@@ -683,30 +712,50 @@ export default function Operacoes() {
                       {/* 🟢 CONTROLE DE USOS E AÇÕES DO CUPOM */}
                       <div className="flex flex-wrap items-center justify-between md:justify-end w-full md:w-auto gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-gray-100">
                         
-                        {/* Painel para ver e ajustar o limite de usos em tempo real */}
+                        {/* Painel para ver e ajustar o limite de usos ou alternar para Ilimitado */}
                         <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                          <button 
-                            type="button"
-                            onClick={() => ajustarLimiteCupom(cupom, limiteTotal - 1)}
-                            disabled={limiteTotal <= 1}
-                            className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
-                            title="Diminuir limite de usos"
-                          >
-                            -
-                          </button>
+                          {!ehIlimitado && (
+                            <button 
+                              type="button"
+                              onClick={() => ajustarLimiteCupom(cupom, limiteTotal - 1)}
+                              disabled={limiteTotal <= 1}
+                              className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                              title="Diminuir limite de usos"
+                            >
+                              -
+                            </button>
+                          )}
+
                           <div className="text-center px-1">
                             <span className="text-[8px] font-black uppercase text-gray-400 block leading-none">Usos</span>
                             <span className={`text-xs font-black ${esgotado ? 'text-amber-600' : 'text-elos-verde'}`}>
-                              {usosFeitos} / {limiteTotal}
+                              {usosFeitos} / {ehIlimitado ? '∞' : limiteTotal}
                             </span>
                           </div>
-                          <button 
+
+                          {!ehIlimitado && (
+                            <button 
+                              type="button"
+                              onClick={() => ajustarLimiteCupom(cupom, limiteTotal + 1)}
+                              className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600"
+                              title="Aumentar limite de usos"
+                            >
+                              +
+                            </button>
+                          )}
+
+                          {/* Botão rápido para alternar entre Ilimitado (∞) e Limitado */}
+                          <button
                             type="button"
-                            onClick={() => ajustarLimiteCupom(cupom, limiteTotal + 1)}
-                            className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600"
-                            title="Aumentar limite de usos"
+                            onClick={() => ajustarLimiteCupom(cupom, ehIlimitado ? Math.max(1, usosFeitos + 1) : LIMITE_ILIMITADO)}
+                            className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-colors border ${
+                              ehIlimitado
+                                ? 'bg-elos-verde text-white border-elos-verde hover:bg-[#3a4a3e]'
+                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'
+                            }`}
+                            title={ehIlimitado ? "Voltar para limite fixo de usos" : "Tornar usos ilimitados até a data de expiração"}
                           >
-                            +
+                            ∞
                           </button>
 
                           {usosFeitos > 0 && (
