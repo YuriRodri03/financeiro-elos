@@ -1368,7 +1368,7 @@ finally { setProcessando(false); }
                             items: infiniteItems
                           };
 
-                          const res = await fetch("https://api.checkout.infinitepay.io/links", {
+                          const res = await fetch(`${API_URL}/infinitepay/checkout`, {
                             method: "POST",
                             headers: { 
                               "Content-Type": "application/json",
