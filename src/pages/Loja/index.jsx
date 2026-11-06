@@ -1356,34 +1356,46 @@ finally { setProcessando(false); }
                               description: `Frete: ${pedidoFinalizado.freteTipo}`
                             });
                           }
+
+                          const telLimpo = String(pedidoFinalizado.clienteTelefone || '').replace(/\D/g, '');
+                          const telFormatado = telLimpo.startsWith('55') ? `+${telLimpo}` : `+55${telLimpo}`;
                           
                           const payload = {
-                            handle: infinitePayUser, 
+                            handle: String(infinitePayUser).replace(/^[$@]+/, '').trim(), 
                             order_nsu: String(pedidoFinalizado.numeroPedidoOnline),
-                            redirect_url: window.location.href, 
+                            redirect_url: window.location.origin, 
                             customer: {
                               name: pedidoFinalizado.clienteNome,
-                              phone_number: "+55" + pedidoFinalizado.clienteTelefone.replace(/\D/g, '')
+                              phone_number: telFormatado
                             },
                             items: infiniteItems
                           };
 
-                          const res = await fetch(`${API_URL}/infinitepay/checkout`, {
+                          const tokenInfinite = import.meta.env.VITE_INFINITEPAY_TOKEN;
+
+                          // 🟢 CORRIGIDO: Usando apiUrl (minúsculo) que é a variável declarada no componente
+                          const res = await fetch(`${apiUrl}/infinitepay/checkout`, {
                             method: "POST",
                             headers: { 
                               "Content-Type": "application/json",
-                              "Authorization": `Bearer ${import.meta.env.VITE_INFINITEPAY_TOKEN || ''}`
+                              ...(tokenInfinite ? { "Authorization": `Bearer ${tokenInfinite}` } : {})
                             },
                             body: JSON.stringify(payload)
                           });
                           
                           const data = await res.json();
-                          if (data.url) {
-                            window.open(data.url, "_blank"); 
+                          const linkCheckout = data.url || data.link || data?.data?.url;
+
+                          if (res.ok && linkCheckout) {
+                            const novaJanela = window.open(linkCheckout, "_blank");
+                            // Se o celular bloquear o pop-up, abre na mesma aba
+                            if (!novaJanela) window.location.href = linkCheckout;
                           } else {
-                            alert("Ops! Falha ao gerar o link de pagamento na InfinitePay.");
+                            console.error("Retorno erro InfinitePay:", data);
+                            alert(data.error || "Ops! Falha ao gerar o link de pagamento na InfinitePay.");
                           }
                         } catch (e) {
+                          console.error("Erro na requisição de checkout:", e);
                           alert("Erro ao conectar com a InfinitePay.");
                         } finally {
                           setGerandoLink(false);

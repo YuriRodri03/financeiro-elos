@@ -9,7 +9,7 @@ const LIMITE_ILIMITADO = 999999;
 
 export default function Operacoes() {
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const API_URL = import.meta.env.VITE_API_URL;
 
   // 🟢 NAVEGAÇÃO INTERNA DO PAINEL
   const [abaAtiva, setAbaAtiva] = useState('PEDIDOS'); // 'PEDIDOS', 'CUPONS', 'PROMOCOES'
