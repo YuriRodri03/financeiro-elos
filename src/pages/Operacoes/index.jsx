@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// 🟢 Data de hoje no fuso de Fortaleza (YYYY-MM-DD)
+const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
 export default function Operacoes() {
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
 
   // 🟢 NAVEGAÇÃO INTERNA DO PAINEL
   const [abaAtiva, setAbaAtiva] = useState('PEDIDOS'); // 'PEDIDOS', 'CUPONS', 'PROMOCOES'
@@ -14,9 +17,13 @@ export default function Operacoes() {
   const [pedidos, setPedidos] = useState([]);
   const [carregandoPedidos, setCarregandoPedidos] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState('TODOS'); 
-  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1); 
-  const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
+  const [mesFiltro, setMesFiltro] = useState(Number(hojeBR().split('-')[1])); 
+  const [anoFiltro, setAnoFiltro] = useState(Number(hojeBR().split('-')[0]));
   const [expandidos, setExpandidos] = useState([]); 
+
+  // 🟢 Anos do filtro gerados a partir do ano atual (não quebra em 2028)
+  const anoAtual = Number(hojeBR().split('-')[0]);
+  const anosDisponiveis = Array.from(new Set([anoAtual - 1, anoAtual, anoAtual + 1, Number(anoFiltro)])).sort();
 
   const buscarPedidosOnline = async () => {
     try {
@@ -34,7 +41,11 @@ export default function Operacoes() {
 
   const atualizarStatus = async (id, novoStatus) => {
     if (novoStatus === 'CONCLUIDO') {
-      const confirma = window.confirm("Deseja efetivar essa venda? No futuro, isso dará baixa automática no estoque.");
+      const confirma = window.confirm("Confirmar o despacho deste pedido? Isso registrará a venda no histórico do cliente.");
+      if (!confirma) return;
+    }
+    if (novoStatus === 'CANCELADO') {
+      const confirma = window.confirm("Cancelar e EXCLUIR este pedido? O uso do cupom (se houver) será devolvido.");
       if (!confirma) return;
     }
     try {
@@ -42,6 +53,7 @@ export default function Operacoes() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus })
       });
       if (res.ok) buscarPedidosOnline(); 
+      else alert("Não foi possível atualizar o pedido.");
     } catch (error) { alert("Erro ao atualizar status."); }
   };
 
@@ -68,8 +80,9 @@ export default function Operacoes() {
   const pedidosExibidos = pedidos.filter(p => {
     if (filtroStatus !== 'TODOS' && p.status !== filtroStatus) return false;
     if (p.dataPedido) {
-      const dataP = new Date(p.dataPedido);
-      if (dataP.getMonth() + 1 !== Number(mesFiltro) || dataP.getFullYear() !== Number(anoFiltro)) return false;
+      // 🟢 Mês/ano calculados no fuso de Fortaleza
+      const [ano, mes] = new Date(p.dataPedido).toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' }).split('-');
+      if (Number(mes) !== Number(mesFiltro) || Number(ano) !== Number(anoFiltro)) return false;
     }
     return true;
   });
@@ -81,11 +94,31 @@ export default function Operacoes() {
   ];
 
   // =====================================
-  // 2. ESTADOS E LÓGICA - CUPONS 
+  // 2. ESTADOS E LÓGICA - CUPONS (COM LIMITE DE USO)
   // =====================================
   const [cupons, setCupons] = useState([]);
   const [carregandoCupons, setCarregandoCupons] = useState(false);
-  const [formCupom, setFormCupom] = useState({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '' });
+  
+  // 🟢 limiteUso inicia fixo em 1, podendo ser ajustado
+  const [formCupom, setFormCupom] = useState({ 
+    codigo: '', 
+    tipo: 'PERCENTUAL', 
+    valor: '', 
+    dataFim: '', 
+    limiteUso: 1 
+  });
+
+  // O servidor já salva dataFim como 23:59:59 no fuso de Fortaleza,
+  // então basta comparar direto com o momento atual.
+  const verificarCupomExpirado = (dataFimStr) => {
+    if (!dataFimStr) return false;
+    return new Date() > new Date(dataFimStr);
+  };
+
+  const formatarDataValidade = (dataFimStr) => {
+    if (!dataFimStr) return '--/--/----';
+    return new Date(dataFimStr).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' });
+  };
 
   const buscarCupons = async () => {
     setCarregandoCupons(true);
@@ -100,15 +133,75 @@ export default function Operacoes() {
   const salvarCupom = async (e) => {
     e.preventDefault();
     if (!formCupom.codigo || !formCupom.valor || !formCupom.dataFim) return alert("Preencha todos os campos.");
+
+    // 🟢 Validações antes de enviar
+    const valorNum = Number(formCupom.valor);
+    if (formCupom.tipo === 'PERCENTUAL' && (valorNum <= 0 || valorNum > 100)) {
+      return alert("A porcentagem do cupom deve estar entre 1 e 100.");
+    }
+    if (formCupom.dataFim < hojeBR()) {
+      return alert("A data de validade não pode estar no passado.");
+    }
+    
+    const limiteNum = Math.max(1, parseInt(formCupom.limiteUso) || 1);
+
     try {
-      const res = await fetch(`${API_URL}/cupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formCupom) });
-      if (res.ok) { setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '' }); buscarCupons(); } 
-      else { const err = await res.json(); alert(err.error || "Erro ao salvar o cupom."); }
+      const res = await fetch(`${API_URL}/cupons`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({
+          ...formCupom,
+          valor: valorNum,
+          limiteUso: limiteNum,
+          usosAtuais: 0,
+          ativo: true
+        }) 
+      });
+      if (res.ok) { 
+        setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '', limiteUso: 1 }); 
+        buscarCupons(); 
+      } else { 
+        const err = await res.json(); 
+        alert(err.error || "Erro ao salvar o cupom."); 
+      }
     } catch (e) { alert("Erro de conexão."); }
   };
 
   const alternarStatusCupom = async (id, statusAtual) => {
-    try { await fetch(`${API_URL}/cupons/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ativo: !statusAtual }) }); buscarCupons(); } catch (e) {}
+    try { 
+      await fetch(`${API_URL}/cupons/${id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ ativo: !statusAtual }) 
+      }); 
+      buscarCupons(); 
+    } catch (e) {}
+  };
+
+  // 🟢 Permite ajustar o limite de usos (+ ou -) ou zerar a contagem de um cupom já criado
+  const ajustarLimiteCupom = async (cupom, novoLimite, novosUsos = cupom.usosAtuais || 0) => {
+    const limiteFinal = Math.max(1, Number(novoLimite) || 1);
+    const usosFinais = Math.max(0, Number(novosUsos) || 0);
+    
+    const estavaEsgotado = (cupom.usosAtuais || 0) >= (cupom.limiteUso ?? 1);
+    const deveFicarAtivo = cupom.ativo || (estavaEsgotado && usosFinais < limiteFinal);
+
+    try {
+      await fetch(`${API_URL}/cupons/${cupom._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          limiteUso: limiteFinal, 
+          usosAtuais: usosFinais,
+          ativo: deveFicarAtivo,
+          // 🟢 Ao zerar, libera também os CPFs que já tinham usado o cupom
+          ...(usosFinais === 0 ? { cpfsUtilizados: [] } : {})
+        })
+      });
+      buscarCupons();
+    } catch (e) {
+      alert("Erro ao atualizar limite do cupom.");
+    }
   };
 
   const deletarCupom = async (id) => {
@@ -117,7 +210,7 @@ export default function Operacoes() {
   };
 
   // =====================================
-  // 3. ESTADOS E LÓGICA - PROMOÇÕES POR CATEGORIA (NOVO)
+  // 3. ESTADOS E LÓGICA - PROMOÇÕES POR CATEGORIA
   // =====================================
   const [produtosTotais, setProdutosTotais] = useState([]);
   const [formPromo, setFormPromo] = useState({ categoriaAlvo: 'ÓCULOS DE SOL', tipoDesconto: 'PERCENTUAL', valorDesconto: '' });
@@ -134,14 +227,18 @@ export default function Operacoes() {
     if (abaAtiva === 'PROMOCOES') buscarRegrasPromocionais();
   }, [abaAtiva]);
 
-  // Filtra as regras salvas disfarçadas de produto
   const promocoesAtivas = produtosTotais.filter(p => p.categoria === 'PROMO_CATE');
 
   const gerarPromocao = async (e) => {
     e.preventDefault();
     if (!formPromo.valorDesconto) return alert("Preencha o valor do desconto!");
 
-    // Verifica se já existe uma promoção para essa categoria para não bugar
+    // 🟢 Porcentagem não pode passar de 100
+    const valorPromoNum = Number(formPromo.valorDesconto);
+    if (formPromo.tipoDesconto === 'PERCENTUAL' && (valorPromoNum <= 0 || valorPromoNum > 100)) {
+      return alert("A porcentagem da promoção deve estar entre 1 e 100.");
+    }
+
     const jaExiste = promocoesAtivas.find(p => p.nome === `PROMOCAO_${formPromo.categoriaAlvo}`);
     if (jaExiste) {
       return alert(`Já existe uma promoção ativa para ${formPromo.categoriaAlvo}. Por favor, exclua a antiga antes de criar uma nova!`);
@@ -149,12 +246,11 @@ export default function Operacoes() {
 
     setSalvandoPromo(true);
     try {
-      // 🟢 O Pulo do Gato: Salvamos a regra disfarçada na tabela de Produtos
       const payloadPromo = {
         nome: `PROMOCAO_${formPromo.categoriaAlvo}`,
         categoria: 'PROMO_CATE',
-        preco: Number(formPromo.valorDesconto), // Guarda o valor (ex: 15)
-        referencia: formPromo.tipoDesconto,     // Guarda se é % ou R$
+        preco: valorPromoNum,
+        referencia: formPromo.tipoDesconto,
         quantidade: 1,
         foto: '' 
       };
@@ -184,7 +280,6 @@ export default function Operacoes() {
       buscarRegrasPromocionais();
     } catch (e) {}
   };
-
 
   // =====================================
   // RENDERIZAÇÃO
@@ -233,12 +328,11 @@ export default function Operacoes() {
 
               <div className="flex items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 lg:border-l border-gray-100 pt-3 lg:pt-0 lg:pl-3">
                 <span className="text-[10px] font-black uppercase text-gray-400">Período:</span>
-                <select value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)} className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-elos-verde outline-none focus:border-elos-bege cursor-pointer">
+                <select value={mesFiltro} onChange={(e) => setMesFiltro(Number(e.target.value))} className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-elos-verde outline-none focus:border-elos-bege cursor-pointer">
                   {mesesDoAno.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
                 </select>
-                <select value={anoFiltro} onChange={(e) => setAnoFiltro(e.target.value)} className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-elos-verde outline-none focus:border-elos-bege cursor-pointer">
-                  <option value="2026">2026</option>
-                  <option value="2027">2027</option>
+                <select value={anoFiltro} onChange={(e) => setAnoFiltro(Number(e.target.value))} className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-elos-verde outline-none focus:border-elos-bege cursor-pointer">
+                  {anosDisponiveis.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
             </div>
@@ -262,10 +356,10 @@ export default function Operacoes() {
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <h3 className="font-black text-xl text-elos-verde tracking-tight">#{pedido.numeroPedidoOnline}</h3>
-                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{new Date(pedido.dataPedido).toLocaleDateString('pt-BR')}</span>
+                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{new Date(pedido.dataPedido).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' })}</span>
                           </div>
                           <div className="flex flex-col items-end gap-2">
-                            <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border ${getEstiloStatus(pedido.status)}`}>{getTextoStatus(pedido.status).split(' ')[1] || getTextoStatus(pedido.status)}</span>
+                            <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border ${getEstiloStatus(pedido.status)}`}>{getTextoStatus(pedido.status).split(' ').slice(1).join(' ') || getTextoStatus(pedido.status)}</span>
                             <span className="text-gray-300 text-lg transition-transform duration-300" style={{ transform: expandido ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
                           </div>
                         </div>
@@ -288,9 +382,9 @@ export default function Operacoes() {
                           </div>
                           <div className="mb-4 bg-orange-50/50 p-3 rounded-xl border border-orange-100/50">
                             <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">📍 Endereço de Entrega</p>
-                            <p className="text-xs text-elos-texto font-medium">{pedido.clienteEndereco || "Não informado."}</p>
+                            <p className="text-xs text-elos-texto font-medium whitespace-pre-wrap">{pedido.clienteEndereco || "Não informado."}</p>
                           </div>
-                          <div className="mb-5 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <div className="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
                             <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2 border-b border-gray-200 pb-1">Itens ({pedido.itens?.length || 0})</p>
                             <ul className="space-y-1.5">
                               {(pedido.itens || []).map((item, idx) => (
@@ -302,10 +396,27 @@ export default function Operacoes() {
                             </ul>
                           </div>
 
+                          {/* 🟢 NOVO: ENTREGA, FRETE E CUPOM DO PEDIDO */}
+                          <div className="mb-5 bg-blue-50/50 p-3 rounded-xl border border-blue-100 space-y-1">
+                            <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest">🚚 Entrega</p>
+                            <p className="text-xs font-bold text-elos-texto">
+                              {pedido.freteTipo || 'Não informado'} —{' '}
+                              {Number(pedido.freteValor || 0) === 0
+                                ? 'Grátis'
+                                : Number(pedido.freteValor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
+                            {pedido.cupomUtilizado && (
+                              <p className="text-xs text-gray-500">
+                                🎟️ Cupom <strong>{pedido.cupomUtilizado}</strong>
+                                {pedido.descontoCupom > 0 && ` (− ${Number(pedido.descontoCupom).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`}
+                              </p>
+                            )}
+                          </div>
+
                           <div className="grid grid-cols-2 gap-2">
                             {pedido.status === 'AGUARDANDO_PAGAMENTO' && (
                               <>
-                                <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'PAGO'); }} className="col-span-2 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md">💰 Recebido (PIX)</button>
+                                <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'PAGO'); }} className="col-span-2 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md">💰 Marcar como Pago</button>
                                 <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'CANCELADO'); }} className="col-span-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold py-2.5 rounded-xl text-[10px] uppercase tracking-widest">Cancelar Pedido</button>
                               </>
                             )}
@@ -327,12 +438,11 @@ export default function Operacoes() {
         )}
 
         {/* ======================================================== */}
-        {/* 🟢 ABA 2: PROMOÇÕES DE CATEGORIA (NOVO) */}
+        {/* ABA 2: PROMOÇÕES DE CATEGORIA */}
         {/* ======================================================== */}
         {abaAtiva === 'PROMOCOES' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             
-            {/* CRIADOR DE REGRAS */}
             <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-xl ring-1 ring-red-500/10 sticky top-24 border border-red-50">
               <div className="flex items-center gap-3 mb-1">
                 <span className="text-3xl">🔥</span>
@@ -373,6 +483,7 @@ export default function Operacoes() {
                       type="number" 
                       step="0.01" 
                       min="1"
+                      max={formPromo.tipoDesconto === 'PERCENTUAL' ? 100 : undefined}
                       placeholder={formPromo.tipoDesconto === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} 
                       value={formPromo.valorDesconto} 
                       onChange={e => setFormPromo({...formPromo, valorDesconto: e.target.value})} 
@@ -394,7 +505,6 @@ export default function Operacoes() {
               </form>
             </div>
 
-            {/* LISTA DE PROMOÇÕES ATIVAS */}
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Liquidações Ativas</p>
               
@@ -416,7 +526,7 @@ export default function Operacoes() {
                           Promoção em <span className="text-elos-verde">{categoriaNome}</span>
                         </h3>
                         <p className="text-xl font-black text-red-600 tracking-tight">
-                          {promo.referencia === 'PERCENTUAL' ? `${promo.preco}% OFF` : `R$ ${promo.preco.toFixed(2)} OFF`}
+                          {promo.referencia === 'PERCENTUAL' ? `${promo.preco}% OFF` : `R$ ${Number(promo.preco).toFixed(2)} OFF`}
                         </p>
                       </div>
 
@@ -433,39 +543,85 @@ export default function Operacoes() {
         )}
 
         {/* ======================================================== */}
-        {/* ABA 3: GERENCIADOR DE CUPONS */}
+        {/* 🟢 ABA 3: GERENCIADOR DE CUPONS (COM LIMITE DE USOS) */}
         {/* ======================================================== */}
         {abaAtiva === 'CUPONS' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
             <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 sticky top-24">
               <h2 className="font-tradicional text-2xl text-elos-verde italic font-bold mb-1">Novo Cupom</h2>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-6">Regras de Desconto</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-6">Regras de Desconto & Limite</p>
               
               <form onSubmit={salvarCupom} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Código Promocional</label>
-                  <input type="text" placeholder="Ex: VERAO20" value={formCupom.codigo} onChange={e => setFormCupom({...formCupom, codigo: e.target.value.toUpperCase()})} required className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm tracking-widest uppercase transition-all" />
+                  <input 
+                    type="text" 
+                    placeholder="Ex: VERAO20" 
+                    value={formCupom.codigo} 
+                    onChange={e => setFormCupom({...formCupom, codigo: e.target.value.toUpperCase()})} 
+                    required 
+                    className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm tracking-widest uppercase transition-all" 
+                  />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Tipo</label>
-                    <select value={formCupom.tipo} onChange={e => setFormCupom({...formCupom, tipo: e.target.value, valor: ''})} className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 text-xs font-bold text-gray-600">
+                    <select 
+                      value={formCupom.tipo} 
+                      onChange={e => setFormCupom({...formCupom, tipo: e.target.value, valor: ''})} 
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 text-xs font-bold text-gray-600"
+                    >
                       <option value="PERCENTUAL">% Porcentagem</option>
                       <option value="FIXO">R$ Valor Fixo</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Valor</label>
-                    <input type="number" step="0.01" min="1" placeholder={formCupom.tipo === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} value={formCupom.valor} onChange={e => setFormCupom({...formCupom, valor: e.target.value})} required className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-elos-verde text-sm transition-all" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="1" 
+                      max={formCupom.tipo === 'PERCENTUAL' ? 100 : undefined}
+                      placeholder={formCupom.tipo === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} 
+                      value={formCupom.valor} 
+                      onChange={e => setFormCupom({...formCupom, valor: e.target.value})} 
+                      required 
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-elos-verde text-sm transition-all" 
+                    />
                   </div>
                 </div>
 
-                <div className="space-y-1.5 pb-2">
-                  <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Válido até o dia</label>
-                  <input type="date" value={formCupom.dataFim} onChange={e => setFormCupom({...formCupom, dataFim: e.target.value})} required className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-sm transition-all" />
+                {/* 🟢 CAMPO DE LIMITE DE USOS (Inicia fixo em 1, mas pode ser alterado) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Limite de Usos</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      value={formCupom.limiteUso} 
+                      onChange={e => setFormCupom({...formCupom, limiteUso: Math.max(1, parseInt(e.target.value) || 1)})} 
+                      required 
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm text-center transition-all" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Válido até</label>
+                    <input 
+                      type="date" 
+                      min={hojeBR()}
+                      value={formCupom.dataFim} 
+                      onChange={e => setFormCupom({...formCupom, dataFim: e.target.value})} 
+                      required 
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-xs transition-all" 
+                    />
+                  </div>
                 </div>
+
+                <p className="text-[10px] text-gray-400 italic leading-relaxed px-1">
+                  💡 Por padrão o limite é de <strong>1 uso</strong>. Quando atingir a quantidade máxima na loja, o cupom é bloqueado automaticamente.
+                </p>
 
                 <button type="submit" className="w-full bg-[#c5a880] hover:bg-[#b0946d] text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-lg active:scale-95 transition-all">
                   Gerar Cupom
@@ -483,35 +639,103 @@ export default function Operacoes() {
                 </div>
               ) : (
                 cupons.map(cupom => {
-                  const expirado = new Date() > new Date(cupom.dataFim);
-                  const statusCor = !cupom.ativo ? 'bg-red-50 text-red-600 border-red-200' : expirado ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200';
-                  const textoStatus = !cupom.ativo ? 'Pausado' : expirado ? 'Expirado' : 'Ativo';
+                  const limiteTotal = cupom.limiteUso ?? 1;
+                  const usosFeitos = cupom.usosAtuais ?? 0;
+                  const esgotado = usosFeitos >= limiteTotal;
+                  const expirado = verificarCupomExpirado(cupom.dataFim);
+
+                  const statusCor = !cupom.ativo 
+                    ? 'bg-red-50 text-red-600 border-red-200' 
+                    : esgotado 
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : expirado 
+                        ? 'bg-gray-100 text-gray-500 border-gray-200' 
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-200';
+
+                  const textoStatus = !cupom.ativo 
+                    ? 'Pausado' 
+                    : esgotado 
+                      ? 'Limite Atingido' 
+                      : expirado 
+                        ? 'Expirado' 
+                        : 'Ativo';
 
                   return (
                     <div key={cupom._id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition-shadow">
                       <div className="flex gap-4 items-center">
-                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center font-tradicional italic font-bold text-2xl ${cupom.tipo === 'PERCENTUAL' ? 'bg-[#c5a880]/10 text-[#c5a880]' : 'bg-elos-verde/10 text-elos-verde'}`}>
+                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center font-tradicional italic font-bold text-2xl shrink-0 ${cupom.tipo === 'PERCENTUAL' ? 'bg-[#c5a880]/10 text-[#c5a880]' : 'bg-elos-verde/10 text-elos-verde'}`}>
                           {cupom.tipo === 'PERCENTUAL' ? '%' : '$'}
                         </div>
                         <div>
-                          <div className="flex items-center gap-3 mb-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
                             <h3 className="font-black text-lg text-elos-verde tracking-widest">{cupom.codigo}</h3>
                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${statusCor}`}>{textoStatus}</span>
                           </div>
                           <p className="text-xs text-gray-500 font-medium">
                             Desconto de <strong className="text-elos-verde">{cupom.tipo === 'PERCENTUAL' ? `${cupom.valor}%` : `R$ ${Number(cupom.valor).toFixed(2)}`}</strong>
                           </p>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-1">Validade: {new Date(cupom.dataFim).toLocaleDateString('pt-BR')} (23:59h)</p>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-1">
+                            Validade: {formatarDataValidade(cupom.dataFim)} (23:59h)
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex w-full md:w-auto gap-2 border-t md:border-t-0 pt-4 md:pt-0 border-gray-100">
-                        <button onClick={() => alternarStatusCupom(cupom._id, cupom.ativo)} className={`flex-1 md:flex-none px-4 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${cupom.ativo ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
-                          {cupom.ativo ? 'Pausar' : 'Reativar'}
-                        </button>
-                        <button onClick={() => deletarCupom(cupom._id)} className="px-4 py-2.5 rounded-lg text-[10px] font-black uppercase text-gray-400 bg-gray-50 hover:bg-red-50 hover:text-red-500 transition-colors">
-                          Excluir
-                        </button>
+                      {/* 🟢 CONTROLE DE USOS E AÇÕES DO CUPOM */}
+                      <div className="flex flex-wrap items-center justify-between md:justify-end w-full md:w-auto gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-gray-100">
+                        
+                        {/* Painel para ver e ajustar o limite de usos em tempo real */}
+                        <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                          <button 
+                            type="button"
+                            onClick={() => ajustarLimiteCupom(cupom, limiteTotal - 1)}
+                            disabled={limiteTotal <= 1}
+                            className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                            title="Diminuir limite de usos"
+                          >
+                            -
+                          </button>
+                          <div className="text-center px-1">
+                            <span className="text-[8px] font-black uppercase text-gray-400 block leading-none">Usos</span>
+                            <span className={`text-xs font-black ${esgotado ? 'text-amber-600' : 'text-elos-verde'}`}>
+                              {usosFeitos} / {limiteTotal}
+                            </span>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => ajustarLimiteCupom(cupom, limiteTotal + 1)}
+                            className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600"
+                            title="Aumentar limite de usos"
+                          >
+                            +
+                          </button>
+
+                          {usosFeitos > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => ajustarLimiteCupom(cupom, limiteTotal, 0)}
+                              className="ml-1 text-[9px] font-black uppercase text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors"
+                              title="Zerar usos e liberar todos os CPFs para usar novamente"
+                            >
+                              🔄 Zerar
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => alternarStatusCupom(cupom._id, cupom.ativo)} 
+                            className={`px-4 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${cupom.ativo ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                          >
+                            {cupom.ativo ? 'Pausar' : 'Reativar'}
+                          </button>
+                          <button 
+                            onClick={() => deletarCupom(cupom._id)} 
+                            className="px-4 py-2.5 rounded-lg text-[10px] font-black uppercase text-gray-400 bg-gray-50 hover:bg-red-50 hover:text-red-500 transition-colors"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+
                       </div>
                     </div>
                   );

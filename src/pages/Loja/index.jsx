@@ -641,7 +641,6 @@ export default function HomeLoja() {
     return valor.substring(0, 9);
   };
 
-  // 🟢 CALCULA OPÇÕES DE ENTREGA MANTENDO A RETIRADA NA LOJA SEMPRE VISÍVEL
   const calcularFrete = async () => {
     if (cepFrete.replace(/\D/g, '').length !== 8) return alert("Digite um CEP válido com 8 dígitos.");
     setCalculandoFrete(true);
@@ -651,7 +650,7 @@ export default function HomeLoja() {
       const cepPrefixo = cepFrete.substring(0, 2);
       let opcoes = [OPCAO_RETIRADA_FIXA];
       
-      if (['60','61','62','63'].includes(cepPrefixo)) {
+      if (['60','61'].includes(cepPrefixo)) {
         opcoes.push({ id: 'motoboy', nome: 'Motoboy Fortaleza/Região', valor: 15.00, prazo: '1 dia útil' });
       }
       
@@ -659,7 +658,6 @@ export default function HomeLoja() {
       opcoes.push({ id: 'sedex', nome: 'Correios Sedex', valor: 45.50, prazo: '2 a 3 dias úteis' });
       
       setOpcoesFrete(opcoes);
-      // Seleciona automaticamente a primeira opção de envio calculada (Motoboy ou PAC)
       setFreteSelecionado(opcoes[1] || opcoes[0]);
     } catch (e) {
       alert("Erro ao calcular frete.");
@@ -747,32 +745,32 @@ export default function HomeLoja() {
     }
 
     const payload = {
-      clienteNome: dadosCliente.nome.toUpperCase(),
-      clienteTelefone: dadosCliente.telefone,
-      clienteCpf: dadosCliente.cpf,
-      clienteEndereco: enderecoFinal, 
-      itens: carrinho.map(item => ({ id: item._id, nome: item.nome, preco: item.preco, referencia: item.referencia })),
-      valorTotal: calculosCarrinho.totalFinal,
-      freteValor: calculosCarrinho.valorFrete, 
-      freteTipo: freteSelecionado ? freteSelecionado.nome : 'Retirar na Loja (Bela Vista)' 
-    };
+  clienteNome: dadosCliente.nome,
+  clienteTelefone: dadosCliente.telefone,
+  clienteCpf: dadosCliente.cpf,
+  clienteEndereco: enderecoFinal,
+  itens: carrinho.map(item => ({ id: item._id })),
+  cupomUtilizado: cupomAtivo ? cupomAtivo.codigo : undefined,
+  freteId: freteSelecionado?.id || 'retirada',
+  cep: cepFrete
+};
 
-    try {
-      const res = await fetch(`${apiUrl}/pedidos_online`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPedidoFinalizado({ ...data.pedido, freteValor: calculosCarrinho.valorFrete, freteTipo: payload.freteTipo }); 
-        setCarrinho([]); 
-        setCupomAtivo(null);
-        setCupomDigitado('');
-        setFreteSelecionado(OPCAO_RETIRADA_FIXA);
-        setEtapaCheckout(2); 
-      } else alert("Ops! Tivemos um problema.");
-    } catch (err) { alert("Erro ao conectar com o servidor."); } 
-    finally { setProcessando(false); }
-  };
+try {
+  const res = await fetch(`${apiUrl}/pedidos_online`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (res.ok) {
+    setPedidoFinalizado(data.pedido);   // já vem com valorTotal, freteValor e freteTipo corretos
+    setCarrinho([]); setCupomAtivo(null); setCupomDigitado('');
+    setFreteSelecionado(OPCAO_RETIRADA_FIXA);
+    setEtapaCheckout(2);
+  } else {
+    alert(data.error || 'Ops! Tivemos um problema.');
+  }
+} catch (err) { alert('Erro ao conectar com o servidor.'); }
+finally { setProcessando(false); }
+}; 
 
   const cancelarPedido = async (pedidoId) => {
     if (!window.confirm("Deseja cancelar este pedido?")) return;
@@ -893,7 +891,7 @@ export default function HomeLoja() {
         </div>
       </nav>
 
-      {/* 🟢 NAVBAR SECUNDÁRIA: CATEGORIAS E BUSCA (Visível no Desktop e Mobile) */}
+      {/* NAVBAR SECUNDÁRIA: CATEGORIAS E BUSCA */}
       {abaAtiva === 'VITRINE' && (
         <div className={`fixed w-full left-0 z-[50] py-2.5 transition-all duration-500 ${isScrolled ? 'top-[70px] bg-[#F4F1EA]/95 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'top-[80px] bg-transparent border-b border-white/10'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1152,13 +1150,12 @@ export default function HomeLoja() {
                         </div>
                       )}
 
-                      {/* 🟢 ENTREGA OU RETIRADA (RETIRADA SEMPRE VISÍVEL MESMO ANTES DO CEP) */}
+                      {/* 🟢 RETIRADA NA LOJA JÁ SELECIONADA E SEMPRE VISÍVEL */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">
                           Como deseja receber?
                         </p>
 
-                        {/* Lista de opções (Já começa com "Retirar na Loja" visível) */}
                         <div className="space-y-2 mb-4">
                           {opcoesFrete.map(opcao => (
                             <label 
@@ -1182,7 +1179,7 @@ export default function HomeLoja() {
                                     {opcao.id === 'retirada' ? '🏪' : '🚚'} {opcao.nome}
                                   </span>
                                   <span className="text-[9px] text-gray-500 uppercase tracking-wider">
-                                    {opcao.id === 'retirada' ? 'Rua Viriato Ribeiro, 321 - Bela Vista' : `Prazo: ${opcao.prazo}`}
+                                    {opcao.id === 'retirada' ? 'Rua Viriato Ribeiro, 321A - Bela Vista' : `Prazo: ${opcao.prazo}`}
                                   </span>
                                 </div>
                               </div>
@@ -1193,7 +1190,6 @@ export default function HomeLoja() {
                           ))}
                         </div>
 
-                        {/* Campo de CEP para quem prefere entrega em casa */}
                         <div className="bg-[#F4F1EA]/70 p-3.5 rounded-2xl border border-gray-200/60">
                           <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider block mb-2">
                             Prefere receber em casa? Calcule o frete por CEP:
@@ -1304,14 +1300,13 @@ export default function HomeLoja() {
                     <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({...dadosCliente, telefone: handleMascaraTel(e.target.value)})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
                   
-                  {/* Se for Retirada na Loja, mostra o endereço da loja em vez de obrigar o cliente a digitar endereço */}
                   {freteSelecionado?.id === 'retirada' ? (
                     <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-1">
                       <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 block">
                         🏪 Modalidade: Retirada na Loja (Grátis)
                       </span>
                       <p className="text-xs font-bold text-[#1d3026]">
-                        Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE
+                        Rua Viriato Ribeiro, 321A - Bela Vista, Fortaleza-CE
                       </p>
                       <p className="text-[10px] text-gray-500">
                         Avisaremos no seu WhatsApp assim que seu pedido estiver separado para retirada.
@@ -1412,7 +1407,7 @@ export default function HomeLoja() {
               )}
             </div>
 
-            {/* 🟢 RODAPÉ DO CARRINHO */}
+            {/* RODAPÉ DO CARRINHO */}
             {etapaCheckout < 2 && carrinho.length > 0 && (
               <div className="p-6 md:p-8 border-t border-gray-200 bg-white space-y-4 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] relative z-20">
                 
@@ -1474,7 +1469,7 @@ export default function HomeLoja() {
           <div className="text-center md:text-left">
             <h4 className="font-tradicional text-3xl text-[#1d3026] italic font-bold mb-2">Ótica Elos</h4>
             <p className="text-[9px] font-black text-[#c5a880] uppercase tracking-[0.2em] mb-4">E-commerce Oficial</p>
-            <p className="text-xs text-gray-600 font-medium">Rua Viriato Ribeiro, 321 - Bela Vista, Fortaleza-CE</p>
+            <p className="text-xs text-gray-600 font-medium">Rua Viriato Ribeiro, 321A - Bela Vista, Fortaleza-CE</p>
             <p className="text-[10px] text-gray-400 mt-2 font-bold tracking-wider">CNPJ: 52.294.947/0001-56</p>
           </div>
           

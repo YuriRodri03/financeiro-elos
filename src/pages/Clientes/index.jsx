@@ -7,6 +7,17 @@ import { useVendas, useAdicionarVenda, useEditarVenda, useExcluirVenda, useDarBa
 import { gerarPDFDocumento, gerarPDFOrdemServico, gerarPDFCarne } from '../../documentosUtils';
 import CadastroClientes from '../CadastroClientes'; 
 
+// --- DATAS NO FUSO DE FORTALEZA (evita virar "amanhã" depois das 21h) ---
+const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
+// Soma meses a uma data YYYY-MM-DD sem estourar o dia (31/01 + 1 mês = 28/02)
+const somarMeses = (iso, n) => {
+  const [a, m, d] = iso.split('-').map(Number);
+  const ultimoDia = new Date(a, m - 1 + n + 1, 0).getDate();
+  const alvo = new Date(a, m - 1 + n, Math.min(d, ultimoDia), 12);
+  return alvo.toLocaleDateString('sv-SE');
+};
+
 // --- FUNÇÕES AUXILIARES PARA MOEDA ---
 const aplicarMascaraMoeda = (valor) => {
   let v = String(valor).replace(/\D/g, '');
@@ -59,11 +70,13 @@ const comprimirImagem = (file) => {
 };
 
 // --- COMPONENTE DE LINHA DE PARCELA (COM EDIÇÃO DE VALOR E DATA) ---
-function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, editarParcelaManual, mostrarToast, abrirConfirmacao }) {
-  const vendaId = venda._id || venda.id;
-  const [dataBaixa, setDataBaixa] = useState(new Date().toISOString().split('T')[0]);
+function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela, editarParcelaManual, mostrarToast, abrirConfirmacao }) {
+  // 🟢 TODOS OS HOOKS FICAM NO TOPO (antes de qualquer return condicional)
+  const [dataBaixa, setDataBaixa] = useState(hojeBR());
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
   const [modoEdicao, setModoEdicao] = useState(false);
+  const [novoValorParcela, setNovoValorParcela] = useState(p?.valor || 0);
+  const [novoVencimentoParcela, setNovoVencimentoParcela] = useState('');
 
   useEffect(() => {
     setValorRecebido(p?.valor || 0);
@@ -71,30 +84,23 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, editarP
 
   if (!p || !venda) return null;
 
+  const vendaId = venda._id || venda.id;
+
   const calcularVencimento = () => {
     try {
-      let dataVenc;
-      if (p.numero === 0) {
-        if (!venda.dataVenda) return '';
-        dataVenc = new Date(venda.dataVenda + 'T00:00:00');
-      } else {
-        const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
-        if (!dataBase) return '';
-        dataVenc = new Date(dataBase + 'T00:00:00');
-        dataVenc.setMonth(dataVenc.getMonth() + (p.numero - 1));
-      }
-      return dataVenc.toISOString().split('T')[0];
+      if (p.numero === 0) return venda.dataVenda || '';
+      const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
+      if (!dataBase) return '';
+      return somarMeses(dataBase, Math.max(0, Math.floor(p.numero) - 1));
     } catch (error) {
       return ''; 
     }
   };
 
   const dataVencimentoStr = p.dataVencimento || p.vencimentoOriginal || calcularVencimento();
-  const [novoValorParcela, setNovoValorParcela] = useState(p?.valor || 0);
-  const [novoVencimentoParcela, setNovoVencimentoParcela] = useState(dataVencimentoStr);
 
-  // Verifica se está atrasada
-  const hojeIso = new Date().toISOString().split('T')[0];
+  // Verifica se está atrasada (comparando no fuso de Fortaleza)
+  const hojeIso = hojeBR();
   const isAtrasada = !p.paga && !p.renegociada && !venda.renegociada && dataVencimentoStr && dataVencimentoStr < hojeIso;
 
   const handleBaixa = async () => {
@@ -119,9 +125,10 @@ function LinhaParcela({ p, venda, darBaixaParcela, estornarBaixaParcela, editarP
         gerarPDFDocumento({
           cliente: venda.cliente, 
           cpf: venda.cpf, 
-          telefone: venda.telefone || "Não cadastrado", 
-          endereco: venda.endereco || "Não cadastrado", 
-          email: venda.email || "Não cadastrado",
+          // 🟢 Dados de contato vêm do cadastro do cliente (a venda não tem esses campos)
+          telefone: cliente?.telefone || "Não cadastrado", 
+          endereco: cliente?.endereco || "Não cadastrado", 
+          email: cliente?.email || "Não cadastrado",
           valorTotal: valor, 
           produto: nomeProduto, 
           dataRecibo: dataBaixa.split('-').reverse().join('/'), 
@@ -306,7 +313,7 @@ export default function Clientes() {
   const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
 
-  // 🟢 CHAVE PIX PERSISTENTE (Salva uma única vez no navegador e no servidor)
+  // 🟢 CHAVE PIX PERSISTENTE (agora salva no navegador E no servidor)
   const [chavePixPadrao, setChavePixPadrao] = useState(() => {
     return localStorage.getItem('chavePixElos') || '(85) 8550-6571';
   });
@@ -344,6 +351,18 @@ export default function Clientes() {
     if (!chaveLimpa) {
       mostrarToast("Informe uma chave PIX válida!", "erro");
       return;
+    }
+
+    // 🟢 Salva no servidor para não ser sobrescrita pelo valor antigo ao recarregar
+    try {
+      const res = await fetch(`${baseUrl}/whatsapp/mensagens`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chave_pix_carne: chaveLimpa })
+      });
+      if (!res.ok) throw new Error('falha');
+    } catch (e) {
+      mostrarToast("Salva só neste aparelho (falha ao salvar no servidor).", "erro");
     }
 
     localStorage.setItem('chavePixElos', chaveLimpa);
@@ -431,8 +450,10 @@ export default function Clientes() {
     const idMongo = clienteParaEditar?._id;
     if (!idMongo) return mostrarToast("Erro: ID do cliente não mapeado.", "erro");
 
+    // 🟢 Remove campos calculados/sensíveis que não devem ir para o banco
+    const { historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = editandoCadastro;
     const dadosAtualizados = {
-      ...editandoCadastro,
+      ...dadosLimpos,
       foto: novaFotoCliente || editandoCadastro.foto
     };
 
@@ -495,7 +516,7 @@ export default function Clientes() {
 
   // 🟢 FUNÇÕES DE RENEGOCIAÇÃO DE DÍVIDA
   const gerarParcelasPreviasRenegociacao = (valorTotal, valorEntrada, dataEntrada, qtdParcelas, dataPrimeira) => {
-    const hojeIso = new Date().toISOString().split('T')[0];
+    const hojeIso = hojeBR();
     const lista = [];
     const restante = Math.max(0, valorTotal - valorEntrada);
     const numParc = Math.max(1, Number(qtdParcelas) || 1);
@@ -516,12 +537,10 @@ export default function Clientes() {
     if (restante > 0) {
       const valorBase = Math.floor((restante / numParc) * 100) / 100;
       const diferencaCentavos = parseFloat((restante - (valorBase * numParc)).toFixed(2));
-      const dtBase = new Date((dataPrimeira || hojeIso) + 'T12:00:00');
+      const dataInicial = dataPrimeira || hojeIso;
 
       for (let i = 1; i <= numParc; i++) {
-        const dtVenc = new Date(dtBase);
-        dtVenc.setMonth(dtVenc.getMonth() + (i - 1));
-        const vencStr = dtVenc.toISOString().split('T')[0];
+        const vencStr = somarMeses(dataInicial, i - 1);
         const valParcela = i === numParc ? parseFloat((valorBase + diferencaCentavos).toFixed(2)) : valorBase;
 
         lista.push({
@@ -543,10 +562,8 @@ export default function Clientes() {
     const parcelasPendentes = (vendaOriginal.listaParcelas || []).filter(p => !p.paga && !p.renegociada);
     const saldoAberto = parcelasPendentes.reduce((acc, p) => acc + Number(p.valor || 0), 0);
 
-    const hojeIso = new Date().toISOString().split('T')[0];
-    const proximoMes = new Date();
-    proximoMes.setMonth(proximoMes.getMonth() + 1);
-    const proximoMesIso = proximoMes.toISOString().split('T')[0];
+    const hojeIso = hojeBR();
+    const proximoMesIso = somarMeses(hojeIso, 1);
 
     const parcelasIniciais = gerarParcelasPreviasRenegociacao(saldoAberto, 0, hojeIso, 3, proximoMesIso);
 
@@ -607,11 +624,11 @@ export default function Clientes() {
     }
 
     setProcessandoRenegociacao(true);
-    const hojeIso = new Date().toISOString().split('T')[0];
+    const hojeIso = hojeBR();
     const vendaOriginalId = vendaOriginal._id || vendaOriginal.id;
     const numPedAntigo = vendaOriginal.numeroPedido || 'S/N';
 
-    // 1. Congela as parcelas antigas não pagas marcando como renegociadas
+    // Marca as parcelas antigas não pagas como renegociadas
     const parcelasAntigasCongeladas = (vendaOriginal.listaParcelas || []).map(p => {
       if (!p.paga) {
         return {
@@ -627,19 +644,7 @@ export default function Clientes() {
     const entradaNum = limparMoeda(valorEntradaFmt);
 
     try {
-      // Atualiza contrato antigo para "Dívida Renegociada"
-      await editarVendaMutation.mutateAsync({
-        vendaId: vendaOriginalId,
-        dadosNovos: {
-          ...vendaOriginal,
-          renegociada: true,
-          renegociadaEm: hojeIso,
-          listaParcelas: parcelasAntigasCongeladas,
-          observacoes: `${vendaOriginal.observacoes ? vendaOriginal.observacoes + '\n' : ''}🔄 DÍVIDA RENEGOCIADA EM ${hojeIso.split('-').reverse().join('/')}.`
-        }
-      });
-
-      // 2. Cria a Nova Conta (Renegociação) ativa para dar baixa
+      // 🟢 1º: cria o NOVO acordo. Se falhar aqui, a dívida original continua intacta.
       const nomeAcordo = `🔄 RENEGOCIAÇÃO (REF. PEDIDO #${numPedAntigo})`;
       const novaVendaRenegociada = {
         cliente: clienteNoModal.nome,
@@ -659,10 +664,28 @@ export default function Clientes() {
 
       await adicionarVendaMutation.mutateAsync(novaVendaRenegociada);
 
+      // 🟢 2º: só então marca o contrato antigo como "Dívida Renegociada"
+      try {
+        await editarVendaMutation.mutateAsync({
+          vendaId: vendaOriginalId,
+          dadosNovos: {
+            ...vendaOriginal,
+            renegociada: true,
+            renegociadaEm: hojeIso,
+            listaParcelas: parcelasAntigasCongeladas,
+            observacoes: `${vendaOriginal.observacoes ? vendaOriginal.observacoes + '\n' : ''}🔄 DÍVIDA RENEGOCIADA EM ${hojeIso.split('-').reverse().join('/')}.`
+          }
+        });
+      } catch (erroMarcacao) {
+        setModalRenegociacao(null);
+        mostrarToast(`O novo acordo foi criado, mas o Pedido #${numPedAntigo} não foi marcado como renegociado. Marque-o manualmente para não cobrar em duplicidade.`, "erro");
+        return;
+      }
+
       setModalRenegociacao(null);
       mostrarToast("Dívida renegociada! Novo acordo ativo criado com sucesso.", "sucesso");
     } catch (error) {
-      mostrarToast("Erro ao processar a renegociação.", "erro");
+      mostrarToast("Erro ao processar a renegociação. Nada foi alterado.", "erro");
     } finally {
       setProcessandoRenegociacao(false);
     }
@@ -672,7 +695,8 @@ export default function Clientes() {
     abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
       const idMongo = clienteNoModal?._id;
       try {
-        await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: { ...clienteNoModal, foto: '' } });
+        const { historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = clienteNoModal;
+        await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: { ...dadosLimpos, foto: '' } });
         mostrarToast("Foto de perfil removida.", "sucesso");
       } catch (err) { mostrarToast("Erro ao remover arquivo.", "erro"); }
     });
@@ -707,10 +731,11 @@ export default function Clientes() {
   };
 
   const listaFinalClientes = useMemo(() => {
+    // 🟢 filter(Boolean): ignora vendas/clientes sem CPF (evita quebrar a busca)
     const todosCPFs = Array.from(new Set([
       ...(vendas || []).map(v => v.cpf),
       ...(clientes || []).map(c => c.cpf)
-    ]));
+    ].filter(Boolean)));
 
     return todosCPFs.map(cpf => {
       const dadosCad = (clientes || []).find(c => c.cpf === cpf);
@@ -765,7 +790,7 @@ export default function Clientes() {
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? (c.totalGeralDevido || 0) > 0.01 : true;
     const termo = busca.toLowerCase();
-    return passaFiltroStatus && (c.nome.toLowerCase().includes(termo) || c.cpf.includes(termo));
+    return passaFiltroStatus && ((c.nome || '').toLowerCase().includes(termo) || (c.cpf || '').includes(termo));
   });
 
   return (
@@ -839,6 +864,13 @@ export default function Clientes() {
         </div>
       )}
 
+      {/* 🟢 INDICADOR DE CARREGAMENTO (evita parecer lista vazia ao abrir a tela) */}
+      {(carregandoClientes || carregandoVendas) && (
+        <p className="text-center text-elos-verde font-bold animate-pulse uppercase text-xs tracking-widest mb-6">
+          Carregando clientes e vendas...
+        </p>
+      )}
+
       {/* TABELA DE CLIENTES */}
       <div className="bg-white rounded-3xl shadow-soft overflow-hidden border border-elos-bege/10">
         <div className="w-full overflow-x-auto no-scrollbar">
@@ -873,7 +905,17 @@ export default function Clientes() {
                       </button>
                       
                       <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
-                      <button onClick={(e) => { e.stopPropagation(); abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?`, () => excluirClienteMutation.mutate(cliente.cpf)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl">🗑️</button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const temVendas = (cliente.historicoVendas || []).length > 0;
+                          const aviso = temVendas
+                            ? ` Atenção: este cliente possui ${cliente.historicoVendas.length} venda(s) registrada(s). Remover o cadastro NÃO apaga as vendas, e ele continuará aparecendo na lista.`
+                            : '';
+                          abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?${aviso}`, () => excluirClienteMutation.mutate(cliente.cpf));
+                        }}
+                        className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl"
+                      >🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -934,7 +976,7 @@ export default function Clientes() {
 
               <div className="flex flex-wrap gap-4">
                 <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="flex-1 py-4 bg-white border-2 border-elos-bege/30 text-elos-verde font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Cadastro</button>
-                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(Math.round(clienteNoModal.totalGeralDevido * 100))), produto: "Pagamento de saldo devedor", data: new Date().toISOString().split('T')[0], metodo: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
+                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(Math.round(clienteNoModal.totalGeralDevido * 100))), produto: "Pagamento de saldo devedor", data: hojeBR(), metodo: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
               </div>
 
               <div className="space-y-6 pt-4">
@@ -1067,7 +1109,7 @@ export default function Clientes() {
                                 desconto: descontoNum,
                                 valorTotal: valorTotalNum,
                                 itensCarrinho: itensRecalculados, 
-                                data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR'),
+                                data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }),
                               }, 'pedido');
                             }} 
                             className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
@@ -1133,9 +1175,10 @@ export default function Clientes() {
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
                         {(venda.listaParcelas || []).map((p, idx) => (
                           <LinhaParcela 
-                            key={idx} 
+                            key={`${venda._id || index}-${p.numero ?? idx}`} 
                             p={p} 
                             venda={venda} 
+                            cliente={clienteNoModal}
                             darBaixaParcela={async (vendaId, numeroParcela, dataPagamento, valorPago) => {
                               return await darBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela, dataPagamento, valorPago });
                             }} 
