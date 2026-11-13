@@ -15,6 +15,10 @@ export default function PainelOS() {
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null });
 
+  // 🟢 Estados para escolher o Pedido antes de ir para /admin/nova-os/:numeroPedido
+  const [modalEscolherPedido, setModalEscolherPedido] = useState(false);
+  const [buscaPedidoModal, setBuscaPedidoModal] = useState('');
+
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
     setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
@@ -27,7 +31,7 @@ export default function PainelOS() {
   const handleExcluirOS = (idOS) => {
     abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api'; 
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api'; 
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
           method: 'DELETE'
         });
@@ -43,6 +47,16 @@ export default function PainelOS() {
       }
     });
   };
+
+  const vendasFiltradasModal = useMemo(() => {
+    const termo = buscaPedidoModal.toLowerCase();
+    return (vendas || []).filter(v => {
+      const cliente = String(v.cliente || '').toLowerCase();
+      const num = String(v.numeroPedido || '').toLowerCase();
+      const prod = String(v.produto || '').toLowerCase();
+      return cliente.includes(termo) || num.includes(termo) || prod.includes(termo);
+    }).slice(0, 20);
+  }, [vendas, buscaPedidoModal]);
 
   const todasAsOS = useMemo(() => {
     let listaFlat = [];
@@ -104,6 +118,76 @@ export default function PainelOS() {
         </div>
       )}
 
+      {/* 🟢 MODAL PARA ESCOLHER A VENDA E IR PARA /admin/nova-os/:numeroPedido */}
+      {modalEscolherPedido && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9998] p-4">
+          <div className="bg-white p-6 md:p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl space-y-5">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-tradicional text-2xl italic text-elos-verde font-bold">Vincular Ordem de Serviço</h3>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mt-0.5">
+                  Selecione o pedido do cliente para abrir a ficha da OS
+                </p>
+              </div>
+              <button 
+                onClick={() => setModalEscolherPedido(false)}
+                className="w-9 h-9 rounded-full bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="🔍 Buscar por nome do cliente ou nº do pedido..."
+              value={buscaPedidoModal}
+              onChange={(e) => setBuscaPedidoModal(e.target.value)}
+              autoFocus
+              className="w-full px-4 py-3 bg-elos-fundo rounded-xl border border-gray-200 text-xs font-bold outline-none focus:border-elos-bege"
+            />
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {vendasFiltradasModal.length === 0 ? (
+                <p className="text-center text-xs text-gray-400 py-8 italic">Nenhuma venda encontrada.</p>
+              ) : (
+                vendasFiltradasModal.map(venda => {
+                  const identificador = venda.numeroPedido ? String(venda.numeroPedido) : String(venda._id);
+                  const dataBr = venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : '--/--/----';
+                  return (
+                    <button
+                      key={venda._id}
+                      type="button"
+                      onClick={() => {
+                        setModalEscolherPedido(false);
+                        navigate(`/admin/nova-os/${identificador}`);
+                      }}
+                      className="w-full text-left p-3.5 rounded-2xl border border-gray-100 hover:border-elos-bege hover:bg-elos-fundo/50 transition-all flex justify-between items-center group"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black bg-elos-verde/10 text-elos-verde px-2 py-0.5 rounded-md">
+                            #{venda.numeroPedido || 'S/N'}
+                          </span>
+                          <span className="text-xs font-bold text-elos-texto group-hover:text-elos-verde">
+                            {venda.cliente}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 truncate max-w-xs mt-1">
+                          {venda.produto} • {dataBr}
+                        </p>
+                      </div>
+                      <span className="text-xs font-black text-elos-bege group-hover:translate-x-1 transition-transform">
+                        Abrir OS ➔
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER ATUALIZADO */}
       <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div>
@@ -112,9 +196,9 @@ export default function PainelOS() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-          {/* 🟢 NOVO BOTÃO AQUI */}
+          {/* 🟢 AGORA ABRE O SELETOR E NAVEGA PARA /admin/nova-os/:numeroPedido */}
           <button 
-            onClick={() => navigate('/admin/nova-os')} 
+            onClick={() => setModalEscolherPedido(true)} 
             className="w-full md:w-auto px-6 py-3 bg-elos-bege hover:bg-elos-verde text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-md flex items-center justify-center gap-2"
           >
             <span className="text-sm">➕</span> Nova OS

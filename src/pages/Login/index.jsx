@@ -3,9 +3,15 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login({ onLogin }) {
   const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
 
   const [modo, setModo] = useState('LOGIN'); 
   const [carregando, setCarregando] = useState(false);
+
+  // 🟢 ESTADOS PARA EXIBIR/OCULTAR SENHA
+  const [mostrarSenhaLogin, setMostrarSenhaLogin] = useState(false);
+  const [mostrarSenhaCadastro, setMostrarSenhaCadastro] = useState(false);
+  const [mostrarSenhaNova, setMostrarSenhaNova] = useState(false);
 
   // LOGIN
   const [loginEmail, setLoginEmail] = useState('');
@@ -50,44 +56,50 @@ export default function Login({ onLogin }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setCarregando(true);
-    const emailTratado = loginEmail.trim().toLowerCase();
+    const inputTratado = loginEmail.trim().toLowerCase();
+    const apenasNumeros = inputTratado.replace(/\D/g, '');
+    const ehCpf = apenasNumeros.length === 11 && !inputTratado.includes('@');
 
     try {
-      const resFunc = await fetch(`${import.meta.env.VITE_API_URL}/funcionarios/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: emailTratado, senha: loginSenha })
-      });
+      if (!ehCpf) {
+        const resFunc = await fetch(`${API_URL}/funcionarios/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: inputTratado, senha: loginSenha })
+        });
 
-      if (resFunc.ok) {
-        const dadosFuncionario = await resFunc.json();
-        onLogin(dadosFuncionario); 
-        navigate('/admin');
-        setCarregando(false);
-        return;
+        if (resFunc.ok) {
+          const dadosFuncionario = await resFunc.json();
+          onLogin(dadosFuncionario); 
+          navigate('/admin');
+          setCarregando(false);
+          return;
+        }
       }
 
-      const resCli = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
+      const resCli = await fetch(`${API_URL}/clientes`);
       if (!resCli.ok) throw new Error("Erro na resposta do servidor");
       const clientes = await resCli.json();
       
-      const clienteEncontrado = clientes.find(c => 
-        (c.email && c.email.toLowerCase() === emailTratado) || 
-        (c.cpf && c.cpf.replace(/\D/g, '') === emailTratado.replace(/\D/g, ''))
-      );
+      const clienteEncontrado = clientes.find(c => {
+        const emailMatch = c.email && c.email.trim().toLowerCase() === inputTratado;
+        const cpfClienteLimpo = c.cpf ? c.cpf.replace(/\D/g, '') : '';
+        const cpfMatch = apenasNumeros.length === 11 && cpfClienteLimpo === apenasNumeros;
+        return emailMatch || cpfMatch;
+      });
 
-      if (clienteEncontrado && clienteEncontrado.senha === loginSenha) {
+      if (clienteEncontrado && clienteEncontrado.senha && clienteEncontrado.senha === loginSenha) {
         localStorage.setItem('clienteLogadoElos', JSON.stringify(clienteEncontrado));
         const redirectPosLogin = localStorage.getItem('redirect_pos_login');
         if (redirectPosLogin === 'loja') {
           localStorage.removeItem('redirect_pos_login'); 
-          navigate('/');
+          navigate('/loja');
         } else {
           mostrarToast(`Bem-vindo(a), ${clienteEncontrado.nome.split(' ')[0]}!`, "sucesso");
-          setTimeout(() => navigate('/'), 1000);
+          setTimeout(() => navigate('/loja'), 1000);
         }
       } else {
-        mostrarToast("Credenciais inválidas. Verifique os dados digitados.", "erro");
+        mostrarToast("Credenciais inválidas. Verifique seu login e senha.", "erro");
       }
     } catch (error) { 
       mostrarToast("Não foi possível conectar ao servidor.", "erro"); 
@@ -100,18 +112,30 @@ export default function Login({ onLogin }) {
     const cpfLimpo = cpfDigitado.replace(/\D/g, '');
     if (cpfLimpo.length === 11) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
+        const res = await fetch(`${API_URL}/clientes`);
         const clientes = await res.json();
         const clienteEncontrado = clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfLimpo);
 
         if (clienteEncontrado) {
           if (clienteEncontrado.senha && clienteEncontrado.senha.trim() !== '') {
-            mostrarToast("Você já possui uma conta online! Faça login.", "erro"); setModo('LOGIN'); setLoginEmail(clienteEncontrado.email || clienteEncontrado.cpf);
+            mostrarToast("Você já possui uma conta online! Faça login.", "erro");
+            setModo('LOGIN');
+            setLoginEmail(clienteEncontrado.email || clienteEncontrado.cpf);
           } else {
             mostrarToast("Encontramos seu cadastro da loja física! Crie uma senha.", "sucesso");
-            setFormCadastro(prev => ({ ...prev, _id: clienteEncontrado._id, nome: clienteEncontrado.nome || '', dataNascimento: clienteEncontrado.dataNascimento || '', telefone: clienteEncontrado.telefone || '', email: clienteEncontrado.email || '', endereco: clienteEncontrado.endereco || '' }));
+            setFormCadastro(prev => ({
+              ...prev,
+              _id: clienteEncontrado._id,
+              nome: clienteEncontrado.nome || '',
+              dataNascimento: clienteEncontrado.dataNascimento || '',
+              telefone: clienteEncontrado.telefone || '',
+              email: clienteEncontrado.email || '',
+              endereco: clienteEncontrado.endereco || ''
+            }));
           }
-        } else setFormCadastro(prev => ({ ...prev, _id: null }));
+        } else {
+          setFormCadastro(prev => ({ ...prev, _id: null }));
+        }
       } catch (error) {}
     }
   };
@@ -125,40 +149,74 @@ export default function Login({ onLogin }) {
     if (formCadastro.senha !== formCadastro.confirmarSenha) { mostrarToast("As senhas não coincidem.", "erro"); setCarregando(false); return; }
 
     try {
-      const payloadCliente = { ...formCadastro, nome: formCadastro.nome.trim().toUpperCase(), email: formCadastro.email.trim().toLowerCase(), observacoes: formCadastro._id ? "Acesso online ativado" : "Cadastro via Portal Online" };
+      const { _id, confirmarSenha, ...dadosLimpos } = formCadastro;
+      const payloadCliente = {
+        ...dadosLimpos,
+        nome: formCadastro.nome.trim().toUpperCase(),
+        email: formCadastro.email.trim().toLowerCase(),
+        origem: _id ? undefined : "Site / Loja Virtual",
+        observacoes: _id ? "Acesso online ativado" : "Cadastro via Portal Online"
+      };
+
       let resCadastro;
 
-      if (formCadastro._id) {
-        resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes/${formCadastro._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadCliente) });
+      if (_id) {
+        resCadastro = await fetch(`${API_URL}/clientes/${_id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadCliente)
+        });
       } else {
-        const resClientes = await fetch(`${import.meta.env.VITE_API_URL}/clientes`);
+        const resClientes = await fetch(`${API_URL}/clientes`);
         const clientesExistentes = await resClientes.json();
-        if (clientesExistentes.some(c => c.email && c.email.toLowerCase() === formCadastro.email.trim().toLowerCase())) { mostrarToast("E-mail já em uso.", "erro"); setCarregando(false); return; }
-        resCadastro = await fetch(`${import.meta.env.VITE_API_URL}/clientes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadCliente) });
+        if (clientesExistentes.some(c => c.email && c.email.trim().toLowerCase() === payloadCliente.email)) {
+          mostrarToast("Este e-mail já está em uso.", "erro");
+          setCarregando(false);
+          return;
+        }
+        resCadastro = await fetch(`${API_URL}/clientes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadCliente)
+        });
       }
 
       if (resCadastro.ok) {
         const clienteSalvo = await resCadastro.json();
         localStorage.setItem('clienteLogadoElos', JSON.stringify(clienteSalvo));
-        if (localStorage.getItem('redirect_pos_login') === 'loja') { localStorage.removeItem('redirect_pos_login'); navigate('/'); } 
-        else { mostrarToast("Conta configurada! Redirecionando...", "sucesso"); setTimeout(() => navigate('/'), 1200); }
-      } else mostrarToast("Falha ao registrar cadastro.", "erro");
-    } catch (error) { mostrarToast("Erro de comunicação com o servidor.", "erro"); } 
-    finally { setCarregando(false); }
+        if (localStorage.getItem('redirect_pos_login') === 'loja') {
+          localStorage.removeItem('redirect_pos_login');
+          navigate('/loja');
+        } else {
+          mostrarToast("Conta configurada! Redirecionando...", "sucesso");
+          setTimeout(() => navigate('/loja'), 1200);
+        }
+      } else {
+        const errData = await resCadastro.json().catch(() => ({}));
+        mostrarToast(errData.error || "Falha ao registrar cadastro.", "erro");
+      }
+    } catch (error) {
+      mostrarToast("Erro de comunicação com o servidor.", "erro");
+    } finally {
+      setCarregando(false);
+    }
   };
 
   const handleSolicitarCodigoEmail = async (e) => {
     e.preventDefault();
     setCarregando(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes/solicitar-recuperacao`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: recuperaEmail })
+      const res = await fetch(`${API_URL}/clientes/solicitar-recuperacao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recuperaEmail.trim().toLowerCase() })
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setEtapaRecuperacao(2);
         mostrarToast("Um código de 6 dígitos foi enviado para o seu e-mail!", "sucesso");
       } else {
-        mostrarToast("E-mail não encontrado em nossos registros.", "erro");
+        mostrarToast(data.error || "E-mail não encontrado em nossos registros.", "erro");
       }
     } catch (error) {
       mostrarToast("Erro ao conectar com o servidor.", "erro");
@@ -175,17 +233,23 @@ export default function Login({ onLogin }) {
     if (novaSenha !== confirmarNovaSenha) { mostrarToast("As senhas não coincidem.", "erro"); setCarregando(false); return; }
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/clientes/redefinir-senha`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ email: recuperaEmail, token: codigoDigitado, novaSenha })
+      const res = await fetch(`${API_URL}/clientes/redefinir-senha`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({
+          email: recuperaEmail.trim().toLowerCase(),
+          token: codigoDigitado.trim(),
+          novaSenha
+        })
       });
+      const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
         mostrarToast("Senha redefinida com sucesso! Você já pode fazer login.", "sucesso");
         setModo('LOGIN'); setLoginEmail(recuperaEmail); setLoginSenha('');
         setRecuperaEmail(''); setCodigoDigitado(''); setNovaSenha(''); setConfirmarNovaSenha(''); setEtapaRecuperacao(1);
       } else {
-        mostrarToast("Código inválido ou expirado.", "erro");
+        mostrarToast(data.error || "Código inválido ou expirado.", "erro");
       }
     } catch (error) {
       mostrarToast("Erro de comunicação com o servidor.", "erro");
@@ -197,9 +261,8 @@ export default function Login({ onLogin }) {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans overflow-hidden bg-gradient-to-br from-[#2a4537] via-[#1d3026] to-[#0a140f]">
       
-      {/* 🟢 BOTÃO DE VOLTAR PARA A LOJA BEM VISÍVEL */}
       <button 
-        onClick={() => navigate('/')} 
+        onClick={() => navigate('/loja')} 
         className="absolute top-6 left-6 z-50 flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-5 py-3 rounded-2xl border border-white/10 transition-all font-black uppercase text-[10px] tracking-widest shadow-lg group"
       >
         <span className="group-hover:-translate-x-1 transition-transform">←</span>
@@ -248,7 +311,24 @@ export default function Login({ onLogin }) {
                 <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Senha</label>
                 <button type="button" onClick={() => { setModo('RECUPERAR'); setEtapaRecuperacao(1); }} className="text-[10px] text-[#c5a880] hover:text-[#b0946d] font-bold uppercase tracking-widest underline underline-offset-2 transition-colors">Esqueceu a senha?</button>
               </div>
-              <input type="password" value={loginSenha} onChange={(e) => setLoginSenha(e.target.value)} placeholder="••••••••" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" />
+              <div className="relative">
+                <input 
+                  type={mostrarSenhaLogin ? "text" : "password"} 
+                  value={loginSenha} 
+                  onChange={(e) => setLoginSenha(e.target.value)} 
+                  placeholder="••••••••" 
+                  required 
+                  className="w-full px-5 py-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20 outline-none transition-all text-sm text-gray-800 placeholder:text-gray-400" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setMostrarSenhaLogin(!mostrarSenhaLogin)} 
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm focus:outline-none"
+                  title={mostrarSenhaLogin ? "Ocultar senha" : "Ver senha"}
+                >
+                  {mostrarSenhaLogin ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
 
             <button type="submit" disabled={carregando} className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-[#1d3026]/20 shadow-lg transition-all duration-300 active:scale-[0.98] mt-2 text-[11px] uppercase tracking-widest">
@@ -274,10 +354,41 @@ export default function Login({ onLogin }) {
               <div className="space-y-1.5"><label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">E-mail *</label><input type="email" value={formCadastro.email} onChange={(e) => setFormCadastro({ ...formCadastro, email: e.target.value })} placeholder="exemplo@email.com" required className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" /></div>
             </div>
             <div className="space-y-1.5"><label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Endereço Completo</label><input type="text" value={formCadastro.endereco} onChange={(e) => setFormCadastro({ ...formCadastro, endereco: e.target.value })} placeholder="Rua, Número, Bairro - Cidade" className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" /></div>
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-              <div className="space-y-1.5"><label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Criar Senha *</label><input type="password" value={formCadastro.senha} onChange={(e) => setFormCadastro({ ...formCadastro, senha: e.target.value })} placeholder="Mínimo 6 dígitos" required className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" /></div>
-              <div className="space-y-1.5"><label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Confirmar Senha *</label><input type="password" value={formCadastro.confirmarSenha} onChange={(e) => setFormCadastro({ ...formCadastro, confirmarSenha: e.target.value })} placeholder="Repita sua senha" required className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" /></div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Criar Senha *</label>
+                <div className="relative">
+                  <input 
+                    type={mostrarSenhaCadastro ? "text" : "password"} 
+                    value={formCadastro.senha} 
+                    onChange={(e) => setFormCadastro({ ...formCadastro, senha: e.target.value })} 
+                    placeholder="Mínimo 6 dígitos" 
+                    required 
+                    className="w-full px-4 py-3.5 pr-12 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)} 
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs focus:outline-none"
+                  >
+                    {mostrarSenhaCadastro ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Confirmar Senha *</label>
+                <input 
+                  type={mostrarSenhaCadastro ? "text" : "password"} 
+                  value={formCadastro.confirmarSenha} 
+                  onChange={(e) => setFormCadastro({ ...formCadastro, confirmarSenha: e.target.value })} 
+                  placeholder="Repita sua senha" 
+                  required 
+                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm focus:bg-white focus:border-[#1d3026] focus:ring-2 focus:ring-[#1d3026]/20" 
+                />
+              </div>
             </div>
+
             <button type="submit" disabled={carregando} className="w-full bg-[#1d3026] hover:bg-[#2a4537] text-white font-bold py-4 rounded-xl shadow-md transition-all duration-300 active:scale-[0.98] mt-4 text-[11px] uppercase tracking-widest">
               {carregando ? 'Salvando...' : (formCadastro._id ? 'Atualizar Cadastro e Entrar' : 'Finalizar Cadastro')}
             </button>
@@ -308,10 +419,28 @@ export default function Login({ onLogin }) {
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Código de 6 dígitos</label>
                   <input type="text" value={codigoDigitado} onChange={(e) => setCodigoDigitado(e.target.value)} placeholder="000000" maxLength="6" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] outline-none text-center tracking-[0.5em] text-lg font-bold text-[#1d3026]" />
                 </div>
+                
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Nova Senha</label>
-                  <input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} placeholder="Mínimo de 6 caracteres" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] outline-none text-sm" />
+                  <div className="relative">
+                    <input 
+                      type={mostrarSenhaNova ? "text" : "password"} 
+                      value={novaSenha} 
+                      onChange={(e) => setNovaSenha(e.target.value)} 
+                      placeholder="Mínimo de 6 caracteres" 
+                      required 
+                      className="w-full px-5 py-4 pr-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] outline-none text-sm" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setMostrarSenhaNova(!mostrarSenhaNova)} 
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs focus:outline-none"
+                    >
+                      {mostrarSenhaNova ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
+
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block ml-1">Confirmar Nova Senha</label>
                   <input type="password" value={confirmarNovaSenha} onChange={(e) => setConfirmarNovaSenha(e.target.value)} placeholder="Repita a senha" required className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#1d3026] outline-none text-sm" />
