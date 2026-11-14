@@ -1,22 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { gerarPDFSaudeFinanceira } from '../../documentosUtils';
 
-// 🟢 ADICIONADO: Importando os hooks do React Query
+// 🟢 Hooks do React Query
 import { useVendas } from '../../hooks/useVendas';
 import { useDespesas } from '../../hooks/useDespesas';
 import { useClientes } from '../../hooks/useClientes';
 
+// 🟢 Data de hoje cravada no fuso de Fortaleza (YYYY-MM-DD)
+const obterHojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
 export default function Dashboard() {
-  // 🟢 AQUI: Puxando dados em tempo real e cacheados do React Query
   const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
   const { data: despesas = [], isLoading: carregandoDespesas } = useDespesas();
   const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
 
   const carregando = carregandoVendas || carregandoDespesas || carregandoClientes;
 
-  const dataAtual = new Date();
-  const [mesFiltro, setMesFiltro] = useState(dataAtual.getMonth() + 1);
-  const [anoFiltro, setAnoFiltro] = useState(dataAtual.getFullYear());
+  const hojeStr = obterHojeBR();
+  const [anoHoje, mesHoje] = hojeStr.split('-').map(Number);
+
+  const [mesFiltro, setMesFiltro] = useState(mesHoje);
+  const [anoFiltro, setAnoFiltro] = useState(anoHoje);
   const [modalTipo, setModalTipo] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('mensal'); // 'mensal', 'anual', 'geral'
 
@@ -26,13 +30,11 @@ export default function Dashboard() {
   const [relatorioFim, setRelatorioFim] = useState('');
 
   const [ocultarValores, setOcultarValores] = useState(true);
-
-  const hojeLocalStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}-${String(dataAtual.getDate()).padStart(2, '0')}`;
-  const [dataAniversario, setDataAniversario] = useState(hojeLocalStr);
+  const [dataAniversario, setDataAniversario] = useState(hojeStr);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
-  const anosDisponiveis = Array.from({ length: 11 }, (_, i) => dataAtual.getFullYear() - 2 + i);
+  const anosDisponiveis = Array.from({ length: 11 }, (_, i) => anoHoje - 2 + i);
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
     setToast({ visivel: true, mensagem, tipo });
@@ -41,7 +43,64 @@ export default function Dashboard() {
 
   const formatarMoeda = (valor) => {
     if (ocultarValores) return "****";
-    return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, '\u00A0');
+    return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, '\u00A0');
+  };
+
+  // 🟢 FUNÇÃO AUXILIAR: Calcula a data exata de vencimento de uma parcela (respeita renegociação e parcelas .5)
+  const obterDataVencimentoParcela = (venda, parcela) => {
+    const dataSalva = parcela.dataVencimento || parcela.vencimentoOriginal;
+    if (dataSalva) {
+      return new Date(`${String(dataSalva).split('T')[0]}T00:00:00-03:00`);
+    }
+    if (Number(parcela.numero) === 0) {
+      const baseEntrada = venda.dataEntrada || venda.dataVenda;
+      return new Date(`${String(baseEntrada).split('T')[0]}T00:00:00-03:00`);
+    }
+    const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
+    const dataVenc = new Date(`${String(dataBase).split('T')[0]}T00:00:00-03:00`);
+    const indiceMes = Math.max(0, Math.floor(Number(parcela.numero)) - 1);
+    dataVenc.setMonth(dataVenc.getMonth() + indiceMes);
+    return dataVenc;
+  };
+
+  // 🟢 FUNÇÃO AUXILIAR: Extrai todos os recebimentos reais de uma venda (evita perder entradas soltas ou duplicar)
+  const extrairRecebimentosDaVenda = (venda) => {
+    const recebimentos = [];
+    const parcelas = Array.isArray(venda.listaParcelas) ? venda.listaParcelas : [];
+
+    // 1. Verifica se a entrada já está representada dentro de listaParcelas (como parcela 0 ou parcela única à vista)
+    const temParcelaZero = parcelas.some(p => Number(p.numero) === 0);
+    const somaParcelas = parcelas.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const entradaJaInclusaNasParcelas = temParcelaZero || (parcelas.length > 0 && Math.abs(somaParcelas - Number(venda.valorTotal || 0)) < 0.05);
+
+    if (Number(venda.valorEntrada) > 0 && !entradaJaInclusaNasParcelas) {
+      const dataEnt = String(venda.dataEntrada || venda.dataVenda || '').split('T')[0];
+      if (dataEnt) {
+        recebimentos.push({
+          nome: venda.cliente,
+          valor: Number(venda.valorEntrada),
+          data: dataEnt,
+          info: `Entrada (${dataEnt.split('-').reverse().join('/')})`
+        });
+      }
+    }
+
+    // 2. Soma todas as parcelas marcadas como pagas
+    parcelas.forEach(p => {
+      if (p.paga && Number(p.valor) > 0) {
+        const dataPag = String(p.dataPagamento || venda.dataVenda || '').split('T')[0];
+        if (dataPag) {
+          recebimentos.push({
+            nome: venda.cliente,
+            valor: Number(p.valor),
+            data: dataPag,
+            info: dataPag.split('-').reverse().join('/')
+          });
+        }
+      }
+    });
+
+    return recebimentos;
   };
 
   // --- PDF ---
@@ -52,14 +111,16 @@ export default function Dashboard() {
     }
     let entradasPeriodo = [];
     vendas.forEach(v => {
-      (v.listaParcelas || []).forEach(p => {
-        if (p.paga && p.dataPagamento >= relatorioInicio && p.dataPagamento <= relatorioFim) {
-          entradasPeriodo.push({ nome: v.cliente, valor: p.valor, data: p.dataPagamento.split('-').reverse().join('/') });
+      extrairRecebimentosDaVenda(v).forEach(rec => {
+        if (rec.data >= relatorioInicio && rec.data <= relatorioFim) {
+          entradasPeriodo.push({ nome: rec.nome, valor: rec.valor, data: rec.data.split('-').reverse().join('/') });
         }
       });
     });
-    const saidasPeriodo = despesas.filter(d => d.paga && d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim)
-      .map(d => ({ nome: d.descricao, valor: d.valor, data: d.vencimento.split('-').reverse().join('/') }));
+
+    const saidasPeriodo = despesas
+      .filter(d => d.paga && d.vencimento >= relatorioInicio && d.vencimento <= relatorioFim)
+      .map(d => ({ nome: d.descricao, valor: Number(d.valor || 0), data: d.vencimento.split('-').reverse().join('/') }));
 
     const dadosRelatorio = { 
       entradas: entradasPeriodo, 
@@ -85,59 +146,90 @@ export default function Dashboard() {
   // --- CÁLCULOS GERAIS ---
   const saldoCaixaAtualGeral = useMemo(() => {
     let arrecadado = 0;
-    vendas.forEach(v => (v.listaParcelas || []).forEach(p => { if (p.paga) arrecadado += p.valor; }));
-    const despesasPagas = despesas.filter(d => d.paga).reduce((acc, d) => acc + d.valor, 0);
+    vendas.forEach(v => {
+      extrairRecebimentosDaVenda(v).forEach(r => { arrecadado += r.valor; });
+    });
+    const despesasPagas = despesas.filter(d => d.paga).reduce((acc, d) => acc + Number(d.valor || 0), 0);
     return arrecadado - despesasPagas;
   }, [vendas, despesas]);
 
+  // 🟢 Todas as parcelas em aberto na loja (A Receber Geral)
   const detalhesAReceber = useMemo(() => {
     let lista = [];
     vendas.forEach(v => {
       (v.listaParcelas || []).forEach(p => {
-        if (!p.paga) {
-          const dataVenc = p.vencimentoOriginal ? new Date(p.vencimentoOriginal + 'T00:00:00') : new Date(new Date(v.dataVenda + 'T00:00:00').setMonth(new Date(v.dataVenda + 'T00:00:00').getMonth() + (p.numero - 1)));
-          if (dataVenc <= new Date(anoFiltro, mesFiltro, 0, 23, 59, 59)) {
-            lista.push({ nome: v.cliente, valor: p.valor, info: p.numero === 0 ? "Entrada" : `${p.numero}ª Parc`, vencimento: dataVenc });
-          }
+        if (!p.paga && Number(p.valor) > 0) {
+          const dataVenc = obterDataVencimentoParcela(v, p);
+          const ehRestante = !Number.isInteger(Number(p.numero));
+          const labelParc = Number(p.numero) === 0 
+            ? "Entrada" 
+            : ehRestante 
+              ? `Rest. ${Math.floor(Number(p.numero))}ª Parc` 
+              : `${p.numero}ª Parc`;
+
+          lista.push({
+            nome: v.cliente,
+            valor: Number(p.valor),
+            info: labelParc,
+            vencimento: dataVenc,
+            vencimentoStr: dataVenc.toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' })
+          });
         }
       });
     });
-    return lista.sort((a,b) => a.vencimento - b.vencimento);
-  }, [vendas, mesFiltro, anoFiltro]);
+    return lista.sort((a, b) => a.vencimento - b.vencimento);
+  }, [vendas]);
 
+  // 🟢 Entradas efetivadas no Mês/Ano selecionado
   const detalhesEntradas = useMemo(() => {
     let lista = [];
     vendas.forEach(v => {
-      (v.listaParcelas || []).forEach(p => {
-        if (p.paga && p.dataPagamento) {
-          const d = new Date(p.dataPagamento + 'T00:00:00');
-          if ((d.getMonth() + 1) === Number(mesFiltro) && d.getFullYear() === Number(anoFiltro)) lista.push({ nome: v.cliente, valor: p.valor, info: p.dataPagamento.split('-').reverse().join('/') });
+      extrairRecebimentosDaVenda(v).forEach(rec => {
+        const [anoRec, mesRec] = rec.data.split('-').map(Number);
+        if (mesRec === Number(mesFiltro) && anoRec === Number(anoFiltro)) {
+          lista.push({ nome: rec.nome, valor: rec.valor, info: rec.info });
         }
       });
     });
     return lista;
   }, [vendas, mesFiltro, anoFiltro]);
 
+  // 🟢 Despesas do Mês/Ano selecionado
   const detalhesDespesas = useMemo(() => despesas.filter(d => {
-    const dv = new Date(d.vencimento + 'T00:00:00');
-    return (dv.getMonth() + 1) === Number(mesFiltro) && dv.getFullYear() === Number(anoFiltro);
-  }).map(d => ({ nome: d.descricao, valor: d.valor, info: d.paga ? "✅ Paga" : "❌ Pendente", paga: d.paga })), [despesas, mesFiltro, anoFiltro]);
+    if (!d.vencimento) return false;
+    const [anoDesp, mesDesp] = String(d.vencimento).split('T')[0].split('-').map(Number);
+    return mesDesp === Number(mesFiltro) && anoDesp === Number(anoFiltro);
+  }).map(d => ({
+    nome: d.descricao,
+    valor: Number(d.valor || 0),
+    info: d.paga ? "✅ Paga" : "❌ Pendente",
+    paga: d.paga
+  })), [despesas, mesFiltro, anoFiltro]);
 
   const totalAReceberGeral = detalhesAReceber.reduce((acc, i) => acc + i.valor, 0);
+  const totalVencidoAteHoje = detalhesAReceber
+    .filter(i => i.vencimentoStr < hojeStr)
+    .reduce((acc, i) => acc + i.valor, 0);
+
   const totalNoCaixaMes = detalhesEntradas.reduce((acc, i) => acc + i.valor, 0);
   const totalDespesasPagasMes = detalhesDespesas.filter(d => d.paga).reduce((acc, i) => acc + i.valor, 0);
   const totalDespesasGeraisMes = detalhesDespesas.reduce((acc, i) => acc + i.valor, 0);
   const saldoLiquidoReal = totalNoCaixaMes - totalDespesasPagasMes;
 
-  const vendasNovasNoMes = vendas.filter(v => {
-    const d = new Date(v.dataVenda + 'T00:00:00');
-    return (d.getMonth() + 1) === Number(mesFiltro) && d.getFullYear() === Number(anoFiltro);
-  });
+  const vendasNovasNoMes = useMemo(() => vendas.filter(v => {
+    if (!v.dataVenda) return false;
+    const [anoV, mesV] = String(v.dataVenda).split('T')[0].split('-').map(Number);
+    return mesV === Number(mesFiltro) && anoV === Number(anoFiltro);
+  }), [vendas, mesFiltro, anoFiltro]);
   
-  const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal), 0);
+  const volumeVendasMes = vendasNovasNoMes.reduce((acc, v) => acc + Number(v.valorTotal || 0), 0);
   const ticketMedio = vendasNovasNoMes.length > 0 ? (volumeVendasMes / vendasNovasNoMes.length) : 0;
   const faltamParaCusto = totalDespesasGeraisMes - totalNoCaixaMes;
-  const indiceInadimplencia = (totalNoCaixaMes + totalAReceberGeral) > 0 ? (totalAReceberGeral / (totalNoCaixaMes + totalAReceberGeral)) * 100 : 0;
+
+  // 🟢 Índice de Inadimplência Real: proporção de parcelas já vencidas sobre toda a carteira a receber
+  const indiceInadimplencia = totalAReceberGeral > 0 
+    ? (totalVencidoAteHoje / totalAReceberGeral) * 100 
+    : 0;
 
   // --- DADOS PARA O GRÁFICO ANUAL ---
   const dadosGraficoAnual = useMemo(() => {
@@ -145,18 +237,20 @@ export default function Dashboard() {
     const dados = meses.map(m => ({ mes: m, receitas: 0, despesas: 0 }));
 
     vendas.forEach(v => {
-      (v.listaParcelas || []).forEach(p => {
-        if (p.paga && p.dataPagamento) {
-          const d = new Date(p.dataPagamento + 'T00:00:00');
-          if (d.getFullYear() === Number(anoFiltro)) dados[d.getMonth()].receitas += p.valor;
+      extrairRecebimentosDaVenda(v).forEach(rec => {
+        const [anoRec, mesRec] = rec.data.split('-').map(Number);
+        if (anoRec === Number(anoFiltro) && mesRec >= 1 && mesRec <= 12) {
+          dados[mesRec - 1].receitas += rec.valor;
         }
       });
     });
 
     despesas.forEach(d => {
       if (d.paga && d.vencimento) {
-        const dVenc = new Date(d.vencimento + 'T00:00:00');
-        if (dVenc.getFullYear() === Number(anoFiltro)) dados[dVenc.getMonth()].despesas += d.valor;
+        const [anoD, mesD] = String(d.vencimento).split('T')[0].split('-').map(Number);
+        if (anoD === Number(anoFiltro) && mesD >= 1 && mesD <= 12) {
+          dados[mesD - 1].despesas += Number(d.valor || 0);
+        }
       }
     });
 
@@ -165,8 +259,14 @@ export default function Dashboard() {
 
   const totalNoCaixaAno = dadosGraficoAnual.reduce((acc, m) => acc + m.receitas, 0);
   const totalDespesasAno = dadosGraficoAnual.reduce((acc, m) => acc + m.despesas, 0);
-  const volumeVendasAno = vendas.reduce((acc, v) => new Date(v.dataVenda + 'T00:00:00').getFullYear() === Number(anoFiltro) ? acc + Number(v.valorTotal) : acc, 0);
+  const volumeVendasAno = vendas.reduce((acc, v) => {
+    if (!v.dataVenda) return acc;
+    const [anoV] = String(v.dataVenda).split('T')[0].split('-').map(Number);
+    return anoV === Number(anoFiltro) ? acc + Number(v.valorTotal || 0) : acc;
+  }, 0);
   const maxValorGraficoAno = Math.max(...dadosGraficoAnual.map(d => Math.max(d.receitas, d.despesas)), 1);
+
+  if (carregando) return null;
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -193,6 +293,7 @@ export default function Dashboard() {
             <button 
               onClick={() => setOcultarValores(!ocultarValores)}
               className="p-3 bg-white rounded-full shadow-soft border border-elos-bege/20 hover:bg-elos-fundo transition-all text-xl"
+              title={ocultarValores ? "Mostrar valores" : "Ocultar valores"}
             >
               {ocultarValores ? "👁️‍🗨️" : "👁️"}
             </button>
@@ -227,7 +328,7 @@ export default function Dashboard() {
             <div className="flex gap-4 bg-white p-4 rounded-2xl shadow-sm border border-elos-bege/10 w-fit mb-6">
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-elos-verde uppercase ml-1">Mês de Análise</label>
-                <select className="bg-transparent font-bold outline-none cursor-pointer" value={mesFiltro} onChange={(e) => setMesFiltro(e.target.value)}>
+                <select className="bg-transparent font-bold outline-none cursor-pointer" value={mesFiltro} onChange={(e) => setMesFiltro(Number(e.target.value))}>
                   {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => (
                     <option key={i} value={i + 1}>{m}</option>
                   ))}
@@ -320,7 +421,7 @@ export default function Dashboard() {
                     <div key={v._id || v.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl">
                       <div className="flex flex-col">
                         <span className="font-bold text-elos-verde">{v.cliente}</span>
-                        <small className="text-[9px] text-gray-400 uppercase font-black">{v.dataVenda.split('-').reverse().join('/')}</small>
+                        <small className="text-[9px] text-gray-400 uppercase font-black">{String(v.dataVenda).split('T')[0].split('-').reverse().join('/')}</small>
                       </div>
                       <strong className="text-sm font-black text-elos-texto italic">{formatarMoeda(v.valorTotal)}</strong>
                     </div>
@@ -437,9 +538,11 @@ export default function Dashboard() {
               {/* DÍVIDA ACUMULADA */}
               <div onClick={() => setModalTipo('receber')} className="bg-white p-6 rounded-[2rem] shadow-soft border-t-8 border-orange-500 cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-between h-full">
                 <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Dívida Geral)</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Carteira Geral)</h3>
                   <p className="text-3xl font-black text-orange-500 mt-1">{formatarMoeda(totalAReceberGeral)}</p>
-                  <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold italic">Ver clientes devedores</p>
+                  <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold italic">
+                    Vencido hoje: {formatarMoeda(totalVencidoAteHoje)} • Clique p/ detalhar
+                  </p>
                 </div>
                 <div className="text-orange-100 text-4xl">⏳</div>
               </div>
@@ -519,7 +622,7 @@ export default function Dashboard() {
             <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
               <header className="p-6 bg-elos-fundo flex justify-between items-center border-b">
                 <h2 className="font-tradicional text-xl text-elos-verde italic">
-                  {modalTipo === 'receber' ? 'Dívidas Acumuladas' : 'Detalhamento do Período'}
+                  {modalTipo === 'receber' ? 'Carteira A Receber (Parcelas em Aberto)' : 'Detalhamento do Período'}
                 </h2>
                 <button onClick={() => setModalTipo(null)} className="text-2xl text-gray-400 hover:text-red-500">&times;</button>
               </header>
@@ -531,7 +634,7 @@ export default function Dashboard() {
                       <thead className="text-[10px] uppercase font-black text-gray-400 border-b tracking-widest">
                         <tr>
                           <th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th>
-                          <th className="pb-3 text-center">{modalTipo === 'receber' ? 'Vencimento' : 'Info'}</th>
+                          <th className="pb-3 text-center">{modalTipo === 'receber' ? 'Parcela / Vencimento' : 'Info'}</th>
                           <th className="pb-3 text-right">Valor</th>
                         </tr>
                       </thead>
@@ -540,7 +643,9 @@ export default function Dashboard() {
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="py-4 font-bold text-elos-verde">{item.nome}</td>
                             <td className="py-4 text-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                              {modalTipo === 'receber' ? item.vencimento.toLocaleDateString() : item.info}
+                              {modalTipo === 'receber' 
+                                ? `${item.info} • ${item.vencimentoStr.split('-').reverse().join('/')}` 
+                                : item.info}
                             </td>
                             <td className="py-4 text-right font-black text-sm">
                               {ocultarValores ? "****" : formatarMoeda(item.valor)}
