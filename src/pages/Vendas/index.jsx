@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
 import { useClientes } from '../../hooks/useClientes';
@@ -84,6 +84,7 @@ const comprimirImagemReceita = (imgFile) => {
 
 export default function Vendas() {
   const navigate = useNavigate();
+  const location = useLocation();
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
 
   const { data: clientes = [] } = useClientes();
@@ -111,6 +112,33 @@ export default function Vendas() {
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
 
+  const aplicarMascaraCPF = (valor) => {
+    return String(valor || '')
+      .replace(/\D/g, '')
+      .slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  };
+
+  // Preenche automaticamente os dados do cliente quando vier da tela de Clientes
+  useEffect(() => {
+    if (location.state?.clienteNome || location.state?.clienteCpf) {
+      const { clienteNome, clienteCpf } = location.state;
+
+      setAbaAtiva('nova');
+      setVenda((prev) => ({
+        ...prev,
+        cliente: clienteNome || prev.cliente,
+        cpf: clienteCpf ? aplicarMascaraCPF(clienteCpf) : prev.cpf
+      }));
+      setMostrarSugestoes(false);
+
+      // Limpa o state para não reaplicar caso o usuário atualize a página
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
+
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -127,15 +155,6 @@ export default function Vendas() {
 
   const abrirConfirmacao = (mensagem, acao, acaoCancelar = null) => {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
-  };
-
-  const aplicarMascaraCPF = (valor) => {
-    return String(valor || '')
-      .replace(/\D/g, '')
-      .slice(0, 11)
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
   const aplicarMascaraMoeda = (valor) => {
