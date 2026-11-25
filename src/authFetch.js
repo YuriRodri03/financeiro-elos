@@ -1,5 +1,5 @@
 // src/authFetch.js
-const API_BASE = (import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api').replace(/\/$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api').replace(/\/$/, '');
 export const CHAVE_TOKEN_PAINEL = 'otica_elos_token';
 
 // Rotas da API que pertencem à loja/cliente ou proxy externo e NUNCA devem receber o token do painel

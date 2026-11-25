@@ -1,3 +1,4 @@
+// src/hooks/useProdutos.js
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pedir } from '../utils/api';
 
@@ -5,8 +6,13 @@ import { pedir } from '../utils/api';
 export function useProdutos() {
   return useQuery({
     queryKey: ['produtos'],
-    queryFn: () => pedir('/produtos'),
+    queryFn: async () => {
+      const res = await pedir('/produtos');
+      return Array.isArray(res) ? res : (res?.produtos || res?.data || []);
+    },
     staleTime: 1000 * 60 * 5, // 5 minutos de cache
+    retry: 2,
+    retryDelay: 5000,
   });
 }
 
@@ -21,7 +27,6 @@ export function useAdicionarProduto() {
       body: JSON.stringify(novoProduto)
     }),
     onSuccess: () => {
-      // Invalida o cache para atualizar a lista automaticamente
       queryClient.invalidateQueries({ queryKey: ['produtos'] });
     }
   });

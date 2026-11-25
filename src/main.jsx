@@ -26,7 +26,7 @@ import EditarVenda from './pages/EditarVenda';
 
 import './index.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
 const CHAVE_TOKEN = 'otica_elos_token';
 const CHAVE_AUTH = 'otica_elos_auth';
 const CHAVE_DADOS = 'otica_elos_dados_equipe';

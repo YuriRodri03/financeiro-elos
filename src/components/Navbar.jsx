@@ -1,41 +1,56 @@
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+
+const LINKS_NAV_TOTAIS = [
+  { id: 'dashboard', nome: 'Dashboard', icone: '📊', restricao: 'ADMIN' },
+  { id: 'vendas', nome: 'Nova Venda', icone: '👓', restricao: 'TODOS' },
+  { id: 'ordens-servico', nome: 'Painel de OS', icone: '📋', restricao: 'TODOS' },
+  { id: 'operacoes', nome: 'Operações', icone: '⚙️', restricao: 'ADMIN' },
+  { id: 'clientes', nome: 'Clientes', icone: '👥', restricao: 'TODOS' },
+  { id: 'produtos', nome: 'Catálogo', icone: '📦', restricao: 'TODOS' },
+  { id: 'despesas', nome: 'Despesas', icone: '💸', restricao: 'ADMIN' },
+  { id: 'relatorios', nome: 'Cobrança', icone: '🚨', restricao: 'ADMIN' },
+  { id: 'zap', nome: 'Automação', icone: '🟢', restricao: 'ADMIN' },
+  { id: 'equipe', nome: 'Equipe & Acessos', icone: '🛡️', restricao: 'ADMIN' },
+];
 
 export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, onLogout }) {
   const [menuAberto, setMenuAberto] = useState(false);
-  const location = useLocation();
 
-  const linksNavTotais = [
-    { id: 'dashboard', nome: 'Dashboard', icone: '📊', restricao: 'ADMIN' },
-    { id: 'vendas', nome: 'Nova Venda', icone: '👓', restricao: 'TODOS' },
-    { id: 'ordens-servico', nome: 'Painel de OS', icone: '📋', restricao: 'TODOS' }, 
-    { id: 'operacoes', nome: 'Operações', icone: '⚙️', restricao: 'ADMIN' }, 
-    { id: 'clientes', nome: 'Clientes', icone: '👥', restricao: 'TODOS' },
-    { id: 'produtos', nome: 'Catálogo', icone: '📦', restricao: 'TODOS' },
-    { id: 'despesas', nome: 'Despesas', icone: '💸', restricao: 'ADMIN' },
-    { id: 'relatorios', nome: 'Cobrança', icone: '🚨', restricao: 'ADMIN' },
-    { id: 'zap', nome: 'Automação', icone: '🟢', restricao: 'ADMIN' },
-    { id: 'equipe', nome: 'Equipe & Acessos', icone: '🛡️', restricao: 'ADMIN' },
-  ];
+  const cargoNormalizado = String(cargo || '').trim().toUpperCase();
+  const ehAdmin = cargoNormalizado === 'ADMIN';
 
-  // 🟢 FILTRO DE SEGURANÇA: Remove do menu os botões proibidos para o Vendedor
-  const linksNav = linksNavTotais.filter(link => {
-    if (cargo === 'VENDEDOR' && link.restricao === 'ADMIN') return false;
+  // Filtro de segurança (fail-closed): só libera rotas ADMIN para cargo ADMIN
+  const linksNav = LINKS_NAV_TOTAIS.filter((link) => {
+    if (link.restricao === 'ADMIN' && !ehAdmin) return false;
     return true;
   });
 
+  // Fecha o menu lateral ao pressionar Esc
+  useEffect(() => {
+    if (!menuAberto) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMenuAberto(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [menuAberto]);
+
   const handleNavegacao = (abaId) => {
-    setAbaAtiva(abaId);
+    setAbaAtiva?.(abaId);
     setMenuAberto(false);
   };
 
   return (
     <>
-      {/* NAVBAR SUPERIOR ULTRA COMPACTA CLEAN */}
+      {/* NAVBAR SUPERIOR */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-elos-bege/10 shadow-sm px-4 md:px-10 py-4 flex items-center justify-between transition-all gap-4">
-        
+
         {/* LOGO DA ÓTICA */}
-        <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => handleNavegacao(cargo === 'VENDEDOR' ? 'vendas' : 'dashboard')}>
+        <button
+          type="button"
+          className="flex items-center gap-3 cursor-pointer shrink-0 text-left bg-transparent border-none p-0"
+          onClick={() => handleNavegacao(ehAdmin ? 'dashboard' : 'vendas')}
+        >
           <span className="text-2xl animate-in fade-in duration-500">👓</span>
           <div className="flex flex-col">
             <span className="font-tradicional text-xl font-black text-elos-verde italic tracking-tight leading-none">
@@ -45,22 +60,24 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, on
               SISTEMA INTERNO
             </span>
           </div>
-        </div>
+        </button>
 
-        {/* CONTROLE DE PERFIL RAPIDO */}
+        {/* CONTROLE DE PERFIL RÁPIDO */}
         <div className="flex items-center gap-4 shrink-0">
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-black text-elos-texto uppercase tracking-wide">
               {usuarioLogado || 'Equipe Elos'}
             </span>
             <span className="text-[9px] font-bold text-green-600 uppercase tracking-tighter text-right">
-              ● {cargo || 'ADMIN'}
+              ● {cargoNormalizado || 'EQUIPE'}
             </span>
           </div>
 
           {/* BOTÃO HAMBÚRGUER UNIFICADO */}
-          <button 
-            onClick={() => setMenuAberto(!menuAberto)}
+          <button
+            type="button"
+            aria-expanded={menuAberto}
+            onClick={() => setMenuAberto((prev) => !prev)}
             className="p-2.5 bg-elos-fundo text-elos-verde rounded-xl focus:outline-none transition-all active:scale-95 hover:bg-elos-bege hover:text-white flex items-center justify-center shadow-xs gap-2 font-black text-xs uppercase tracking-wider"
             title="Abrir Menu de Navegação"
           >
@@ -72,13 +89,13 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, on
         </div>
       </nav>
 
-      {/* GAVETA LATERAL DE NAVEGAÇÃO UNIFICADA BLINDADA CONTRA ROLAGEM HORIZONTAL */}
+      {/* GAVETA LATERAL DE NAVEGAÇÃO */}
       {menuAberto && (
-        <div 
+        <div
           className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex justify-end animate-in fade-in duration-200"
           onClick={() => setMenuAberto(false)}
         >
-          <div 
+          <div
             className="w-72 max-w-full h-full bg-white shadow-2xl p-6 flex flex-col justify-between animate-in slide-in-from-right duration-300 border-l border-elos-bege/10 box-border"
             onClick={(e) => e.stopPropagation()}
           >
@@ -89,7 +106,9 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, on
                   <span className="font-tradicional text-lg text-elos-verde font-black italic">Navegação</span>
                   <span className="text-[9px] font-sans font-black text-gray-400 uppercase tracking-widest">Painel de Controle</span>
                 </div>
-                <button 
+                <button
+                  type="button"
+                  aria-label="Fechar menu"
                   onClick={() => setMenuAberto(false)}
                   className="w-8 h-8 flex items-center justify-center bg-elos-fundo text-gray-400 hover:text-red-500 rounded-full text-xl transition-colors font-bold"
                 >
@@ -100,14 +119,15 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, on
               {/* Lista Vertical de Links - Filtrada por Cargo */}
               <div className="flex flex-col gap-2 max-h-[65vh] overflow-y-auto no-scrollbar overflow-x-hidden">
                 {linksNav.map((link) => {
-                  const ativo = abaAtual === link.id; 
+                  const ativo = abaAtual === link.id;
                   return (
                     <button
+                      type="button"
                       key={link.id}
                       onClick={() => handleNavegacao(link.id)}
-                      className={`w-full px-4 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest text-left flex items-center gap-4 transition-all whitespace-normal break-words ${
-                        ativo 
-                          ? 'bg-elos-verde text-white shadow-md shadow-elos-verde/10 scale-[1.01]' 
+                      className={`w-full px-4 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest text-left flex items-center gap-4 transition-all whitespace-normal wrap-break-word ${
+                        ativo
+                          ? 'bg-elos-verde text-white shadow-md shadow-elos-verde/10 scale-[1.01]'
                           : 'text-gray-400 bg-elos-fundo/40 hover:bg-elos-fundo hover:text-elos-verde'
                       }`}
                     >
@@ -127,10 +147,11 @@ export default function Navbar({ abaAtual, setAbaAtiva, usuarioLogado, cargo, on
                 </span>
                 <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Ótica Elos &copy; 2026</span>
               </div>
-              <button 
+              <button
+                type="button"
                 onClick={() => {
                   setMenuAberto(false);
-                  onLogout();
+                  onLogout?.();
                 }}
                 className="px-4 py-2.5 bg-red-50 hover:bg-red-600 text-red-500 hover:text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0"
               >

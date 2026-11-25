@@ -1,95 +1,181 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAdicionarCliente } from '../../hooks/useClientes';
+
+const ESTADO_INICIAL = {
+  nome: '',
+  cpf: '',
+  dataNascimento: '',
+  telefone: '',
+  email: '',
+  origem: '',
+  endereco: '',
+  observacoes: '',
+  foto: ''
+};
+
+// --- COMPRESSÃO DE IMAGEM PARA WEBP (800px) ---
+const comprimirImagem = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo.'));
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error('Falha ao comprimir imagem.'));
+          resolve(new File([blob], 'imagem_otimizada.webp', { type: 'image/webp' }));
+        }, 'image/webp', 0.8);
+      };
+    };
+  });
+};
 
 export default function CadastroClientes() {
   const adicionarClienteMutation = useAdicionarCliente();
+  const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
 
-  // 🟢 ADICIONADO: campo 'origem' no estado
-  const [novo, setNovo] = useState({
-    nome: '', 
-    cpf: '', 
-    dataNascimento: '',
-    telefone: '', 
-    email: '', 
-    origem: '', // <-- Novo Campo
-    endereco: '', 
-    observacoes: '',
-    foto: '' 
-  });
-
+  const [novo, setNovo] = useState(ESTADO_INICIAL);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
+  const toastTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ visivel: true, mensagem, tipo });
-    setTimeout(() => {
+    toastTimerRef.current = setTimeout(() => {
       setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
-    }, 3500); 
+    }, 3500);
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNovo({ ...novo, foto: reader.result });
-      };
-      reader.readAsDataURL(file);
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!imgBBKey) {
+      mostrarToast('Chave VITE_IMGBB_API_KEY não encontrada!', 'erro');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+    mostrarToast('Comprimindo e enviando foto... ⏳', 'sucesso');
+
+    try {
+      const fotoOtimizada = await comprimirImagem(file);
+      const formData = new FormData();
+      formData.append('image', fotoOtimizada);
+
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.success && data.data?.url) {
+        setNovo((prev) => ({ ...prev, foto: data.data.url }));
+        mostrarToast('Foto enviada com sucesso! ✅', 'sucesso');
+      } else {
+        mostrarToast('Falha no upload da imagem no ImgBB.', 'erro');
+      }
+    } catch {
+      mostrarToast('Erro ao processar ou enviar a imagem.', 'erro');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
     }
   };
 
   const mascaraTelefone = (v) => {
-    return v.replace(/\D/g, "")
-      .replace(/^(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2")
-      .substring(0, 15);
+    return v
+      .replace(/\D/g, '')
+      .slice(0, 11)
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d)/, '$1-$2');
   };
 
   const mascaraCPF = (v) => {
-    return v.replace(/\D/g, "")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
-      .substring(0, 14);
+    return v
+      .replace(/\D/g, '')
+      .slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'telefone') {
-      setNovo({ ...novo, [name]: mascaraTelefone(value) });
+      setNovo((prev) => ({ ...prev, telefone: mascaraTelefone(value) }));
     } else if (name === 'cpf') {
-      setNovo({ ...novo, [name]: mascaraCPF(value) });
+      setNovo((prev) => ({ ...prev, cpf: mascaraCPF(value) }));
     } else {
-      setNovo({ ...novo, [name]: value });
+      setNovo((prev) => ({ ...prev, [name]: value }));
     }
   };
 
   const salvar = async (e) => {
     e.preventDefault();
-    
-    if (novo.cpf.length < 14) {
-      mostrarToast("Por favor, preencha o CPF corretamente.", "erro");
+    if (uploadingImage || adicionarClienteMutation.isPending) return;
+
+    const cpfDigitos = novo.cpf.replace(/\D/g, '');
+    if (cpfDigitos.length !== 11) {
+      mostrarToast('Por favor, preencha o CPF corretamente com 11 dígitos.', 'erro');
       return;
     }
 
+    const payload = {
+      ...novo,
+      nome: novo.nome.trim(),
+      email: novo.email.trim().toLowerCase(),
+      origem: novo.origem.trim(),
+      endereco: novo.endereco.trim(),
+      observacoes: novo.observacoes.trim()
+    };
+
     try {
-      await adicionarClienteMutation.mutateAsync(novo);
-      mostrarToast("Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨", "sucesso");
-      // 🟢 ADICIONADO: 'origem' limpo após o sucesso
-      setNovo({ nome: '', cpf: '', dataNascimento: '', telefone: '', email: '', origem: '', endereco: '', observacoes: '', foto: '' });
+      await adicionarClienteMutation.mutateAsync(payload);
+      mostrarToast('Cliente cadastrado com sucesso na nuvem da Ótica Elos! ☁️✨', 'sucesso');
+      setNovo(ESTADO_INICIAL);
     } catch (error) {
-      mostrarToast(error.message || "Erro ao conectar com o banco de dados.", "erro");
+      mostrarToast(error.message || 'Erro ao conectar com o banco de dados.', 'erro');
     }
   };
 
   return (
-    <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
-      
+    <div className="bg-elos-fundo py-4 px-2 md:p-6 font-sans text-elos-texto relative">
+
       {toast.visivel && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-9999 animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
-            toast.tipo === 'sucesso' 
-              ? 'bg-elos-verde/95 border-elos-bege/30 text-white' 
+            toast.tipo === 'sucesso'
+              ? 'bg-elos-verde/95 border-elos-bege/30 text-white'
               : 'bg-red-900/95 border-red-500/30 text-red-100'
           }`}>
             <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
@@ -99,50 +185,49 @@ export default function CadastroClientes() {
       )}
 
       <div className="max-w-4xl mx-auto">
-        <header className="mb-10 text-center md:text-left">
+        <header className="mb-8 text-center md:text-left">
           <h1 className="font-tradicional text-3xl md:text-4xl text-elos-verde italic border-b-2 border-elos-bege/30 pb-4 inline-block">
             Novo Cadastro - Ótica Elos
           </h1>
           <p className="text-gray-400 text-xs uppercase tracking-[0.2em] mt-2 font-bold">Registro de Clientes e Receitas</p>
         </header>
 
-        <form onSubmit={salvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
-          
+        <form onSubmit={salvar} className="bg-white rounded-4xl shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10">
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Nome Completo</label>
-              <input type="text" name="nome" value={novo.nome} onChange={handleChange} required placeholder="Ex: João Silva de Souza" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300"/>
+              <input type="text" name="nome" value={novo.nome} onChange={handleChange} required placeholder="Ex: João Silva de Souza" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300" />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">CPF (Obrigatório)</label>
-              <input type="text" name="cpf" value={novo.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
+              <input type="text" name="cpf" value={novo.cpf} onChange={handleChange} required placeholder="000.000.000-00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all" />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Data de Nascimento</label>
-              <input type="date" name="dataNascimento" value={novo.dataNascimento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all text-gray-500"/>
+              <input type="date" name="dataNascimento" value={novo.dataNascimento} onChange={handleChange} className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all text-gray-500" />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Telefone / WhatsApp</label>
-              <input type="text" name="telefone" value={novo.telefone} onChange={handleChange} placeholder="(88) 99999-9999" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
+              <input type="text" name="telefone" value={novo.telefone} onChange={handleChange} placeholder="(88) 99999-9999" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all" />
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">E-mail</label>
-              <input type="email" name="email" value={novo.email} onChange={handleChange} placeholder="cliente@email.com" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300"/>
+              <input type="email" name="email" value={novo.email} onChange={handleChange} placeholder="cliente@email.com" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all placeholder:text-gray-300" />
             </div>
 
-            {/* 🟢 NOVO CAMPO: Origem do Cliente (Usando Datalist para ter sugestões + digitação livre) */}
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Origem (De onde veio?)</label>
-              <input 
-                list="opcoes-origem" 
-                name="origem" 
-                value={novo.origem} 
-                onChange={handleChange} 
-                placeholder="Ex: Instagram, Indicação da Maria..." 
+              <input
+                list="opcoes-origem"
+                name="origem"
+                value={novo.origem}
+                onChange={handleChange}
+                placeholder="Ex: Instagram, Indicação da Maria..."
                 className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"
               />
               <datalist id="opcoes-origem">
@@ -157,24 +242,33 @@ export default function CadastroClientes() {
 
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1">Endereço Completo</label>
-              <input type="text" name="endereco" value={novo.endereco} onChange={handleChange} placeholder="Rua, Número, Bairro e Cidade" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all"/>
+              <input type="text" name="endereco" value={novo.endereco} onChange={handleChange} placeholder="Rua, Número, Bairro e Cidade" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-elos-bege outline-none transition-all" />
             </div>
 
             <div className="md:col-span-2 space-y-4">
               <label className="text-xs font-black text-elos-verde uppercase tracking-widest ml-1 italic">Anexos e Observações Clínicas</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <textarea name="observacoes" value={novo.observacoes} onChange={handleChange} rows="5" placeholder="Detalhes técnicos permanentes do cliente..." className="w-full px-5 py-4 bg-elos-fundo/50 border-2 border-elos-bege/20 rounded-3xl focus:ring-2 focus:ring-elos-bege outline-none transition-all resize-none italic text-elos-texto"></textarea>
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-3xl p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all min-h-[160px]">
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-3xl p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all min-h-40">
                   {novo.foto ? (
                     <div className="flex flex-col items-center gap-3 w-full">
                       <img src={novo.foto} alt="Preview do Cliente" className="max-h-32 rounded-xl shadow-lg border-2 border-white object-cover" />
-                      <button type="button" onClick={() => setNovo({...novo, foto: ''})} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Anexo</button>
+                      <button type="button" onClick={() => setNovo((prev) => ({ ...prev, foto: '' }))} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remover Anexo</button>
                     </div>
                   ) : (
                     <>
-                      <div className="text-4xl mb-2 opacity-50">📸</div>
-                      <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
-                      <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                      <div className="text-4xl mb-2 opacity-50">{uploadingImage ? '⏳' : '📸'}</div>
+                      <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">
+                        {uploadingImage ? 'Otimizando e enviando...' : 'Tirar Foto ou Anexar Receita'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        disabled={uploadingImage}
+                        onChange={handleFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                      />
                       <div className="mt-2 text-elos-bege/40 text-[9px] font-bold uppercase tracking-widest">Clique para abrir câmera</div>
                     </>
                   )}
@@ -183,20 +277,20 @@ export default function CadastroClientes() {
             </div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={adicionarClienteMutation.isPending}
-            className={`w-full text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all text-lg uppercase tracking-[0.2em] mt-6 
-              ${adicionarClienteMutation.isPending 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-elos-verde hover:bg-[#3a4a3e] shadow-elos-verde/20 active:scale-[0.98]'
-              }`}
+          <button
+            type="submit"
+            disabled={uploadingImage || adicionarClienteMutation.isPending}
+            className={`w-full text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all text-lg uppercase tracking-[0.2em] mt-6 ${
+              uploadingImage || adicionarClienteMutation.isPending
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-elos-verde hover:bg-[#3a4a3e] shadow-elos-verde/20 active:scale-98'
+            }`}
           >
-            {adicionarClienteMutation.isPending ? 'Salvando...' : 'Finalizar Cadastro'}
+            {uploadingImage ? 'Enviando Foto...' : adicionarClienteMutation.isPending ? 'Salvando...' : 'Finalizar Cadastro'}
           </button>
         </form>
 
-        <footer className="mt-10 text-center text-gray-400 text-[10px] uppercase tracking-widest font-bold">
+        <footer className="mt-8 text-center text-gray-400 text-[10px] uppercase tracking-widest font-bold">
           Sistema Homologado Ótica Elos &copy; 2026
         </footer>
       </div>

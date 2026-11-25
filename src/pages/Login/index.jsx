@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login({ onLogin }) {
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
 
   const [modo, setModo] = useState('LOGIN');
   const [carregando, setCarregando] = useState(false);

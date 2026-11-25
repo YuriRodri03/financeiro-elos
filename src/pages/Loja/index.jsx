@@ -503,7 +503,7 @@ export default function HomeLoja() {
   const [busca, setBusca] = useState('');
 
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
 
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   const [isScrolled, setIsScrolled] = useState(false);

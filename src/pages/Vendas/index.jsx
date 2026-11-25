@@ -3,19 +3,93 @@ import { useNavigate } from 'react-router-dom';
 import { gerarPDFDocumento } from '../../documentosUtils';
 
 import { useClientes } from '../../hooks/useClientes';
-import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos'; 
+import { useProdutos, useAdicionarProduto } from '../../hooks/useProdutos';
 import { useVendas, useAdicionarVenda } from '../../hooks/useVendas';
+
+// Data de hoje no fuso de Fortaleza (YYYY-MM-DD)
+const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
+// Soma meses sem estourar o dia (31/01 + 1 mês = 28/02)
+const somarMesesIso = (iso, meses) => {
+  const [a, m, d] = String(iso).split('T')[0].split('-').map(Number);
+  if (!a || !m || !d) return hojeBR();
+  const ultimoDia = new Date(a, m - 1 + meses + 1, 0).getDate();
+  const alvo = new Date(a, m - 1 + meses, Math.min(d, ultimoDia), 12);
+  return alvo.toLocaleDateString('sv-SE');
+};
+
+const limparCpf = (v) => String(v || '').replace(/\D/g, '');
+
+const formatarDataBR = (dataStr) => {
+  if (!dataStr) return '--/--/----';
+  const limpa = String(dataStr).split('T')[0];
+  const partes = limpa.split('-');
+  return partes.length === 3 ? partes.reverse().join('/') : limpa;
+};
+
+const criarEstadoInicialVenda = () => {
+  const hoje = hojeBR();
+  return {
+    cliente: '',
+    cpf: '',
+    valorEntrada: '',
+    desconto: '',
+    parcelas: 1,
+    metodoPagamento: 'Dinheiro',
+    observacoes: '',
+    foto: '',
+    dataVenda: hoje,
+    dataEntrada: hoje,
+    dataPrimeiraParcela: hoje
+  };
+};
+
+const comprimirImagemReceita = (imgFile) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler a imagem.'));
+    reader.readAsDataURL(imgFile);
+
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido ou corrompido.'));
+      img.src = event.target.result;
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error('Não foi possível comprimir a imagem.'));
+          resolve(new File([blob], 'receita_otimizada.webp', { type: 'image/webp' }));
+        }, 'image/webp', 0.8);
+      };
+    };
+  });
+};
 
 export default function Vendas() {
   const navigate = useNavigate();
-
-  // Chave da API do ImgBB
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
 
   const { data: clientes = [] } = useClientes();
   const { data: vendas = [] } = useVendas();
   const { data: produtos = [] } = useProdutos();
-  
+
   const adicionarProdutoMutation = useAdicionarProduto();
   const adicionarVendaMutation = useAdicionarVenda();
 
@@ -25,66 +99,97 @@ export default function Vendas() {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesProd, setMostrarSugestoesProd] = useState(false);
   const [uploadingReceita, setUploadingReceita] = useState(false);
-  
+
   const wrapperRef = useRef(null);
   const prodWrapperRef = useRef(null);
+  const toastTimerRef = useRef(null);
 
-  // 🟢 ADICIONADO: dataEntrada no estado inicial
-  const [venda, setVenda] = useState({
-    cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-    metodoPagamento: 'Dinheiro', observacoes: '', foto: '', 
-    dataVenda: new Date().toISOString().split('T')[0],
-    dataEntrada: new Date().toISOString().split('T')[0], // NOVO
-    dataPrimeiraParcela: new Date().toISOString().split('T')[0]
-  });
-
+  const [venda, setVenda] = useState(criarEstadoInicialVenda);
   const [itensCarrinho, setItensCarrinho] = useState([]);
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '', desconto: '' });
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
 
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   const mostrarToast = (mensagem, tipo = 'sucesso') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ visivel: true, mensagem, tipo });
-    setTimeout(() => setToast({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      setToast({ visivel: false, mensagem: '', tipo: 'sucesso' });
+    }, 3000);
   };
 
   const abrirConfirmacao = (mensagem, acao, acaoCancelar = null) => {
     setConfirmModal({ visivel: true, mensagem, acao, acaoCancelar });
   };
 
-  // 🟢 SUGESTÕES DE CLIENTES
+  const aplicarMascaraCPF = (valor) => {
+    return String(valor || '')
+      .replace(/\D/g, '')
+      .slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  };
+
+  const aplicarMascaraMoeda = (valor) => {
+    const digitos = String(valor || '').replace(/\D/g, '');
+    if (!digitos) return '';
+    return (Number(digitos) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  const limparMoeda = (valor) => {
+    if (!valor) return 0;
+    return Number(String(valor).replace(/\D/g, '')) / 100;
+  };
+
+  // Sugestões de Clientes
   const sugestoes = useMemo(() => {
     if (!venda.cliente || venda.cliente.trim().length === 0 || !mostrarSugestoes) return [];
-    
-    const termo = venda.cliente.toLowerCase();
-    const termoSomenteNumeros = termo.replace(/\D/g, '');
 
-    return clientes.filter(c => {
-      if (!c.nome) return false;
+    const termo = venda.cliente.trim().toLowerCase();
+    const termoSomenteNumeros = limparCpf(termo);
+
+    return clientes.filter((c) => {
+      if (!c?.nome) return false;
       const nomeMatch = c.nome.toLowerCase().includes(termo);
-      const cpfMatch = c.cpf && (c.cpf.includes(termo) || (termoSomenteNumeros && c.cpf.replace(/\D/g, '').includes(termoSomenteNumeros)));
+      const cpfMatch = c.cpf && (
+        c.cpf.includes(termo) ||
+        (termoSomenteNumeros && limparCpf(c.cpf).includes(termoSomenteNumeros))
+      );
       return nomeMatch || cpfMatch;
     }).slice(0, 5);
   }, [venda.cliente, clientes, mostrarSugestoes]);
 
   const selecionarCliente = (c) => {
-    setVenda({ ...venda, cliente: c.nome, cpf: c.cpf || '' });
+    setVenda((prev) => ({ ...prev, cliente: c.nome, cpf: c.cpf ? aplicarMascaraCPF(c.cpf) : '' }));
     setMostrarSugestoes(false);
   };
 
-  // 🟢 Sugestões de Produtos
+  // Sugestões de Produtos (exclui registros internos de promoção PROMO_CATE)
   const sugestoesProd = useMemo(() => {
     if (!novoItem.nome || !mostrarSugestoesProd) return [];
-    const termo = novoItem.nome.toLowerCase();
-    return produtos.filter(p => p.nome.toLowerCase().includes(termo) || (p.referencia && p.referencia.toLowerCase().includes(termo))).slice(0, 5);
+    const termo = novoItem.nome.trim().toLowerCase();
+    return produtos
+      .filter((p) => p && p.categoria !== 'PROMO_CATE' && (
+        String(p.nome || '').toLowerCase().includes(termo) ||
+        String(p.referencia || '').toLowerCase().includes(termo)
+      ))
+      .slice(0, 5);
   }, [novoItem.nome, produtos, mostrarSugestoesProd]);
 
   const selecionarProdutoCat = (p) => {
-    setNovoItem({ 
-      nome: p.nome.toUpperCase(), 
-      preco: aplicarMascaraMoeda(String(p.preco * 100)),
-      desconto: '' 
+    const centavos = Math.round((Number(p.preco) || 0) * 100).toString();
+    setNovoItem({
+      nome: String(p.nome || '').toUpperCase(),
+      preco: aplicarMascaraMoeda(centavos),
+      desconto: ''
     });
     setMostrarSugestoesProd(false);
   };
@@ -94,312 +199,312 @@ export default function Vendas() {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setMostrarSugestoes(false);
       if (prodWrapperRef.current && !prodWrapperRef.current.contains(e.target)) setMostrarSugestoesProd(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleUploadReceita = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!imgBBKey) {
-      mostrarToast("Chave VITE_IMGBB_API_KEY não encontrada!", "erro");
+      mostrarToast('Chave VITE_IMGBB_API_KEY não encontrada!', 'erro');
+      e.target.value = '';
       return;
     }
 
     setUploadingReceita(true);
-    mostrarToast("Comprimindo e enviando receita... ⏳", "sucesso");
-
-    const comprimirImagem = (imgFile) => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(imgFile);
-        reader.onload = (event) => {
-          const img = new Image();
-          img.src = event.target.result;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800; 
-            const MAX_HEIGHT = 800;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-            } else {
-              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-            }
-            
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            canvas.toBlob((blob) => {
-              resolve(new File([blob], "receita_otimizada.webp", { type: 'image/webp' }));
-            }, 'image/webp', 0.8);
-          };
-        };
-      });
-    };
+    mostrarToast('Comprimindo e enviando receita... ⏳', 'sucesso');
 
     try {
-      const fotoSuperLeve = await comprimirImagem(file);
-      
+      const fotoSuperLeve = await comprimirImagemReceita(file);
       const formData = new FormData();
-      formData.append("image", fotoSuperLeve);
+      formData.append('image', fotoSuperLeve);
 
       const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
-        method: "POST",
-        body: formData,
+        method: 'POST',
+        body: formData
       });
 
       const data = await res.json();
-      if (data.success) {
-        setVenda({ ...venda, foto: data.data.url });
-        mostrarToast("Receita anexada com sucesso! ✅", "sucesso");
+      if (data.success && data.data?.url) {
+        setVenda((prev) => ({ ...prev, foto: data.data.url }));
+        mostrarToast('Receita anexada com sucesso! ✅', 'sucesso');
       } else {
-        mostrarToast("Falha no upload via ImgBB.", "erro");
-        console.error("Erro no ImgBB:", data);
+        mostrarToast('Falha no upload via ImgBB.', 'erro');
+        console.error('Erro no ImgBB:', data);
       }
     } catch (error) {
-      mostrarToast("Erro ao processar imagem.", "erro");
-      console.error("Erro na requisição:", error);
+      mostrarToast('Erro ao processar imagem.', 'erro');
+      console.error('Erro na requisição:', error);
+    } finally {
+      setUploadingReceita(false);
+      e.target.value = '';
     }
-
-    setUploadingReceita(false);
-  };
-
-  const aplicarMascaraCPF = (valor) => valor.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  
-  const aplicarMascaraMoeda = (valor) => {
-    let v = String(valor).replace(/\D/g, '');
-    if (!v) return '';
-    return (Number(v) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-  
-  const limparMoeda = (valor) => {
-    if (!valor) return 0;
-    return Number(String(valor).replace(/[^\d]/g, '')) / 100;
   };
 
   const adicionarAoCarrinho = () => {
-    if (!novoItem.nome || !novoItem.preco) return mostrarToast("Preencha a descrição do item e o preço correspondente.", "erro");
-    
+    const nomeLimpo = novoItem.nome.trim();
     const precoBruto = limparMoeda(novoItem.preco);
-    const descontoAplicado = limparMoeda(novoItem.desconto || '0');
-    const precoFinal = Math.max(0, precoBruto - descontoAplicado);
 
-    setItensCarrinho([
-      ...itensCarrinho, 
-      { 
-        id: Date.now(), 
-        nome: novoItem.nome.toUpperCase(), 
-        precoOriginal: precoBruto, 
-        descontoItem: descontoAplicado, 
-        preco: precoFinal 
+    if (!nomeLimpo || precoBruto <= 0) {
+      return mostrarToast('Preencha a descrição do item e um preço maior que zero.', 'erro');
+    }
+
+    const descontoAplicado = limparMoeda(novoItem.desconto || '0');
+    const precoFinal = Math.max(0, parseFloat((precoBruto - descontoAplicado).toFixed(2)));
+
+    setItensCarrinho((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        nome: nomeLimpo.toUpperCase(),
+        precoOriginal: precoBruto,
+        descontoItem: descontoAplicado,
+        preco: precoFinal
       }
     ]);
     setNovoItem({ nome: '', preco: '', desconto: '' });
   };
 
-  const removerDoCarrinho = (id) => setItensCarrinho(itensCarrinho.filter(item => item.id !== id));
+  const removerDoCarrinho = (id) => {
+    setItensCarrinho((prev) => prev.filter((item) => item.id !== id));
+  };
 
   const salvarItemNoCatalogo = async (item) => {
     try {
-      await adicionarProdutoMutation.mutateAsync({ nome: item.nome.toUpperCase(), preco: item.precoOriginal || item.preco, categoria: 'ARMAÇÃO' });
-      mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, "sucesso");
-    } catch (err) { mostrarToast("Erro ao sincronizar item com o catálogo.", "erro"); }
+      await adicionarProdutoMutation.mutateAsync({
+        nome: item.nome.toUpperCase(),
+        preco: item.precoOriginal || item.preco,
+        categoria: 'ARMAÇÃO'
+      });
+      mostrarToast(`"${item.nome}" salvo no catálogo com sucesso! 📦`, 'sucesso');
+    } catch (err) {
+      mostrarToast(err?.message || 'Erro ao sincronizar item com o catálogo.', 'erro');
+    }
   };
 
-  const subtotalItens = useMemo(() => itensCarrinho.reduce((acc, item) => acc + item.preco, 0), [itensCarrinho]);
-  const totalFinalVenda = useMemo(() => Math.max(0, subtotalItens - limparMoeda(venda.desconto)), [subtotalItens, venda.desconto]);
+  const subtotalItens = useMemo(
+    () => parseFloat(itensCarrinho.reduce((acc, item) => acc + item.preco, 0).toFixed(2)),
+    [itensCarrinho]
+  );
+
+  const totalFinalVenda = useMemo(
+    () => Math.max(0, parseFloat((subtotalItens - limparMoeda(venda.desconto)).toFixed(2))),
+    [subtotalItens, venda.desconto]
+  );
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'cpf') {
-      const valorFormatado = aplicarMascaraCPF(value).substring(0, 14);
-      const isCompleto = valorFormatado.length === 14;
-      const clienteExistente = isCompleto ? clientes.find(c => c.cpf === valorFormatado) : null;
-      
-      setVenda({ 
-        ...venda, 
-        cpf: valorFormatado, 
-        cliente: clienteExistente ? clienteExistente.nome : venda.cliente 
-      });
+      const valorFormatado = aplicarMascaraCPF(value);
+      const digitos = limparCpf(valorFormatado);
+      const clienteExistente = digitos.length === 11
+        ? clientes.find((c) => limparCpf(c.cpf) === digitos)
+        : null;
 
+      setVenda((prev) => ({
+        ...prev,
+        cpf: valorFormatado,
+        cliente: clienteExistente ? clienteExistente.nome : prev.cliente
+      }));
     } else if (name === 'cliente') {
-      setVenda({ ...venda, cliente: value });
+      setVenda((prev) => ({ ...prev, cliente: value }));
       setMostrarSugestoes(true);
-
     } else if (name === 'valorEntrada' || name === 'desconto') {
-      setVenda({ ...venda, [name]: aplicarMascaraMoeda(value) });
-      
+      setVenda((prev) => ({ ...prev, [name]: aplicarMascaraMoeda(value) }));
     } else if (name === 'metodoPagamento') {
       const isAVista = value === 'Dinheiro' || value === 'Pix';
-      setVenda({ ...venda, [name]: value, parcelas: isAVista ? 1 : venda.parcelas });
-      
+      setVenda((prev) => ({ ...prev, [name]: value, parcelas: isAVista ? 1 : prev.parcelas }));
     } else {
-      setVenda({ ...venda, [name]: value });
+      setVenda((prev) => ({ ...prev, [name]: value }));
     }
   };
 
   const handleSalvar = async (e) => {
     e.preventDefault();
-    if (itensCarrinho.length === 0) return mostrarToast("Adicione pelo menos um item ao carrinho antes de finalizar.", "erro");
-    if (!venda.cliente || !venda.cpf) return mostrarToast("Identifique os dados do cliente vinculados a esta operação.", "erro");
+    if (uploadingReceita || adicionarVendaMutation.isPending) return;
 
-    const clienteBase = clientes.find(c => c.cpf === venda.cpf);
+    if (itensCarrinho.length === 0) {
+      return mostrarToast('Adicione pelo menos um item ao carrinho antes de finalizar.', 'erro');
+    }
+
+    const clienteLimpo = venda.cliente.trim();
+    const cpfDigitos = limparCpf(venda.cpf);
+    if (!clienteLimpo || cpfDigitos.length !== 11) {
+      return mostrarToast('Informe o nome do cliente e um CPF válido com 11 dígitos.', 'erro');
+    }
+
     const descontoNum = limparMoeda(venda.desconto);
     const valorEntradaNum = limparMoeda(venda.valorEntrada);
+
+    if (valorEntradaNum > totalFinalVenda) {
+      return mostrarToast('O valor de entrada não pode ser maior que o total final da venda.', 'erro');
+    }
+
+    if (venda.metodoPagamento === 'Boleto / Crediário' && totalFinalVenda - valorEntradaNum > 0 && !venda.dataPrimeiraParcela) {
+      return mostrarToast('Informe a data de vencimento da 1ª parcela.', 'erro');
+    }
+
+    const clienteBase = clientes.find((c) => limparCpf(c.cpf) === cpfDigitos);
     const carrinhoParaPDF = [...itensCarrinho];
 
-    // 🟢 INTELIGÊNCIA ARTIFICIAL: GERANDO AS PARCELAS AUTOMATICAMENTE PARA O BANCO DE DADOS
-    const hojeStr = new Date().toISOString().split('T')[0];
-    const isEntradaPaga = venda.dataEntrada <= hojeStr;
+    const hojeStr = hojeBR();
+    const dataVendaLimpa = venda.dataVenda || hojeStr;
+    const dataEntradaLimpa = venda.dataEntrada || dataVendaLimpa;
+    const isEntradaPaga = dataEntradaLimpa <= hojeStr;
 
-    let parcelasGeradas = [];
-    const valorRestante = totalFinalVenda - valorEntradaNum;
-    const numParcelas = Number(venda.parcelas) || 1;
+    const parcelasGeradas = [];
+    const valorRestante = parseFloat(Math.max(0, totalFinalVenda - valorEntradaNum).toFixed(2));
+    const numParcelas = Math.max(1, Number(venda.parcelas) || 1);
 
-    // 1. Gera a Parcela Zero (Entrada / Sinal)
+    // 1. Parcela Zero (Entrada / Sinal)
     if (valorEntradaNum > 0) {
       parcelasGeradas.push({
         numero: 0,
-        valor: valorEntradaNum,
-        vencimentoOriginal: venda.dataEntrada,
-        dataVencimento: venda.dataEntrada,
+        valor: parseFloat(valorEntradaNum.toFixed(2)),
+        vencimentoOriginal: dataEntradaLimpa,
+        dataVencimento: dataEntradaLimpa,
         paga: isEntradaPaga,
-        dataPagamento: isEntradaPaga ? venda.dataEntrada : null,
+        dataPagamento: isEntradaPaga ? dataEntradaLimpa : null,
         observacao: 'Entrada / Sinal'
       });
     }
 
-    // 2. Gera as Mensalidades (Restante)
-    if (valorRestante > 0) {
+    // 2. Mensalidades / Pagamento do restante
+    if (valorRestante > 0 || valorEntradaNum <= 0) {
       if (venda.metodoPagamento === 'Boleto / Crediário') {
-        const valorPorParcela = valorRestante / numParcelas;
-        let dataBase = new Date(venda.dataPrimeiraParcela + 'T12:00:00');
-        for (let i = 1; i <= numParcelas; i++) {
-          let venc = new Date(dataBase);
-          venc.setMonth(venc.getMonth() + (i - 1));
-          const vencStr = venc.toISOString().split('T')[0];
-          
+        const valorBase = Math.floor((valorRestante / numParcelas) * 100) / 100;
+        const sobra = parseFloat((valorRestante - valorBase * numParcelas).toFixed(2));
+
+        for (let i = 0; i < numParcelas; i++) {
+          const vencStr = somarMesesIso(venda.dataPrimeiraParcela || dataVendaLimpa, i);
+          const ehUltima = i === numParcelas - 1;
+          const valorParcela = parseFloat((ehUltima ? valorBase + sobra : valorBase).toFixed(2));
+
           parcelasGeradas.push({
-            numero: i,
-            valor: parseFloat(valorPorParcela.toFixed(2)),
+            numero: i + 1,
+            valor: valorParcela,
             vencimentoOriginal: vencStr,
             dataVencimento: vencStr,
             paga: false,
             dataPagamento: null,
-            observacao: `Parcela ${i}/${numParcelas}`
+            observacao: `Parcela ${i + 1}/${numParcelas}`
           });
         }
       } else {
-        // Se for Cartão/Pix/Dinheiro que passa na hora
         const isCartao = venda.metodoPagamento === 'Cartão de Crédito';
         parcelasGeradas.push({
           numero: 1,
           valor: valorRestante,
-          vencimentoOriginal: venda.dataVenda,
-          dataVencimento: venda.dataVenda,
+          vencimentoOriginal: dataVendaLimpa,
+          dataVencimento: dataVendaLimpa,
           paga: true,
-          dataPagamento: venda.dataVenda,
-          observacao: `Pagamento via ${venda.metodoPagamento}`
+          dataPagamento: dataVendaLimpa,
+          observacao: isCartao && numParcelas > 1
+            ? `Cartão de Crédito (${numParcelas}x)`
+            : `Pagamento via ${venda.metodoPagamento}`
         });
       }
     }
 
     const dadosParaSalvar = {
       ...venda,
-      produto: itensCarrinho.map(i => i.nome).join(' + '), 
-      itensCarrinho: itensCarrinho,
+      cliente: clienteLimpo,
+      dataVenda: dataVendaLimpa,
+      dataEntrada: dataEntradaLimpa,
+      parcelas: numParcelas,
+      produto: itensCarrinho.map((i) => i.nome).join(' + '),
+      itensCarrinho,
       valorTotal: totalFinalVenda,
       valorEntrada: valorEntradaNum,
       desconto: descontoNum,
-      listaParcelas: parcelasGeradas // 🟢 Anexando as parcelas corretas para o Servidor
+      listaParcelas: parcelasGeradas
     };
 
     try {
       const resultado = await adicionarVendaMutation.mutateAsync(dadosParaSalvar);
 
       const irParaHistorico = () => {
-        setVenda({
-          cliente: '', cpf: '', valorEntrada: '', desconto: '', parcelas: 1,
-          metodoPagamento: 'Dinheiro', observacoes: '', foto: '',
-          dataVenda: new Date().toISOString().split('T')[0],
-          dataEntrada: new Date().toISOString().split('T')[0],
-          dataPrimeiraParcela: new Date().toISOString().split('T')[0]
-        });
+        setVenda(criarEstadoInicialVenda());
         setItensCarrinho([]);
         setAbaAtiva('historico');
       };
 
       const perguntarReciboEntrada = () => {
-        // 🟢 Só pergunta de recibo se a entrada foi PAGA HOJE
         if (valorEntradaNum > 0 && isEntradaPaga) {
           setTimeout(() => {
-            abrirConfirmacao(`A entrada constou como PAGA. Deseja imprimir o RECIBO de R$ ${valorEntradaNum.toFixed(2).replace('.',',')}?`, () => {
-              gerarPDFDocumento({
-                ...resultado,
-                produto: `Entrada / Sinal (Pedido #${resultado.numeroPedido || 'S/N'})`,
-                dataRecibo: venda.dataEntrada.split('-').reverse().join('/'),
-                valorTotal: valorEntradaNum,
-                desconto: 0,
-                metodoPagamento: resultado.metodoPagamento,
-                itensCarrinho: [{ nome: `ENTRADA / SINAL (PEDIDO #${resultado.numeroPedido || 'S/N'})`, preco: valorEntradaNum }],
-                telefone: clienteBase?.telefone || "Não informado",
-                endereco: clienteBase?.endereco || "Não informado",
-                email: clienteBase?.email || "Não informado"
-              }, 'recibo');
-              irParaHistorico();
-            }, irParaHistorico);
-          }, 400); 
+            abrirConfirmacao(
+              `A entrada constou como PAGA. Deseja imprimir o RECIBO de R$ ${valorEntradaNum.toFixed(2).replace('.', ',')}?`,
+              () => {
+                gerarPDFDocumento({
+                  ...resultado,
+                  produto: `Entrada / Sinal (Pedido #${resultado.numeroPedido || 'S/N'})`,
+                  dataRecibo: formatarDataBR(dataEntradaLimpa),
+                  valorTotal: valorEntradaNum,
+                  desconto: 0,
+                  metodoPagamento: resultado.metodoPagamento,
+                  itensCarrinho: [{ nome: `ENTRADA / SINAL (PEDIDO #${resultado.numeroPedido || 'S/N'})`, preco: valorEntradaNum }],
+                  telefone: clienteBase?.telefone || 'Não informado',
+                  endereco: clienteBase?.endereco || 'Não informado',
+                  email: clienteBase?.email || 'Não informado'
+                }, 'recibo');
+                irParaHistorico();
+              },
+              irParaHistorico
+            );
+          }, 300);
         } else {
           irParaHistorico();
         }
       };
 
-      abrirConfirmacao("Venda registrada com sucesso! 👓 Deseja imprimir o PEDIDO COM GARANTIA em PDF?", () => {
-        gerarPDFDocumento({
-          ...resultado, // Inclui o "listaParcelas" gerado pelo backend
-          itensCarrinho: carrinhoParaPDF, 
-          desconto: descontoNum,          
-          data: resultado.dataVenda ? resultado.dataVenda.split('-').reverse().join('/') : venda.dataVenda.split('-').reverse().join('/'),
-          telefone: clienteBase?.telefone || "Não informado",
-          endereco: clienteBase?.endereco || "Não informado",
-          email: clienteBase?.email || "Não informado"
-        }, 'pedido');
-        mostrarToast("Pedido gerado com sucesso!", "sucesso");
-        perguntarReciboEntrada();
-      }, perguntarReciboEntrada); 
-
+      abrirConfirmacao(
+        'Venda registrada com sucesso! 👓 Deseja imprimir o PEDIDO COM GARANTIA em PDF?',
+        () => {
+          gerarPDFDocumento({
+            ...resultado,
+            itensCarrinho: carrinhoParaPDF,
+            desconto: descontoNum,
+            data: formatarDataBR(resultado.dataVenda || dataVendaLimpa),
+            telefone: clienteBase?.telefone || 'Não informado',
+            endereco: clienteBase?.endereco || 'Não informado',
+            email: clienteBase?.email || 'Não informado'
+          }, 'pedido');
+          mostrarToast('Pedido gerado com sucesso!', 'sucesso');
+          perguntarReciboEntrada();
+        },
+        perguntarReciboEntrada
+      );
     } catch (error) {
-      mostrarToast("Erro operacional ao salvar a venda.", "erro");
+      mostrarToast(error?.message || 'Erro operacional ao salvar a venda.', 'erro');
     }
   };
 
   const vendasFiltradas = useMemo(() => {
-    if (!vendas) return [];
-    let filtradas = [...vendas];
-    
-    if (buscaHistorico) {
-      const termo = buscaHistorico.toLowerCase();
-      filtradas = filtradas.filter(v => 
-        (v.cliente && v.cliente.toLowerCase().includes(termo)) ||
-        (v.cpf && v.cpf.toLowerCase().includes(termo)) ||
-        (v.numeroPedido && String(v.numeroPedido).toLowerCase().includes(termo))
-      );
-    }
-    return filtradas.sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda));
+    if (!Array.isArray(vendas)) return [];
+    const termo = buscaHistorico.trim().toLowerCase();
+    const termoNumeros = limparCpf(termo);
+
+    return [...vendas]
+      .filter((v) => {
+        if (!termo) return true;
+        return (
+          String(v.cliente || '').toLowerCase().includes(termo) ||
+          String(v.cpf || '').toLowerCase().includes(termo) ||
+          (termoNumeros && limparCpf(v.cpf).includes(termoNumeros)) ||
+          String(v.numeroPedido || '').toLowerCase().includes(termo)
+        );
+      })
+      .sort((a, b) => String(b.dataVenda || '').localeCompare(String(a.dataVenda || '')));
   }, [vendas, buscaHistorico]);
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
-      
+
       {toast.visivel && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-9999 animate-in fade-in slide-in-from-top-4 duration-300 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl backdrop-blur-md shadow-2xl border flex items-center gap-3 ${
             toast.tipo === 'sucesso' ? 'bg-elos-verde/95 border-elos-bege/30 text-white' : 'bg-red-900/95 border-red-500/30 text-red-100'
           }`}>
@@ -410,27 +515,29 @@ export default function Vendas() {
       )}
 
       {confirmModal.visivel && (
-        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm flex items-center justify-center z-9999 p-4">
           <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center space-y-6 shadow-2xl border border-elos-bege/20 animate-in zoom-in-95 duration-200">
             <div className="text-4xl text-elos-verde">📄</div>
             <h3 className="font-tradicional text-xl italic text-elos-verde">Impressão</h3>
             <p className="text-xs text-gray-400 font-sans leading-relaxed">{confirmModal.mensagem}</p>
             <div className="flex gap-3">
-              <button 
+              <button
                 type="button"
                 onClick={() => {
-                  if (confirmModal.acaoCancelar) confirmModal.acaoCancelar();
+                  const acaoCancelar = confirmModal.acaoCancelar;
                   setConfirmModal({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
+                  if (acaoCancelar) acaoCancelar();
                 }}
                 className="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
               >
                 Pular
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
-                  if (confirmModal.acao) confirmModal.acao();
+                  const acao = confirmModal.acao;
                   setConfirmModal({ visivel: false, mensagem: '', acao: null, acaoCancelar: null });
+                  if (acao) acao();
                 }}
                 className="flex-1 py-3 bg-elos-verde text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-elos-verde/20 hover:bg-[#3a4a3e] transition-all"
               >
@@ -442,7 +549,7 @@ export default function Vendas() {
       )}
 
       <div className="max-w-5xl mx-auto">
-        
+
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 border-b border-elos-bege/30 pb-6">
           <div>
             <h1 className="font-tradicional text-4xl text-elos-verde italic">Gestão de Vendas</h1>
@@ -451,6 +558,7 @@ export default function Vendas() {
 
           <div className="flex bg-white p-1.5 rounded-2xl shadow-soft border border-elos-bege/10 w-full md:w-auto">
             <button
+              type="button"
               onClick={() => setAbaAtiva('nova')}
               className={`flex-1 md:w-40 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 abaAtiva === 'nova' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'
@@ -459,6 +567,7 @@ export default function Vendas() {
               ➕ Nova Venda
             </button>
             <button
+              type="button"
               onClick={() => setAbaAtiva('historico')}
               className={`flex-1 md:w-40 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 abaAtiva === 'historico' ? 'bg-elos-verde text-white shadow-md' : 'text-gray-400 hover:text-elos-verde'
@@ -471,7 +580,7 @@ export default function Vendas() {
 
         {abaAtiva === 'nova' && (
           <form onSubmit={handleSalvar} className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-12 space-y-8 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">CPF do Cliente</label>
@@ -480,23 +589,23 @@ export default function Vendas() {
 
               <div className="space-y-2 relative" ref={wrapperRef}>
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Nome do Cliente</label>
-                <input 
-                  type="text" 
-                  name="cliente" 
-                  value={venda.cliente} 
-                  onChange={handleChange} 
+                <input
+                  type="text"
+                  name="cliente"
+                  value={venda.cliente}
+                  onChange={handleChange}
                   onFocus={() => setMostrarSugestoes(true)}
-                  required 
-                  placeholder="Nome Completo ou CPF..." 
-                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-elos-bege/30 transition-all" 
+                  required
+                  placeholder="Nome Completo ou CPF..."
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-elos-bege/30 transition-all"
                 />
-      
+
                 {mostrarSugestoes && sugestoes.length > 0 && (
                   <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
                     {sugestoes.map((c) => (
-                      <div 
-                        key={c.cpf || c._id} 
-                        onClick={() => selecionarCliente(c)} 
+                      <div
+                        key={c.cpf || c._id}
+                        onClick={() => selecionarCliente(c)}
                         className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
                       >
                         <span className="font-bold text-sm text-elos-texto">{c.nome}</span>
@@ -508,34 +617,33 @@ export default function Vendas() {
               </div>
             </div>
 
-            <div className="bg-elos-fundo/30 p-6 rounded-[2rem] border-2 border-dashed border-elos-bege/30">
+            <div className="bg-elos-fundo/30 p-6 rounded-4xl border-2 border-dashed border-elos-bege/30">
               <h3 className="text-sm font-black text-elos-verde uppercase mb-4 flex items-center gap-2">🛒 Carrinho de Itens</h3>
-              
+
               <div className="flex flex-col md:flex-row gap-3 mb-6 relative" ref={prodWrapperRef}>
-                
                 <div className="flex-1 relative">
-                  <input 
-                    type="text" 
-                    placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban...)" 
-                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm" 
-                    value={novoItem.nome} 
+                  <input
+                    type="text"
+                    placeholder="Buscar produto no catálogo (Ex: Armação Ray-Ban...)"
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm bg-white"
+                    value={novoItem.nome}
                     onChange={(e) => {
-                      setNovoItem({...novoItem, nome: e.target.value});
+                      setNovoItem((prev) => ({ ...prev, nome: e.target.value }));
                       setMostrarSugestoesProd(true);
                     }}
                     onFocus={() => setMostrarSugestoesProd(true)}
                   />
-                  
+
                   {sugestoesProd.length > 0 && (
                     <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-xl mt-2 max-h-60 overflow-y-auto">
                       {sugestoesProd.map((p) => (
-                        <div 
-                          key={p._id || p.id} 
-                          onClick={() => selecionarProdutoCat(p)} 
+                        <div
+                          key={p._id || p.id}
+                          onClick={() => selecionarProdutoCat(p)}
                           className="p-4 cursor-pointer hover:bg-elos-fundo border-b border-gray-50 flex justify-between items-center"
                         >
                           <span className="font-bold text-sm text-elos-texto">{p.nome}</span>
-                          <span className="text-xs text-elos-verde font-black">R$ {Number(p.preco).toFixed(2).replace('.',',')}</span>
+                          <span className="text-xs text-elos-verde font-black">R$ {Number(p.preco || 0).toFixed(2).replace('.', ',')}</span>
                         </div>
                       ))}
                     </div>
@@ -543,22 +651,22 @@ export default function Vendas() {
                 </div>
 
                 <div className="w-full md:w-32">
-                  <input 
-                    type="text" 
-                    placeholder="Preço R$" 
-                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde" 
-                    value={novoItem.preco} 
-                    onChange={(e) => setNovoItem({...novoItem, preco: aplicarMascaraMoeda(e.target.value)})} 
+                  <input
+                    type="text"
+                    placeholder="Preço R$"
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-elos-verde bg-white"
+                    value={novoItem.preco}
+                    onChange={(e) => setNovoItem((prev) => ({ ...prev, preco: aplicarMascaraMoeda(e.target.value) }))}
                   />
                 </div>
-                
+
                 <div className="w-full md:w-32">
-                  <input 
-                    type="text" 
-                    placeholder="Desc. R$" 
-                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-red-400 placeholder:text-red-200" 
-                    value={novoItem.desconto} 
-                    onChange={(e) => setNovoItem({...novoItem, desconto: aplicarMascaraMoeda(e.target.value)})} 
+                  <input
+                    type="text"
+                    placeholder="Desc. R$"
+                    className="w-full px-4 py-3 rounded-xl border-none shadow-sm text-sm font-bold text-red-400 placeholder:text-red-200 bg-white"
+                    value={novoItem.desconto}
+                    onChange={(e) => setNovoItem((prev) => ({ ...prev, desconto: aplicarMascaraMoeda(e.target.value) }))}
                   />
                 </div>
 
@@ -566,12 +674,11 @@ export default function Vendas() {
               </div>
 
               <div className="space-y-2">
-                {itensCarrinho.map(item => {
-                  const jaExisteNoCatalogo = produtos.some(p => p.nome.toUpperCase() === item.nome.toUpperCase());
+                {itensCarrinho.map((item) => {
+                  const jaExisteNoCatalogo = produtos.some((p) => String(p.nome || '').toUpperCase() === item.nome.toUpperCase());
 
                   return (
                     <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-elos-bege/10">
-                      
                       <div className="flex items-center gap-3">
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-elos-texto">{item.nome}</span>
@@ -581,33 +688,33 @@ export default function Vendas() {
                             </span>
                           )}
                         </div>
-                        
+
                         {!jaExisteNoCatalogo && (
                           <button
                             type="button"
+                            disabled={adicionarProdutoMutation.isPending}
                             onClick={() => salvarItemNoCatalogo(item)}
-                            className="px-2 py-0.5 bg-elos-bege/10 hover:bg-elos-bege hover:text-white text-elos-bege text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1"
+                            className="px-2 py-0.5 bg-elos-bege/10 hover:bg-elos-bege hover:text-white text-elos-bege text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1 disabled:opacity-50"
                             title="Salvar este produto no Catálogo permanente"
                           >
                             📦 Salvar no Catálogo
                           </button>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col items-end">
                           {item.descontoItem > 0 && (
                             <span className="text-[10px] text-gray-400 line-through font-bold">
-                              R$ {item.precoOriginal.toFixed(2).replace('.',',')}
+                              R$ {item.precoOriginal.toFixed(2).replace('.', ',')}
                             </span>
                           )}
                           <span className="text-sm font-black text-elos-verde">
-                            R$ {item.preco.toFixed(2).replace('.',',')}
+                            R$ {item.preco.toFixed(2).replace('.', ',')}
                           </span>
                         </div>
                         <button type="button" onClick={() => removerDoCarrinho(item.id)} className="text-red-400 hover:text-red-600">✕</button>
                       </div>
-
                     </div>
                   );
                 })}
@@ -618,15 +725,15 @@ export default function Vendas() {
             <div className="space-y-4">
               <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1 italic">Detalhes Técnicos / Fotos das Receitas</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <textarea 
+                <textarea
                   name="observacoes"
                   value={venda.observacoes}
                   onChange={handleChange}
                   placeholder="Anote aqui: Graus (OD/OE), Eixo, DNP, tipo de tratamento das lentes ou cor da armação..."
-                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-[2rem] outline-none h-40 resize-none text-sm italic"
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-4xl outline-none h-40 resize-none text-sm italic"
                 />
-                
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-[2rem] p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
+
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-elos-bege/30 rounded-4xl p-6 bg-elos-fundo/20 relative group hover:bg-elos-fundo/40 transition-all">
                   {uploadingReceita ? (
                     <div className="text-center">
                       <span className="text-4xl block animate-bounce mb-2">⏳</span>
@@ -635,9 +742,9 @@ export default function Vendas() {
                   ) : venda.foto ? (
                     <div className="flex flex-col items-center gap-3 w-full h-full relative group/foto">
                       <img src={venda.foto} alt="Receita" className="max-h-32 object-contain rounded-xl shadow-lg border-2 border-white" />
-                      <button 
-                        type="button" 
-                        onClick={() => setVenda({...venda, foto: ''})} 
+                      <button
+                        type="button"
+                        onClick={() => setVenda((prev) => ({ ...prev, foto: '' }))}
                         className="absolute inset-0 m-auto w-10 h-10 bg-red-600/90 text-white rounded-full text-xs font-black flex items-center justify-center opacity-0 group-hover/foto:opacity-100 transition-opacity"
                         title="Remover Foto"
                       >
@@ -648,12 +755,12 @@ export default function Vendas() {
                     <>
                       <div className="text-4xl mb-2">📸</div>
                       <span className="text-[10px] font-black text-elos-bege uppercase tracking-widest text-center">Tirar Foto ou Anexar Receita</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleUploadReceita} 
-                        disabled={uploadingReceita} 
-                        className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadReceita}
+                        disabled={uploadingReceita}
+                        className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                       />
                     </>
                   )}
@@ -661,22 +768,21 @@ export default function Vendas() {
               </div>
             </div>
 
-            {/* 🟢 ADICIONADO: NOVA ORGANIZAÇÃO DE PAGAMENTOS COM A DATA DA ENTRADA */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Valor de Entrada</label>
                 <input type="text" name="valorEntrada" value={venda.valorEntrada} onChange={handleChange} placeholder="R$ 0,00" className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" />
               </div>
-              
+
               <div className="space-y-2">
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">Data da Entrada</label>
-                <input 
-                  type="date" 
-                  name="dataEntrada" 
-                  value={venda.dataEntrada} 
-                  onChange={handleChange} 
-                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
-                  disabled={!venda.valorEntrada || limparMoeda(venda.valorEntrada) <= 0} 
+                <input
+                  type="date"
+                  name="dataEntrada"
+                  value={venda.dataEntrada}
+                  onChange={handleChange}
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none"
+                  disabled={!venda.valorEntrada || limparMoeda(venda.valorEntrada) <= 0}
                   title="Só pode ser alterada se houver valor de entrada"
                 />
               </div>
@@ -690,19 +796,19 @@ export default function Vendas() {
                   <option value="Boleto / Crediário">Boleto / Crediário</option>
                 </select>
               </div>
-              
+
               <div className={`space-y-2 ${(venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix') ? 'opacity-50 pointer-events-none' : ''}`}>
                 <label className="text-xs font-black text-elos-verde uppercase tracking-tighter ml-1">
                   {venda.metodoPagamento === 'Cartão de Crédito' ? 'Nº Parcelas (Cartão)' : 'Nº Parcelas (Mensais)'}
                 </label>
-                <input 
-                  type="number" 
-                  name="parcelas" 
-                  min="1" 
-                  value={venda.parcelas} 
-                  onChange={handleChange} 
-                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none" 
-                  disabled={venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix'} 
+                <input
+                  type="number"
+                  name="parcelas"
+                  min="1"
+                  value={venda.parcelas}
+                  onChange={handleChange}
+                  className="w-full px-5 py-4 bg-elos-fundo/50 border border-gray-100 rounded-2xl outline-none"
+                  disabled={venda.metodoPagamento === 'Dinheiro' || venda.metodoPagamento === 'Pix'}
                 />
               </div>
             </div>
@@ -719,7 +825,7 @@ export default function Vendas() {
               <div className="space-y-2">
                 <label className="text-xs font-black text-green-700 uppercase tracking-tighter ml-1">Total a Pagar (Final)</label>
                 <div className="w-full px-5 py-4 bg-green-50 border border-green-200 text-green-900 font-black rounded-2xl text-xl">
-                  R$ {totalFinalVenda.toFixed(2).replace('.',',')}
+                  R$ {totalFinalVenda.toFixed(2).replace('.', ',')}
                 </div>
               </div>
             </div>
@@ -731,7 +837,7 @@ export default function Vendas() {
               </div>
             )}
 
-            <button type="submit" disabled={uploadingReceita || adicionarVendaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-[0.98] text-lg uppercase tracking-widest mt-6">
+            <button type="submit" disabled={uploadingReceita || adicionarVendaMutation.isPending} className="w-full bg-elos-verde hover:bg-[#3a4a3e] disabled:bg-gray-400 text-white font-bold py-6 rounded-2xl shadow-xl transform transition-all active:scale-98 text-lg uppercase tracking-widest mt-6">
               {adicionarVendaMutation.isPending ? 'Registrando Venda...' : 'Finalizar Venda'}
             </button>
           </form>
@@ -739,21 +845,21 @@ export default function Vendas() {
 
         {abaAtiva === 'historico' && (
           <div className="bg-white rounded-[2.5rem] shadow-soft p-6 md:p-10 border border-elos-bege/10 animate-in fade-in slide-in-from-bottom-4">
-            
+
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-gray-50 pb-6">
               <h2 className="font-tradicional text-2xl text-elos-verde italic">Últimas Vendas Realizadas</h2>
-              
+
               <div className="w-full md:w-auto relative">
-                <input 
-                  type="text" 
-                  placeholder="🔍 Buscar por nome, CPF ou Nº do Pedido..." 
+                <input
+                  type="text"
+                  placeholder="🔍 Buscar por nome, CPF ou Nº do Pedido..."
                   value={buscaHistorico}
                   onChange={(e) => setBuscaHistorico(e.target.value)}
                   className="w-full md:w-80 px-5 py-3 bg-elos-fundo/50 border border-elos-bege/20 rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-elos-verde/30 shadow-inner"
                 />
               </div>
             </div>
-            
+
             {vendasFiltradas.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -767,10 +873,10 @@ export default function Vendas() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {vendasFiltradas.map(v => (
+                    {vendasFiltradas.map((v) => (
                       <tr key={v._id || v.id} className="hover:bg-gray-50 transition-colors group">
                         <td className="py-4 px-4 text-xs font-bold text-gray-500">
-                          {v.dataVenda ? v.dataVenda.split('-').reverse().join('/') : '--/--/----'}
+                          {formatarDataBR(v.dataVenda)}
                         </td>
                         <td className="py-4 px-4 font-bold text-elos-verde">
                           {v.cliente}
@@ -779,22 +885,23 @@ export default function Vendas() {
                           </div>
                         </td>
                         <td className="py-4 px-4 font-black text-elos-texto italic">
-                          R$ {Number(v.valorTotal).toFixed(2).replace('.',',')}
+                          R$ {Number(v.valorTotal || 0).toFixed(2).replace('.', ',')}
                         </td>
                         <td className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">
                           {v.metodoPagamento}
                         </td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button 
+                            <button
+                              type="button"
                               onClick={() => {
-                                const clienteBase = clientes.find(c => c.cpf === v.cpf);
+                                const clienteBase = clientes.find((c) => limparCpf(c.cpf) === limparCpf(v.cpf));
                                 gerarPDFDocumento({
                                   ...v,
-                                  data: v.dataVenda ? v.dataVenda.split('-').reverse().join('/') : '',
-                                  telefone: clienteBase?.telefone || "Não informado",
-                                  endereco: clienteBase?.endereco || "Não informado",
-                                  email: clienteBase?.email || "Não informado"
+                                  data: formatarDataBR(v.dataVenda),
+                                  telefone: clienteBase?.telefone || 'Não informado',
+                                  endereco: clienteBase?.endereco || 'Não informado',
+                                  email: clienteBase?.email || 'Não informado'
                                 }, 'pedido');
                               }}
                               className="px-3 py-2 bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold uppercase hover:bg-elos-bege hover:text-white transition-colors"
@@ -802,7 +909,8 @@ export default function Vendas() {
                             >
                               🖨️
                             </button>
-                            <button 
+                            <button
+                              type="button"
                               onClick={() => navigate(`/admin/vendas/editar/${v._id || v.id}`)}
                               className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors"
                               title="Editar Venda"

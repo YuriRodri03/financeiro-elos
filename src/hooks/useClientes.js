@@ -2,16 +2,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pedir } from '../utils/api';
 
+const limparCpf = (c) => String(c || '').replace(/\D/g, '');
+
 // 1. Buscar os clientes
 export function useClientes() {
   return useQuery({
-    queryKey: ['clientes'], 
+    queryKey: ['clientes'],
     queryFn: async () => {
       const res = await pedir('/clientes');
-      console.log("👥 Resposta bruta da API de Clientes:", res);
-      // Garante que se o retorno vier encapsulado ou estranho, ele pega o array correto
-      const lista = Array.isArray(res) ? res : (res?.clientes || res?.data || []);
-      return lista;
+      return Array.isArray(res) ? res : (res?.clientes || res?.data || []);
     },
     staleTime: 1000 * 60 * 5,
     retry: 2,
@@ -26,7 +25,9 @@ export function useAdicionarCliente() {
   return useMutation({
     mutationFn: async (novoCliente) => {
       const clientesAtuais = queryClient.getQueryData(['clientes']) || [];
-      if (clientesAtuais.some((c) => c.cpf === novoCliente.cpf)) {
+      const cpfNovo = limparCpf(novoCliente.cpf);
+
+      if (cpfNovo.length === 11 && clientesAtuais.some((c) => limparCpf(c.cpf) === cpfNovo)) {
         throw new Error('Este CPF já está cadastrado.');
       }
 
@@ -64,7 +65,7 @@ export function useExcluirCliente() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (cpf) => pedir(`/clientes/${cpf}`, { method: 'DELETE' }),
+    mutationFn: (cpf) => pedir(`/clientes/${encodeURIComponent(cpf)}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }

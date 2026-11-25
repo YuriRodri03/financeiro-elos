@@ -21,7 +21,7 @@ export default function Operacoes() {
   const location = useLocation();
   const queryClient = useQueryClient();
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
   const naTelaOperacoes = location.pathname.replace(/\/+$/, '') === '/admin/operacoes';
 
   // 🟢 NAVEGAÇÃO INTERNA DO PAINEL

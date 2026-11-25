@@ -224,7 +224,7 @@ export default function EditarVenda() {
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative animate-in fade-in">
       
       {toast.visivel && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] px-4 w-full max-w-md">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-9999 px-4 w-full max-w-md">
           <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 ${toast.tipo === 'sucesso' ? 'bg-elos-verde text-white' : 'bg-red-900 text-red-100'}`}>
             <span className="text-lg">{toast.tipo === 'sucesso' ? '✨' : '⚠️'}</span>
             <p className="text-xs font-bold uppercase tracking-wider">{toast.mensagem}</p>

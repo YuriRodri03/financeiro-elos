@@ -6,30 +6,31 @@ import { pedir } from '../utils/api';
 export function useDespesas() {
   return useQuery({
     queryKey: ['despesas'],
-    queryFn: () => pedir('/despesas'),
+    queryFn: async () => {
+      const res = await pedir('/despesas');
+      return Array.isArray(res) ? res : (res?.despesas || res?.data || []);
+    },
     staleTime: 1000 * 60 * 5, // 5 minutos de cache
+    retry: 2,
+    retryDelay: 5000,
   });
 }
 
-// 2. Adicionar Múltiplas Despesas (Para Lidar com as Parcelas Automáticas)
+// 2. Adicionar Despesa (única ou lote de parcelas em 1 única requisição)
 export function useAdicionarDespesa() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (despesasArray) => {
-      // Se vier apenas um objeto (1 parcela), transforma em array para o loop rodar igual
-      const lotes = Array.isArray(despesasArray) ? despesasArray : [despesasArray];
+    mutationFn: async (despesasPayload) => {
+      const corpo = Array.isArray(despesasPayload) && despesasPayload.length === 1
+        ? despesasPayload[0]
+        : despesasPayload;
 
-      // Dispara todas as requisições POST ao mesmo tempo (Promise.all)
-      const promessas = lotes.map(despesa => 
-        pedir('/despesas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(despesa)
-        })
-      );
-      
-      return Promise.all(promessas);
+      return pedir('/despesas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo)
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['despesas'] });

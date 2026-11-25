@@ -1,43 +1,42 @@
+// src/hooks/useVendas.js
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pedir } from '../utils/api';
 
 // ============================================================
-// FUNÇÕES UTILITÁRIAS (Fora dos hooks para não recriar na memória)
+// FUNÇÕES UTILITÁRIAS (Fuso de Fortaleza)
 // ============================================================
-function somarMeses(dataBase, meses) {
-  const resultado = new Date(dataBase.getTime());
-  const diaOriginal = resultado.getDate();
+const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
 
-  resultado.setDate(1);
-  resultado.setMonth(resultado.getMonth() + meses);
-
-  const ultimoDiaDoMes = new Date(
-    resultado.getFullYear(),
-    resultado.getMonth() + 1,
-    0
-  ).getDate();
-
-  resultado.setDate(Math.min(diaOriginal, ultimoDiaDoMes));
-  return resultado;
+// Soma meses a uma data YYYY-MM-DD sem estourar o dia (31/01 + 1 mês = 28/02)
+function somarMesesIso(iso, meses) {
+  const [a, m, d] = String(iso).split('T')[0].split('-').map(Number);
+  if (!a || !m || !d) return null;
+  const ultimoDiaDoMes = new Date(a, m - 1 + meses + 1, 0).getDate();
+  const alvo = new Date(a, m - 1 + meses, Math.min(d, ultimoDiaDoMes), 12);
+  if (Number.isNaN(alvo.getTime())) return null;
+  return alvo.toLocaleDateString('sv-SE');
 }
 
 const montarParcelas = (novaVenda) => {
   const valorTotal = Number(novaVenda.valorTotal) || 0;
   const valorEntrada = Number(novaVenda.valorEntrada) || 0;
-  const valorRestante = parseFloat((valorTotal - valorEntrada).toFixed(2));
+  const valorRestante = parseFloat(Math.max(0, valorTotal - valorEntrada).toFixed(2));
 
   const isCrediario = novaVenda.metodoPagamento === 'Boleto / Crediário';
   const isCartao = novaVenda.metodoPagamento === 'Cartão de Crédito';
   const numParcelas = isCrediario ? Math.max(1, Number(novaVenda.parcelas) || 1) : 1;
 
-  const dataBase = isCrediario ? novaVenda.dataPrimeiraParcela : novaVenda.dataVenda;
+  const dataVendaLimpa = String(novaVenda.dataVenda || hojeBR()).split('T')[0];
+  const dataEntradaLimpa = String(novaVenda.dataEntrada || dataVendaLimpa).split('T')[0];
+  const dataBase = isCrediario
+    ? String(novaVenda.dataPrimeiraParcela || '').split('T')[0]
+    : dataVendaLimpa;
 
-  if (!dataBase) {
+  if (valorRestante > 0 && !dataBase) {
     throw new Error(isCrediario ? 'Informe a data da primeira parcela para vendas no crediário.' : 'Informe a data da venda.');
   }
 
-  const referencia = new Date(`${dataBase}T00:00:00`);
-  if (Number.isNaN(referencia.getTime())) {
+  if (dataBase && !somarMesesIso(dataBase, 0)) {
     throw new Error('A data informada não é válida.');
   }
 
@@ -46,30 +45,34 @@ const montarParcelas = (novaVenda) => {
   if (valorEntrada > 0) {
     parcelas.push({
       numero: 0,
-      valor: valorEntrada,
+      valor: parseFloat(valorEntrada.toFixed(2)),
       paga: true,
-      dataPagamento: novaVenda.dataVenda,
-      vencimentoOriginal: novaVenda.dataVenda,
+      dataPagamento: dataEntradaLimpa,
+      dataVencimento: dataEntradaLimpa,
+      vencimentoOriginal: dataEntradaLimpa,
       observacao: 'Entrada/Sinal'
     });
   }
 
-  const valorBase = Math.floor((valorRestante / numParcelas) * 100) / 100;
-  const sobra = parseFloat((valorRestante - valorBase * numParcelas).toFixed(2));
+  if (valorRestante > 0 || valorEntrada <= 0) {
+    const valorBase = Math.floor((valorRestante / numParcelas) * 100) / 100;
+    const sobra = parseFloat((valorRestante - valorBase * numParcelas).toFixed(2));
 
-  for (let i = 0; i < numParcelas; i++) {
-    const vencimento = somarMeses(referencia, i);
-    const ehUltima = i === numParcelas - 1;
-    const valor = parseFloat((ehUltima ? valorBase + sobra : valorBase).toFixed(2));
+    for (let i = 0; i < numParcelas; i++) {
+      const vencimentoIso = somarMesesIso(dataBase || dataVendaLimpa, i);
+      const ehUltima = i === numParcelas - 1;
+      const valor = parseFloat((ehUltima ? valorBase + sobra : valorBase).toFixed(2));
 
-    parcelas.push({
-      numero: i + 1,
-      valor,
-      paga: !isCrediario,
-      dataPagamento: !isCrediario ? novaVenda.dataVenda : null,
-      vencimentoOriginal: vencimento.toISOString().split('T')[0],
-      observacao: isCartao && Number(novaVenda.parcelas) > 1 ? `No cartão em ${novaVenda.parcelas}x` : ''
-    });
+      parcelas.push({
+        numero: i + 1,
+        valor,
+        paga: !isCrediario,
+        dataPagamento: !isCrediario ? dataVendaLimpa : null,
+        dataVencimento: vencimentoIso,
+        vencimentoOriginal: vencimentoIso,
+        observacao: isCartao && Number(novaVenda.parcelas) > 1 ? `No cartão em ${novaVenda.parcelas}x` : ''
+      });
+    }
   }
 
   return parcelas;
@@ -83,8 +86,13 @@ const montarParcelas = (novaVenda) => {
 export function useVendas() {
   return useQuery({
     queryKey: ['vendas'],
-    queryFn: () => pedir('/vendas'),
-    staleTime: 1000 * 60 * 5, // 5 minutos de cache
+    queryFn: async () => {
+      const res = await pedir('/vendas');
+      return Array.isArray(res) ? res : (res?.vendas || res?.data || []);
+    },
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+    retryDelay: 5000,
   });
 }
 
@@ -94,9 +102,11 @@ export function useAdicionarVenda() {
 
   return useMutation({
     mutationFn: (novaVenda) => {
+      // Preserva listaParcelas se já vier montada (ex: Renegociação de Dívida)
+      const temParcelasProntas = Array.isArray(novaVenda.listaParcelas) && novaVenda.listaParcelas.length > 0;
       const vendaCompleta = {
         ...novaVenda,
-        listaParcelas: montarParcelas(novaVenda)
+        listaParcelas: temParcelasProntas ? novaVenda.listaParcelas : montarParcelas(novaVenda)
       };
 
       return pedir('/vendas', {
@@ -107,6 +117,7 @@ export function useAdicionarVenda() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
   });
 }
@@ -123,6 +134,7 @@ export function useEditarVenda() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
   });
 }
@@ -153,12 +165,11 @@ export function useDarBaixaParcela() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         paga: true,
-        dataPagamento: dataPagamento || new Date().toISOString().split('T')[0],
+        dataPagamento: dataPagamento || hojeBR(),
         valorPago: Number(valorPago)
       })
     }),
     onSuccess: () => {
-      // 🟢 O SEGREDO: Invalida AMBOS os caches para forçar o recálculo imediato na tela de Clientes!
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
@@ -176,7 +187,6 @@ export function useEstornarBaixaParcela() {
       body: JSON.stringify({ paga: false, dataPagamento: null })
     }),
     onSuccess: () => {
-      // 🟢 O SEGREDO: Invalida AMBOS os caches para forçar o recálculo imediato na tela de Clientes!
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
@@ -191,6 +201,7 @@ export function useExcluirVenda() {
     mutationFn: (vendaId) => pedir(`/vendas/${vendaId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     }
   });
 }

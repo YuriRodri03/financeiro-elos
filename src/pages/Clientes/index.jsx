@@ -342,7 +342,7 @@ export default function Clientes() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
-  const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const baseUrl = import.meta.env.VITE_API_URL || 'https://elos-server.onrender.com/api';
 
   const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
   const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
