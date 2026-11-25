@@ -112,6 +112,7 @@ export default function Dashboard() {
   const [mesFiltro, setMesFiltro] = useState(mesHoje);
   const [anoFiltro, setAnoFiltro] = useState(anoHoje);
   const [modalTipo, setModalTipo] = useState(null);
+  const [filtroReceber, setFiltroReceber] = useState('todos'); // 'todos' | 'vencidos' | 'a_vencer'
   const [abaAtiva, setAbaAtiva] = useState('mensal'); // 'mensal', 'anual', 'geral'
 
   const [mesExpandido, setMesExpandido] = useState(null);
@@ -126,6 +127,11 @@ export default function Dashboard() {
   const toastTimerRef = useRef(null);
 
   const anosDisponiveis = Array.from({ length: 11 }, (_, i) => anoHoje - 2 + i);
+
+  const abrirModalReceber = (filtroInicial = 'todos') => {
+    setFiltroReceber(filtroInicial);
+    setModalTipo('receber');
+  };
 
   useEffect(() => {
     return () => {
@@ -248,18 +254,32 @@ export default function Dashboard() {
               ? `Rest. ${Math.floor(Number(p.numero))}ª Parc`
               : `${p.numero}ª Parc`;
 
+          const vencimentoStr = dataVenc.toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
           lista.push({
             nome: v.cliente,
             valor: arred(p.valor),
             info: labelParc,
             vencimento: dataVenc,
-            vencimentoStr: dataVenc.toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' })
+            vencimentoStr,
+            vencida: vencimentoStr < hojeStr
           });
         }
       });
     });
     return lista.sort((a, b) => a.vencimento - b.vencimento);
-  }, [vendas]);
+  }, [vendas, hojeStr]);
+
+  // Separação direta entre já vencidas e a vencer
+  const detalhesVencidos = useMemo(
+    () => detalhesAReceber.filter((i) => i.vencida),
+    [detalhesAReceber]
+  );
+
+  const detalhesAVencer = useMemo(
+    () => detalhesAReceber.filter((i) => !i.vencida),
+    [detalhesAReceber]
+  );
 
   // Entradas efetivadas no Mês/Ano selecionado
   const detalhesEntradas = useMemo(() => {
@@ -288,11 +308,8 @@ export default function Dashboard() {
   })), [despesas, mesFiltro, anoFiltro]);
 
   const totalAReceberGeral = arred(detalhesAReceber.reduce((acc, i) => acc + i.valor, 0));
-  const totalVencidoAteHoje = arred(
-    detalhesAReceber
-      .filter((i) => i.vencimentoStr < hojeStr)
-      .reduce((acc, i) => acc + i.valor, 0)
-  );
+  const totalVencidoAteHoje = arred(detalhesVencidos.reduce((acc, i) => acc + i.valor, 0));
+  const totalAVencer = arred(detalhesAVencer.reduce((acc, i) => acc + i.valor, 0));
 
   const totalNoCaixaMes = arred(detalhesEntradas.reduce((acc, i) => acc + i.valor, 0));
   const totalDespesasPagasMes = arred(detalhesDespesas.filter((d) => d.paga).reduce((acc, i) => acc + i.valor, 0));
@@ -362,6 +379,17 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  const dadosModalAtual =
+    modalTipo === 'receber'
+      ? (filtroReceber === 'vencidos'
+          ? detalhesVencidos
+          : filtroReceber === 'a_vencer'
+            ? detalhesAVencer
+            : detalhesAReceber)
+      : modalTipo === 'entradas'
+        ? detalhesEntradas
+        : detalhesDespesas;
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
@@ -639,16 +667,62 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* DÍVIDA ACUMULADA */}
-              <div onClick={() => setModalTipo('receber')} className="bg-white p-6 rounded-4xl shadow-soft border-t-8 border-orange-500 cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-between h-full">
-                <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Carteira Geral)</h3>
-                  <p className="text-3xl font-black text-orange-500 mt-1">{formatarMoeda(totalAReceberGeral)}</p>
-                  <p className="text-[10px] text-gray-400 mt-2 uppercase font-bold italic">
-                    Vencido hoje: {formatarMoeda(totalVencidoAteHoje)} • Clique p/ detalhar
-                  </p>
+              {/* CARTEIRA A RECEBER + RESUMO DO JÁ VENCIDO */}
+              <div
+                onClick={() => abrirModalReceber('todos')}
+                className="bg-white p-6 rounded-4xl shadow-soft border-t-8 border-orange-500 cursor-pointer hover:scale-[1.01] transition-transform flex flex-col justify-between gap-5 h-full"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">A Receber (Carteira Geral)</h3>
+                    <p className="text-3xl font-black text-orange-500 mt-1">{formatarMoeda(totalAReceberGeral)}</p>
+                    <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold italic">
+                      {detalhesAReceber.length} {detalhesAReceber.length === 1 ? 'parcela em aberto' : 'parcelas em aberto'} • Clique p/ detalhar
+                    </p>
+                  </div>
+                  <div className="text-orange-100 text-4xl">⏳</div>
                 </div>
-                <div className="text-orange-100 text-4xl">⏳</div>
+
+                {/* RESUMO SEPARADO: JÁ VENCIDO vs A VENCER */}
+                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      abrirModalReceber('vencidos');
+                    }}
+                    className="text-left p-3 rounded-2xl bg-red-50/80 hover:bg-red-100/80 border border-red-100 transition-colors"
+                  >
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest block">
+                      ⚠️ Já Vencido
+                    </span>
+                    <span className="text-base font-black text-red-700 block mt-0.5">
+                      {formatarMoeda(totalVencidoAteHoje)}
+                    </span>
+                    <span className="text-[9px] font-bold text-red-400 uppercase">
+                      {detalhesVencidos.length} {detalhesVencidos.length === 1 ? 'parcela' : 'parcelas'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      abrirModalReceber('a_vencer');
+                    }}
+                    className="text-left p-3 rounded-2xl bg-elos-fundo/60 hover:bg-elos-fundo border border-elos-bege/20 transition-colors"
+                  >
+                    <span className="text-[9px] font-black text-elos-verde uppercase tracking-widest block">
+                      📅 A Vencer
+                    </span>
+                    <span className="text-base font-black text-elos-verde block mt-0.5">
+                      {formatarMoeda(totalAVencer)}
+                    </span>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase">
+                      {detalhesAVencer.length} {detalhesAVencer.length === 1 ? 'parcela' : 'parcelas'}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* SAÚDE FINANCEIRA PDF */}
@@ -735,36 +809,96 @@ export default function Dashboard() {
                 </h2>
                 <button type="button" onClick={() => setModalTipo(null)} className="text-2xl text-gray-400 hover:text-red-500">&times;</button>
               </header>
+
+              {/* RESUMO E FILTRO RÁPIDO QUANDO MODAL = A RECEBER */}
+              {modalTipo === 'receber' && (
+                <div className="px-6 pt-5 pb-3 bg-white border-b border-gray-100 grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFiltroReceber('todos')}
+                    className={`p-3 rounded-2xl text-left border transition-all ${
+                      filtroReceber === 'todos'
+                        ? 'bg-orange-50 border-orange-300 shadow-xs'
+                        : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-orange-500 block">Total</span>
+                    <span className="text-sm font-black text-orange-600 block mt-0.5">{formatarMoeda(totalAReceberGeral)}</span>
+                    <span className="text-[9px] font-bold text-gray-400">{detalhesAReceber.length} parc.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFiltroReceber('vencidos')}
+                    className={`p-3 rounded-2xl text-left border transition-all ${
+                      filtroReceber === 'vencidos'
+                        ? 'bg-red-50 border-red-300 shadow-xs'
+                        : 'bg-gray-50 border-gray-100 hover:bg-red-50/50'
+                    }`}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-red-500 block">⚠️ Já Vencido</span>
+                    <span className="text-sm font-black text-red-700 block mt-0.5">{formatarMoeda(totalVencidoAteHoje)}</span>
+                    <span className="text-[9px] font-bold text-red-400">{detalhesVencidos.length} parc.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFiltroReceber('a_vencer')}
+                    className={`p-3 rounded-2xl text-left border transition-all ${
+                      filtroReceber === 'a_vencer'
+                        ? 'bg-elos-fundo border-elos-verde/40 shadow-xs'
+                        : 'bg-gray-50 border-gray-100 hover:bg-elos-fundo/60'
+                    }`}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-elos-verde block">📅 A Vencer</span>
+                    <span className="text-sm font-black text-elos-verde block mt-0.5">{formatarMoeda(totalAVencer)}</span>
+                    <span className="text-[9px] font-bold text-gray-400">{detalhesAVencer.length} parc.</span>
+                  </button>
+                </div>
+              )}
+
               <div className="p-6 overflow-y-auto flex-1 no-scrollbar">
-                {(() => {
-                  const dados = modalTipo === 'receber' ? detalhesAReceber : modalTipo === 'entradas' ? detalhesEntradas : detalhesDespesas;
-                  return dados.length > 0 ? (
-                    <table className="w-full text-left">
-                      <thead className="text-[10px] uppercase font-black text-gray-400 border-b tracking-widest">
-                        <tr>
-                          <th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th>
-                          <th className="pb-3 text-center">{modalTipo === 'receber' ? 'Parcela / Vencimento' : 'Info'}</th>
-                          <th className="pb-3 text-right">Valor</th>
+                {dadosModalAtual.length > 0 ? (
+                  <table className="w-full text-left">
+                    <thead className="text-[10px] uppercase font-black text-gray-400 border-b tracking-widest">
+                      <tr>
+                        <th className="pb-3">{modalTipo === 'despesas' ? 'Descrição' : 'Cliente'}</th>
+                        <th className="pb-3 text-center">{modalTipo === 'receber' ? 'Parcela / Vencimento' : 'Info'}</th>
+                        <th className="pb-3 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {dadosModalAtual.map((item, idx) => (
+                        <tr key={idx} className={modalTipo === 'receber' && item.vencida ? 'bg-red-50/30 hover:bg-red-50/60' : 'hover:bg-gray-50'}>
+                          <td className="py-4 font-bold text-elos-verde">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{item.nome}</span>
+                              {modalTipo === 'receber' && item.vencida && (
+                                <span className="text-[8px] font-black uppercase bg-red-100 text-red-600 px-2 py-0.5 rounded-full tracking-wider">
+                                  Vencida
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className={`py-4 text-center text-[10px] font-bold uppercase tracking-widest ${modalTipo === 'receber' && item.vencida ? 'text-red-500' : 'text-gray-500'}`}>
+                            {modalTipo === 'receber'
+                              ? `${item.info} • ${item.vencimentoStr.split('-').reverse().join('/')}`
+                              : item.info}
+                          </td>
+                          <td className={`py-4 text-right font-black text-sm ${modalTipo === 'receber' && item.vencida ? 'text-red-700' : ''}`}>
+                            {formatarMoeda(item.valor)}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {dados.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="py-4 font-bold text-elos-verde">{item.nome}</td>
-                            <td className="py-4 text-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                              {modalTipo === 'receber'
-                                ? `${item.info} • ${item.vencimentoStr.split('-').reverse().join('/')}`
-                                : item.info}
-                            </td>
-                            <td className="py-4 text-right font-black text-sm">
-                              {formatarMoeda(item.valor)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : <p className="text-center text-gray-400 py-10 italic font-bold">Nenhum registro encontrado.</p>;
-                })()}
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-center text-gray-400 py-10 italic font-bold">
+                    {modalTipo === 'receber' && filtroReceber === 'vencidos'
+                      ? 'Nenhuma parcela vencida no momento! ✨'
+                      : 'Nenhum registro encontrado.'}
+                  </p>
+                )}
               </div>
               <footer className="p-4 bg-gray-50 text-right">
                 <button type="button" onClick={() => setModalTipo(null)} className="bg-elos-verde text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-xs shadow-md">Fechar</button>
