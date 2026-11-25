@@ -1,21 +1,37 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useClientes, useEditarCliente, useExcluirCliente } from '../../hooks/useClientes';
 import { useVendas, useAdicionarVenda, useEditarVenda, useExcluirVenda, useDarBaixaParcela, useEstornarBaixaParcela } from '../../hooks/useVendas';
 
 import { gerarPDFDocumento, gerarPDFOrdemServico, gerarPDFCarne } from '../../documentosUtils';
-import CadastroClientes from '../CadastroClientes'; 
+import CadastroClientes from '../CadastroClientes';
 
 // --- DATAS NO FUSO DE FORTALEZA (evita virar "amanhã" depois das 21h) ---
 const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
 
 // Soma meses a uma data YYYY-MM-DD sem estourar o dia (31/01 + 1 mês = 28/02)
 const somarMeses = (iso, n) => {
-  const [a, m, d] = iso.split('-').map(Number);
+  const [a, m, d] = String(iso).split('T')[0].split('-').map(Number);
   const ultimoDia = new Date(a, m - 1 + n + 1, 0).getDate();
   const alvo = new Date(a, m - 1 + n, Math.min(d, ultimoDia), 12);
   return alvo.toLocaleDateString('sv-SE');
+};
+
+// --- NORMALIZAÇÃO DE CPF (evita duplicação por diferença de máscara) ---
+const limparCpf = (c) => String(c || '').replace(/\D/g, '');
+const chaveCpf = (c) => limparCpf(c) || String(c || '').trim();
+
+// --- HEADER DE AUTENTICAÇÃO JWT PARA CHAMADAS FETCH DIRETAS ---
+const obterHeadersAuth = (comJson = false) => {
+  const headers = {};
+  if (comJson) headers['Content-Type'] = 'application/json';
+  try {
+    const dados = JSON.parse(localStorage.getItem('otica_elos_dados_equipe') || '{}');
+    if (dados?.token) headers['Authorization'] = `Bearer ${dados.token}`;
+  } catch (e) {}
+  return headers;
 };
 
 // --- FUNÇÕES AUXILIARES PARA MOEDA ---
@@ -45,7 +61,7 @@ const comprimirImagem = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800; 
+        const MAX_WIDTH = 800;
         const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
@@ -55,14 +71,14 @@ const comprimirImagem = (file) => {
         } else {
           if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
         }
-        
+
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         canvas.toBlob((blob) => {
-          resolve(new File([blob], "imagem_otimizada.webp", { type: 'image/webp' }));
+          resolve(new File([blob], 'imagem_otimizada.webp', { type: 'image/webp' }));
         }, 'image/webp', 0.8);
       };
     };
@@ -71,12 +87,12 @@ const comprimirImagem = (file) => {
 
 // --- COMPONENTE DE LINHA DE PARCELA (COM EDIÇÃO DE VALOR E DATA) ---
 function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela, editarParcelaManual, mostrarToast, abrirConfirmacao }) {
-  // 🟢 TODOS OS HOOKS FICAM NO TOPO (antes de qualquer return condicional)
   const [dataBaixa, setDataBaixa] = useState(hojeBR());
   const [valorRecebido, setValorRecebido] = useState(p?.valor || 0);
   const [modoEdicao, setModoEdicao] = useState(false);
   const [novoValorParcela, setNovoValorParcela] = useState(p?.valor || 0);
   const [novoVencimentoParcela, setNovoVencimentoParcela] = useState('');
+  const [processando, setProcessando] = useState(false);
 
   useEffect(() => {
     setValorRecebido(p?.valor || 0);
@@ -85,80 +101,114 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
   if (!p || !venda) return null;
 
   const vendaId = venda._id || venda.id;
+  const numParcela = Number(p.numero);
+  const ehRestante = !Number.isInteger(numParcela);
+  const labelParcela = numParcela === 0
+    ? 'Entrada'
+    : ehRestante
+      ? `Rest. ${Math.floor(numParcela)}ª Parcela`
+      : `${p.numero}ª Parcela`;
 
   const calcularVencimento = () => {
     try {
-      if (p.numero === 0) return venda.dataVenda || '';
+      if (numParcela === 0) return String(venda.dataEntrada || venda.dataVenda || '').split('T')[0];
       const dataBase = venda.dataPrimeiraParcela || venda.dataVenda;
       if (!dataBase) return '';
-      return somarMeses(dataBase, Math.max(0, Math.floor(p.numero) - 1));
+      return somarMeses(dataBase, Math.max(0, Math.floor(numParcela) - 1));
     } catch (error) {
-      return ''; 
+      return '';
     }
   };
 
-  const dataVencimentoStr = p.dataVencimento || p.vencimentoOriginal || calcularVencimento();
+  const dataVencimentoStr = String(p.dataVencimento || p.vencimentoOriginal || calcularVencimento() || '').split('T')[0];
 
-  // Verifica se está atrasada (comparando no fuso de Fortaleza)
   const hojeIso = hojeBR();
   const isAtrasada = !p.paga && !p.renegociada && !venda.renegociada && dataVencimentoStr && dataVencimentoStr < hojeIso;
 
   const handleBaixa = async () => {
-    let stringValor = String(valorRecebido).replace(',', '.');
-    let valor = parseFloat(stringValor); 
-    
+    if (processando) return;
+    const stringValor = String(valorRecebido).replace(',', '.');
+    let valor = parseFloat(stringValor);
+
     if (isNaN(valor) || valor <= 0) {
-      mostrarToast("Informe um valor válido para o pagamento.", "erro");
+      mostrarToast('Informe um valor válido para o pagamento.', 'erro');
       return;
     }
     valor = parseFloat(valor.toFixed(2));
-    
+
+    setProcessando(true);
     try {
       await darBaixaParcela(vendaId, p.numero, dataBaixa, valor);
-      mostrarToast("Baixa registrada com sucesso!", "sucesso");
+      mostrarToast('Baixa registrada com sucesso!', 'sucesso');
 
-      const nomeProduto = p.numero === 0 
-        ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})` 
-        : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
+      const nomeProduto = numParcela === 0
+        ? `Entrada / Sinal (Pedido #${venda.numeroPedido || 'S/N'})`
+        : ehRestante
+          ? `Pagamento do Restante da ${Math.floor(numParcela)}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`
+          : `Pagamento da ${p.numero}ª Parcela (Pedido #${venda.numeroPedido || 'S/N'})`;
 
       abrirConfirmacao(`Pagamento de R$ ${valor.toFixed(2).replace('.', ',')} recebido com sucesso! Deseja emitir o Recibo Simples desta parcela agora?`, () => {
         gerarPDFDocumento({
-          cliente: venda.cliente, 
-          cpf: venda.cpf, 
-          // 🟢 Dados de contato vêm do cadastro do cliente (a venda não tem esses campos)
-          telefone: cliente?.telefone || "Não cadastrado", 
-          endereco: cliente?.endereco || "Não cadastrado", 
-          email: cliente?.email || "Não cadastrado",
-          valorTotal: valor, 
-          produto: nomeProduto, 
-          dataRecibo: dataBaixa.split('-').reverse().join('/'), 
-          metodoPagamento: "Dinheiro / Transferência",
+          cliente: venda.cliente,
+          cpf: venda.cpf,
+          telefone: cliente?.telefone || 'Não cadastrado',
+          endereco: cliente?.endereco || 'Não cadastrado',
+          email: cliente?.email || 'Não cadastrado',
+          valorTotal: valor,
+          produto: nomeProduto,
+          dataRecibo: dataBaixa.split('-').reverse().join('/'),
+          metodoPagamento: 'Dinheiro / Transferência',
           desconto: 0,
           numeroPedido: venda.numeroPedido,
           itensCarrinho: [{ nome: nomeProduto.toUpperCase(), preco: valor }]
         }, 'recibo');
       });
     } catch (err) {
-      mostrarToast("Erro ao processar baixa.", "erro");
+      mostrarToast('Erro ao processar baixa.', 'erro');
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  const handleEstorno = async () => {
+    if (processando) return;
+    setProcessando(true);
+    try {
+      await estornarBaixaParcela(vendaId, p.numero);
+      mostrarToast('Estorno realizado com sucesso!', 'sucesso');
+    } catch (e) {
+      mostrarToast('Falha ao estornar parcela.', 'erro');
+    } finally {
+      setProcessando(false);
     }
   };
 
   const salvarAlteracaoParcela = async () => {
+    if (processando) return;
     const valNum = parseFloat(String(novoValorParcela).replace(',', '.'));
     if (isNaN(valNum) || valNum <= 0) {
-      mostrarToast("Valor inválido para a parcela.", "erro");
+      mostrarToast('Valor inválido para a parcela.', 'erro');
       return;
     }
-    await editarParcelaManual(venda, p.numero, parseFloat(valNum.toFixed(2)), novoVencimentoParcela);
-    setModoEdicao(false);
+    if (!novoVencimentoParcela) {
+      mostrarToast('Informe a data de vencimento da parcela.', 'erro');
+      return;
+    }
+    setProcessando(true);
+    try {
+      await editarParcelaManual(venda, p.numero, parseFloat(valNum.toFixed(2)), novoVencimentoParcela);
+      setModoEdicao(false);
+    } finally {
+      setProcessando(false);
+    }
   };
-  
+
   return (
     <div className={`flex flex-col md:flex-row justify-between items-start md:items-center py-4 border-b border-gray-100 gap-4 ${p.renegociada ? 'opacity-50' : ''}`}>
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-bold text-elos-texto">
-            {p.numero === 0 ? "Entrada" : `${p.numero}ª Parcela`} — 
+            {labelParcela} —
             <span className={`ml-1 font-black ${p.renegociada ? 'line-through text-gray-400' : 'text-elos-verde'}`}>
               R$ {(p.valor || 0).toFixed(2).replace('.', ',')}
             </span>
@@ -169,7 +219,7 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
             </span>
           )}
         </div>
-        
+
         {dataVencimentoStr && (
           <small className={`font-bold text-[10px] uppercase tracking-tighter ${isAtrasada ? 'text-red-500' : 'text-gray-500'}`}>
             ⏳ Vencimento: {dataVencimentoStr.split('-').reverse().join('/')}
@@ -182,7 +232,7 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
 
         {p.paga && (
           <small className="text-elos-verde font-bold text-[10px] uppercase tracking-tighter">
-            🗓️ Recebido em: {p.dataPagamento?.split('-').reverse().join('/')}
+            🗓️ Recebido em: {p.dataPagamento?.split('T')[0].split('-').reverse().join('/')}
           </small>
         )}
       </div>
@@ -192,18 +242,12 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
         <div className="flex items-center gap-3">
           <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">✅ Paga</span>
           {!venda.renegociada && (
-            <button 
-              onClick={async () => {
-                try {
-                  await estornarBaixaParcela(vendaId, p.numero);
-                  mostrarToast("Estorno realizado com sucesso!", "sucesso");
-                } catch (e) {
-                  mostrarToast("Falha ao estornar parcela.", "erro");
-                }
-              }} 
-              className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors font-bold"
+            <button
+              disabled={processando}
+              onClick={handleEstorno}
+              className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors font-bold disabled:opacity-40"
             >
-              (Estornar)
+              {processando ? '(Estornando...)' : '(Estornar)'}
             </button>
           )}
         </div>
@@ -215,30 +259,32 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
         <div className="flex flex-wrap gap-2 items-end bg-amber-50/70 p-3 rounded-xl border border-amber-200 w-full md:w-auto">
           <div className="flex flex-col gap-1">
             <label className="text-[9px] font-black text-amber-800 uppercase">Novo Valor (R$)</label>
-            <input 
-              type="number" 
+            <input
+              type="number"
               step="0.01"
               className="w-24 p-2 bg-white rounded-lg text-xs border border-amber-200 font-bold"
-              value={novoValorParcela} 
+              value={novoValorParcela}
               onChange={(e) => setNovoValorParcela(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[9px] font-black text-amber-800 uppercase">Novo Vencimento</label>
-            <input 
-              type="date" 
+            <input
+              type="date"
               className="p-2 bg-white rounded-lg text-xs border border-amber-200 font-bold"
-              value={novoVencimentoParcela} 
+              value={novoVencimentoParcela}
               onChange={(e) => setNovoVencimentoParcela(e.target.value)}
             />
           </div>
-          <button 
+          <button
+            disabled={processando}
             onClick={salvarAlteracaoParcela}
-            className="bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition-all"
+            className="bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition-all disabled:opacity-50"
           >
-            Salvar
+            {processando ? '...' : 'Salvar'}
           </button>
-          <button 
+          <button
+            disabled={processando}
             onClick={() => setModoEdicao(false)}
             className="bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all"
           >
@@ -249,37 +295,39 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
         <div className="flex flex-wrap gap-2 items-end w-full md:w-auto">
           <div className="flex flex-col gap-1">
             <label className="text-[9px] font-black text-gray-400 uppercase">Valor Pago</label>
-            <input 
-              type="number" 
+            <input
+              type="number"
               step="0.01"
               className="w-24 p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
-              value={valorRecebido} 
+              value={valorRecebido}
               onChange={(e) => setValorRecebido(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[9px] font-black text-gray-400 uppercase">Data Pag.</label>
-            <input 
-              type="date" 
+            <input
+              type="date"
               className="p-2 bg-elos-fundo rounded-lg text-xs border-none focus:ring-1 focus:ring-elos-bege"
-              value={dataBaixa} 
+              value={dataBaixa}
               onChange={(e) => setDataBaixa(e.target.value)}
             />
           </div>
-          <button 
-            className="bg-elos-verde text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-elos-verde/90 transition-all active:scale-95 shadow-md shadow-elos-verde/10"
+          <button
+            disabled={processando}
+            className="bg-elos-verde text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-elos-verde/90 transition-all active:scale-95 shadow-md shadow-elos-verde/10 disabled:opacity-50"
             onClick={handleBaixa}
           >
-            Confirmar
+            {processando ? 'Salvando...' : 'Confirmar'}
           </button>
-          <button 
+          <button
             type="button"
+            disabled={processando}
             onClick={() => {
               setNovoValorParcela(p.valor);
               setNovoVencimentoParcela(dataVencimentoStr);
               setModoEdicao(true);
             }}
-            className="p-2 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded-lg text-xs transition-colors"
+            className="p-2 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded-lg text-xs transition-colors disabled:opacity-40"
             title="Editar Valor ou Data de Vencimento desta parcela"
           >
             ✏️
@@ -292,12 +340,13 @@ function LinhaParcela({ p, venda, cliente, darBaixaParcela, estornarBaixaParcela
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const imgBBKey = import.meta.env.VITE_IMGBB_API_KEY || '';
   const baseUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
-  
+
   const { data: clientes = [], isLoading: carregandoClientes } = useClientes();
   const { data: vendas = [], isLoading: carregandoVendas } = useVendas();
-  
+
   const editarClienteMutation = useEditarCliente();
   const excluirClienteMutation = useExcluirCliente();
   const adicionarVendaMutation = useAdicionarVenda();
@@ -308,12 +357,11 @@ export default function Clientes() {
 
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
-  const [clienteSelecionadoCPF, setClienteSelecionadoCPF] = useState(null);
+  const [clienteSelecionadoChave, setClienteSelecionadoChave] = useState(null);
   const [editandoCadastro, setEditandoCadastro] = useState(null);
-  const [editandoVenda, setEditandoVenda] = useState(null);
   const [modalRecibo, setModalRecibo] = useState(null);
 
-  // 🟢 CHAVE PIX PERSISTENTE (agora salva no navegador E no servidor)
+  // 🟢 CHAVE PIX PERSISTENTE (navegador + servidor)
   const [chavePixPadrao, setChavePixPadrao] = useState(() => {
     return localStorage.getItem('chavePixElos') || '(85) 8550-6571';
   });
@@ -326,17 +374,16 @@ export default function Clientes() {
   const [processandoRenegociacao, setProcessandoRenegociacao] = useState(false);
 
   const [novaFotoCliente, setNovaFotoCliente] = useState('');
-  const [novaFotoVenda, setNovaFotoVenda] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [mostrarFormCadastro, setMostrarFormCadastro] = useState(false);
 
   const [toast, setToast] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
   const [confirmModal, setConfirmModal] = useState({ visivel: false, message: '', acao: null });
 
-  // Busca chave PIX salva no servidor (caso o usuário troque de computador/celular)
+  // Busca chave PIX salva no servidor
   useEffect(() => {
-    fetch(`${baseUrl}/whatsapp/mensagens`)
-      .then(r => r.json())
+    fetch(`${baseUrl}/whatsapp/mensagens`, { headers: obterHeadersAuth() })
+      .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data && data.chave_pix_carne) {
           setChavePixPadrao(data.chave_pix_carne);
@@ -349,28 +396,32 @@ export default function Clientes() {
   const salvarChavePixGlobal = async () => {
     const chaveLimpa = inputNovaChavePix.trim();
     if (!chaveLimpa) {
-      mostrarToast("Informe uma chave PIX válida!", "erro");
+      mostrarToast('Informe uma chave PIX válida!', 'erro');
       return;
     }
 
-    // 🟢 Salva no servidor para não ser sobrescrita pelo valor antigo ao recarregar
+    let salvouNoServidor = true;
     try {
       const res = await fetch(`${baseUrl}/whatsapp/mensagens`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: obterHeadersAuth(true),
         body: JSON.stringify({ chave_pix_carne: chaveLimpa })
       });
-      if (!res.ok) throw new Error('falha');
+      if (!res.ok) salvouNoServidor = false;
     } catch (e) {
-      mostrarToast("Salva só neste aparelho (falha ao salvar no servidor).", "erro");
+      salvouNoServidor = false;
     }
 
     localStorage.setItem('chavePixElos', chaveLimpa);
     setChavePixPadrao(chaveLimpa);
     setModalConfigPix(false);
-    mostrarToast("Chave PIX salva como padrão! ✅", "sucesso");
 
-    // Se o usuário clicou em "Gerar Carnê" e não tinha chave ainda, gera agora automaticamente
+    if (salvouNoServidor) {
+      mostrarToast('Chave PIX salva como padrão! ✅', 'sucesso');
+    } else {
+      mostrarToast('Salva só neste aparelho (falha ao salvar no servidor).', 'erro');
+    }
+
     if (vendaAguardandoCarne && clienteNoModal) {
       gerarPDFCarne({ ...vendaAguardandoCarne, cliente: clienteNoModal.nome, cpf: clienteNoModal.cpf }, chaveLimpa);
       setVendaAguardandoCarne(null);
@@ -400,13 +451,11 @@ export default function Clientes() {
   };
 
   const fecharModal = () => {
-    setClienteSelecionadoCPF(null);
+    setClienteSelecionadoChave(null);
     setEditandoCadastro(null);
-    setEditandoVenda(null);
     setModalRecibo(null);
     setModalRenegociacao(null);
-    setNovaFotoCliente(''); 
-    setNovaFotoVenda('');   
+    setNovaFotoCliente('');
   };
 
   const handleUploadImgBB = async (e, setFotoState) => {
@@ -414,44 +463,43 @@ export default function Clientes() {
     if (!file) return;
 
     if (!imgBBKey) {
-      mostrarToast("Chave VITE_IMGBB_API_KEY não encontrada!", "erro");
+      mostrarToast('Chave VITE_IMGBB_API_KEY não encontrada!', 'erro');
       return;
     }
 
     setUploadingImage(true);
-    mostrarToast("Comprimindo e enviando arquivo... ⏳", "sucesso");
+    mostrarToast('Comprimindo e enviando arquivo... ⏳', 'sucesso');
 
     try {
       const fotoSuperLeve = await comprimirImagem(file);
       const formData = new FormData();
-      formData.append("image", fotoSuperLeve);
+      formData.append('image', fotoSuperLeve);
 
       const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgBBKey}`, {
-        method: "POST",
-        body: formData,
+        method: 'POST',
+        body: formData
       });
 
       const data = await res.json();
       if (data.success) {
         setFotoState(data.data.url);
-        mostrarToast("Upload concluído com sucesso! ✅", "sucesso");
+        mostrarToast('Upload concluído com sucesso! ✅', 'sucesso');
       } else {
-        mostrarToast("Falha no upload do ImgBB.", "erro");
+        mostrarToast('Falha no upload do ImgBB.', 'erro');
       }
     } catch (error) {
-      mostrarToast("Erro ao processar imagem.", "erro");
+      mostrarToast('Erro ao processar imagem.', 'erro');
     }
 
     setUploadingImage(false);
   };
 
   const salvarEdicaoCadastro = async () => {
-    const clienteParaEditar = listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF);
+    const clienteParaEditar = listaFinalClientes.find(c => c.cpfChave === clienteSelecionadoChave);
     const idMongo = clienteParaEditar?._id;
-    if (!idMongo) return mostrarToast("Erro: ID do cliente não mapeado.", "erro");
+    if (!idMongo) return mostrarToast('Erro: ID do cliente não mapeado.', 'erro');
 
-    // 🟢 Remove campos calculados/sensíveis que não devem ir para o banco
-    const { historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = editandoCadastro;
+    const { cpfChave, historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = editandoCadastro;
     const dadosAtualizados = {
       ...dadosLimpos,
       foto: novaFotoCliente || editandoCadastro.foto
@@ -459,33 +507,20 @@ export default function Clientes() {
 
     try {
       await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: dadosAtualizados });
-      setClienteSelecionadoCPF(editandoCadastro.cpf);
+      setClienteSelecionadoChave(chaveCpf(editandoCadastro.cpf));
       setEditandoCadastro(null);
       setNovaFotoCliente('');
-      mostrarToast("Cadastro atualizado com sucesso!", "sucesso");
-    } catch (err) { mostrarToast("Erro ao editar dados no servidor.", "erro"); }
+      mostrarToast('Cadastro atualizado com sucesso!', 'sucesso');
+    } catch (err) {
+      mostrarToast('Erro ao editar dados no servidor.', 'erro');
+    }
   };
 
-  const salvarEdicaoVenda = async () => {
-    if (!editandoVenda.vendaId || !editandoVenda.dataVenda) return;
-
-    const dadosAtualizados = {
-      ...editandoVenda,
-      foto: novaFotoVenda || editandoVenda.foto
-    };
-
-    try {
-      await editarVendaMutation.mutateAsync({ vendaId: editandoVenda.vendaId, dadosNovos: dadosAtualizados });
-      setEditandoVenda(null);
-      setNovaFotoVenda('');
-      mostrarToast("Pedido atualizado com sucesso!", "sucesso");
-    } catch (err) { mostrarToast("Erro ao sincronizar modificações do pedido.", "erro"); }
-  };
-
-  // 🟢 FUNÇÃO PARA EDITAR VALOR E DATA DE UMA PARCELA INDIVIDUALMENTE
+  // 🟢 EDIÇÃO MANUAL DE PARCELA (preserva valorEntrada quando fora de listaParcelas e remove campo virtual ordensServico)
   const handleEditarParcelaManual = async (vendaAlvo, numeroParcela, novoValor, novoVencimento) => {
     const vendaId = vendaAlvo._id || vendaAlvo.id;
-    const novasParcelas = (vendaAlvo.listaParcelas || []).map(p => {
+    const parcelasAntigas = vendaAlvo.listaParcelas || [];
+    const novasParcelas = parcelasAntigas.map(p => {
       if (String(p.numero) === String(numeroParcela)) {
         return {
           ...p,
@@ -497,20 +532,29 @@ export default function Clientes() {
       return p;
     });
 
-    const novoTotalVenda = novasParcelas.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const temParcelaZero = parcelasAntigas.some(p => Number(p.numero) === 0);
+    const somaAntiga = parcelasAntigas.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const entradaJaInclusa =
+      temParcelaZero ||
+      (parcelasAntigas.length > 0 && Math.abs(somaAntiga - Number(vendaAlvo.valorTotal || 0)) < 0.05);
+
+    const somaNovasParcelas = novasParcelas.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const novoTotalVenda = somaNovasParcelas + (!entradaJaInclusa ? Number(vendaAlvo.valorEntrada || 0) : 0);
+
+    const { ordensServico, ...vendaLimpa } = vendaAlvo;
 
     try {
       await editarVendaMutation.mutateAsync({
         vendaId,
         dadosNovos: {
-          ...vendaAlvo,
+          ...vendaLimpa,
           valorTotal: parseFloat(novoTotalVenda.toFixed(2)),
           listaParcelas: novasParcelas
         }
       });
-      mostrarToast("Parcela atualizada com sucesso! ✅", "sucesso");
+      mostrarToast('Parcela atualizada com sucesso! ✅', 'sucesso');
     } catch (err) {
-      mostrarToast("Erro ao atualizar parcela.", "erro");
+      mostrarToast('Erro ao atualizar parcela.', 'erro');
     }
   };
 
@@ -615,11 +659,17 @@ export default function Clientes() {
   };
 
   const confirmarRenegociacao = async () => {
-    if (!modalRenegociacao) return;
-    const { vendaOriginal, parcelasPrevias, metodoPagamento, observacoes, dataPrimeiraParcela, valorEntradaFmt } = modalRenegociacao;
+    if (!modalRenegociacao || processandoRenegociacao) return;
+    const { vendaOriginal, parcelasPrevias, metodoPagamento, observacoes, dataPrimeiraParcela, dataEntrada, valorEntradaFmt } = modalRenegociacao;
 
     if (!parcelasPrevias || parcelasPrevias.length === 0) {
-      mostrarToast("Gere ao menos uma parcela para a renegociação.", "erro");
+      mostrarToast('Gere ao menos uma parcela para a renegociação.', 'erro');
+      return;
+    }
+
+    const parcelaInvalida = parcelasPrevias.find(p => isNaN(Number(p.valor)) || Number(p.valor) <= 0 || !p.dataVencimento);
+    if (parcelaInvalida) {
+      mostrarToast('Todas as parcelas do acordo devem ter valor maior que zero e data de vencimento.', 'erro');
       return;
     }
 
@@ -628,7 +678,6 @@ export default function Clientes() {
     const vendaOriginalId = vendaOriginal._id || vendaOriginal.id;
     const numPedAntigo = vendaOriginal.numeroPedido || 'S/N';
 
-    // Marca as parcelas antigas não pagas como renegociadas
     const parcelasAntigasCongeladas = (vendaOriginal.listaParcelas || []).map(p => {
       if (!p.paga) {
         return {
@@ -644,7 +693,7 @@ export default function Clientes() {
     const entradaNum = limparMoeda(valorEntradaFmt);
 
     try {
-      // 🟢 1º: cria o NOVO acordo. Se falhar aqui, a dívida original continua intacta.
+      // 1º: cria o NOVO acordo. Se falhar aqui, a dívida original continua intacta.
       const nomeAcordo = `🔄 RENEGOCIAÇÃO (REF. PEDIDO #${numPedAntigo})`;
       const novaVendaRenegociada = {
         cliente: clienteNoModal.nome,
@@ -657,6 +706,7 @@ export default function Clientes() {
         parcelas: parcelasPrevias.filter(p => p.numero > 0).length || 1,
         listaParcelas: parcelasPrevias,
         dataVenda: hojeIso,
+        dataEntrada: entradaNum > 0 ? dataEntrada : hojeIso,
         dataPrimeiraParcela: dataPrimeiraParcela,
         metodoPagamento: metodoPagamento,
         observacoes: observacoes
@@ -664,12 +714,13 @@ export default function Clientes() {
 
       await adicionarVendaMutation.mutateAsync(novaVendaRenegociada);
 
-      // 🟢 2º: só então marca o contrato antigo como "Dívida Renegociada"
+      // 2º: marca o contrato antigo como "Dívida Renegociada"
+      const { ordensServico, ...vendaOriginalLimpa } = vendaOriginal;
       try {
         await editarVendaMutation.mutateAsync({
           vendaId: vendaOriginalId,
           dadosNovos: {
-            ...vendaOriginal,
+            ...vendaOriginalLimpa,
             renegociada: true,
             renegociadaEm: hojeIso,
             listaParcelas: parcelasAntigasCongeladas,
@@ -678,69 +729,76 @@ export default function Clientes() {
         });
       } catch (erroMarcacao) {
         setModalRenegociacao(null);
-        mostrarToast(`O novo acordo foi criado, mas o Pedido #${numPedAntigo} não foi marcado como renegociado. Marque-o manualmente para não cobrar em duplicidade.`, "erro");
+        mostrarToast(`O novo acordo foi criado, mas o Pedido #${numPedAntigo} não foi marcado como renegociado. Marque-o manualmente para não cobrar em duplicidade.`, 'erro');
         return;
       }
 
       setModalRenegociacao(null);
-      mostrarToast("Dívida renegociada! Novo acordo ativo criado com sucesso.", "sucesso");
+      mostrarToast('Dívida renegociada! Novo acordo ativo criado com sucesso.', 'sucesso');
     } catch (error) {
-      mostrarToast("Erro ao processar a renegociação. Nada foi alterado.", "erro");
+      mostrarToast('Erro ao processar a renegociação. Nada foi alterado.', 'erro');
     } finally {
       setProcessandoRenegociacao(false);
     }
   };
 
   const handleExcluirFotoCliente = () => {
-    abrirConfirmacao("Deseja remover permanentemente a foto de perfil deste cliente?", async () => {
+    abrirConfirmacao('Deseja remover permanentemente a foto de perfil deste cliente?', async () => {
       const idMongo = clienteNoModal?._id;
+      if (!idMongo) return;
       try {
-        const { historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = clienteNoModal;
+        const { cpfChave, historicoVendas, totalGeralDevido, senha, tokenRecuperacao, tokenExpiraEm, ...dadosLimpos } = clienteNoModal;
         await editarClienteMutation.mutateAsync({ id: idMongo, dadosNovos: { ...dadosLimpos, foto: '' } });
-        mostrarToast("Foto de perfil removida.", "sucesso");
-      } catch (err) { mostrarToast("Erro ao remover arquivo.", "erro"); }
+        mostrarToast('Foto de perfil removida.', 'sucesso');
+      } catch (err) {
+        mostrarToast('Erro ao remover arquivo.', 'erro');
+      }
     });
   };
 
   const handleExcluirFotoVenda = (vendaId, vendaAtual) => {
-    abrirConfirmacao("Deseja remover permanentemente a receita digitalizada deste pedido?", async () => {
+    abrirConfirmacao('Deseja remover permanentemente a receita digitalizada deste pedido?', async () => {
+      const { ordensServico, ...vendaLimpa } = vendaAtual;
       try {
-        await editarVendaMutation.mutateAsync({ vendaId, dadosNovos: { ...vendaAtual, foto: '' } });
-        mostrarToast("Receita óptica removida do histórico.", "sucesso");
-      } catch (err) { mostrarToast("Erro ao limpar arquivo.", "erro"); }
+        await editarVendaMutation.mutateAsync({ vendaId, dadosNovos: { ...vendaLimpa, foto: '' } });
+        mostrarToast('Receita óptica removida do histórico.', 'sucesso');
+      } catch (err) {
+        mostrarToast('Erro ao limpar arquivo.', 'erro');
+      }
     });
   };
 
   const handleExcluirOS = (idOS) => {
-    abrirConfirmacao("Deseja excluir esta Ordem de Serviço permanentemente?", async () => {
+    abrirConfirmacao('Deseja excluir esta Ordem de Serviço permanentemente?', async () => {
       try {
         const response = await fetch(`${baseUrl}/ordens_servico/${idOS}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: obterHeadersAuth()
         });
-        
+
         if (response.ok) {
-          mostrarToast("Ordem de Serviço excluída com sucesso!", "sucesso");
-          setTimeout(() => window.location.reload(), 1500); 
+          await queryClient.invalidateQueries({ queryKey: ['vendas'] });
+          await queryClient.invalidateQueries({ queryKey: ['ordens_servico'] });
+          mostrarToast('Ordem de Serviço excluída com sucesso!', 'sucesso');
         } else {
-          mostrarToast("Erro ao excluir OS no servidor.", "erro");
+          mostrarToast('Erro ao excluir OS no servidor.', 'erro');
         }
       } catch (error) {
-        mostrarToast("Erro de conexão ao tentar excluir a OS.", "erro");
+        mostrarToast('Erro de conexão ao tentar excluir a OS.', 'erro');
       }
     });
   };
 
   const listaFinalClientes = useMemo(() => {
-    // 🟢 filter(Boolean): ignora vendas/clientes sem CPF (evita quebrar a busca)
-    const todosCPFs = Array.from(new Set([
-      ...(vendas || []).map(v => v.cpf),
-      ...(clientes || []).map(c => c.cpf)
+    const todasChaves = Array.from(new Set([
+      ...(vendas || []).map(v => chaveCpf(v.cpf)),
+      ...(clientes || []).map(c => chaveCpf(c.cpf))
     ].filter(Boolean)));
 
-    return todosCPFs.map(cpf => {
-      const dadosCad = (clientes || []).find(c => c.cpf === cpf);
+    return todasChaves.map(chave => {
+      const dadosCad = (clientes || []).find(c => chaveCpf(c.cpf) === chave);
       const vendasCli = (vendas || [])
-        .filter(v => v.cpf === cpf)
+        .filter(v => chaveCpf(v.cpf) === chave)
         .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
         .map(venda => {
           const osVenda = venda.ordensServico || [];
@@ -750,32 +808,32 @@ export default function Clientes() {
             renegociada: foiRenegociada,
             ordensServico: osVenda.map(os => ({
               ...os,
-              idOS: os.idOS || os._id 
+              idOS: os.idOS || os._id
             }))
           };
         });
 
-      // 🟢 SALDO DEVEDOR IGNORA VENDAS/PARCELAS QUE JÁ FORAM RENEGOCIADAS
       const totalDevido = vendasCli.reduce((acc, v) => {
         if (v.renegociada) return acc;
         const somaAberta = (v.listaParcelas || [])
           .filter(p => !p.paga && !p.renegociada)
-          .reduce((soma, p) => soma + (p.valor || 0), 0);
+          .reduce((soma, p) => soma + Number(p.valor || 0), 0);
         return acc + somaAberta;
       }, 0);
 
       return {
         ...dadosCad,
         _id: dadosCad?._id || dadosCad?.id,
-        nome: dadosCad?.nome || vendasCli[0]?.cliente || "Sem Nome",
-        cpf: cpf,
-        telefone: dadosCad?.telefone || "Não cadastrado",
-        email: dadosCad?.email || "Não cadastrado",
-        origem: dadosCad?.origem || "Não informada", 
-        endereco: dadosCad?.endereco || "Não informado",
-        dataNascimento: dadosCad?.dataNascimento || "",
-        observacoes: dadosCad?.observacoes || "",
-        foto: dadosCad?.foto || "",
+        cpfChave: chave,
+        nome: dadosCad?.nome || vendasCli[0]?.cliente || 'Sem Nome',
+        cpf: dadosCad?.cpf || vendasCli[0]?.cpf || chave,
+        telefone: dadosCad?.telefone || 'Não cadastrado',
+        email: dadosCad?.email || 'Não cadastrado',
+        origem: dadosCad?.origem || 'Não informada',
+        endereco: dadosCad?.endereco || 'Não informado',
+        dataNascimento: dadosCad?.dataNascimento || '',
+        observacoes: dadosCad?.observacoes || '',
+        foto: dadosCad?.foto || '',
         historicoVendas: vendasCli,
         totalGeralDevido: totalDevido
       };
@@ -783,19 +841,22 @@ export default function Clientes() {
   }, [vendas, clientes]);
 
   const clienteNoModal = useMemo(() => {
-    if (!clienteSelecionadoCPF) return null;
-    return listaFinalClientes.find(c => c.cpf === clienteSelecionadoCPF) || null;
-  }, [clienteSelecionadoCPF, listaFinalClientes]);
+    if (!clienteSelecionadoChave) return null;
+    return listaFinalClientes.find(c => c.cpfChave === clienteSelecionadoChave) || null;
+  }, [clienteSelecionadoChave, listaFinalClientes]);
 
   const clientesExibidos = listaFinalClientes.filter(c => {
     const passaFiltroStatus = filtro === 'pendentes' ? (c.totalGeralDevido || 0) > 0.01 : true;
-    const termo = busca.toLowerCase();
-    return passaFiltroStatus && ((c.nome || '').toLowerCase().includes(termo) || (c.cpf || '').includes(termo));
+    const termo = busca.trim().toLowerCase();
+    const termoDigitos = limparCpf(busca);
+    const bateNome = (c.nome || '').toLowerCase().includes(termo);
+    const bateCpf = (c.cpf || '').toLowerCase().includes(termo) || (termoDigitos.length > 0 && limparCpf(c.cpf).includes(termoDigitos));
+    return passaFiltroStatus && (bateNome || bateCpf);
   });
 
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto relative">
-      
+
       {/* TOAST PREMIUM */}
       {toast.visivel && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] px-4 w-full max-w-md">
@@ -831,14 +892,13 @@ export default function Clientes() {
         </div>
 
         <div className="flex flex-wrap md:flex-row gap-3 w-full md:w-auto items-center">
-          {/* 🟢 BOTÃO PARA CONFIGURAR A CHAVE PIX UMA ÚNICA VEZ */}
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => {
               setInputNovaChavePix(chavePixPadrao);
               setVendaAguardandoCarne(null);
               setModalConfigPix(true);
-            }} 
+            }}
             className="px-4 py-3 bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-2"
             title={`Chave atual: ${chavePixPadrao}`}
           >
@@ -848,9 +908,9 @@ export default function Clientes() {
           <button type="button" onClick={() => setMostrarFormCadastro(!mostrarFormCadastro)} className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all ${mostrarFormCadastro ? 'bg-elos-bege text-white' : 'bg-elos-verde text-white'}`}>
             {mostrarFormCadastro ? '📁 Ocultar Cadastro' : '➕ Cadastrar Cliente'}
           </button>
-          
+
           <input type="text" className="px-6 py-3 bg-white rounded-2xl shadow-soft border border-elos-bege/20 focus:outline-none text-sm w-full md:w-72" placeholder="🔍 Buscar por nome ou CPF..." value={busca} onChange={(e) => setBusca(e.target.value)} />
-          
+
           <div className="flex bg-white p-1 rounded-2xl border border-elos-bege/10">
             <button onClick={() => setFiltro('todos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${filtro === 'todos' ? 'bg-elos-verde text-white' : 'text-gray-400'}`}>TODOS</button>
             <button onClick={() => setFiltro('pendentes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${filtro === 'pendentes' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>⚠️ PENDENTES</button>
@@ -864,7 +924,6 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* 🟢 INDICADOR DE CARREGAMENTO (evita parecer lista vazia ao abrir a tela) */}
       {(carregandoClientes || carregandoVendas) && (
         <p className="text-center text-elos-verde font-bold animate-pulse uppercase text-xs tracking-widest mb-6">
           Carregando clientes e vendas...
@@ -884,9 +943,9 @@ export default function Clientes() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {clientesExibidos.map((cliente) => (
-                <tr key={cliente.cpf} className="hover:bg-elos-fundo/30 transition-colors group">
+                <tr key={cliente.cpfChave} className="hover:bg-elos-fundo/30 transition-colors group">
                   <td className="px-8 py-5">
-                    <div className="font-bold text-elos-verde cursor-pointer" onClick={() => setClienteSelecionadoCPF(cliente.cpf)}>{cliente.nome}</div>
+                    <div className="font-bold text-elos-verde cursor-pointer" onClick={() => setClienteSelecionadoChave(cliente.cpfChave)}>{cliente.nome}</div>
                     <div className="text-[10px] text-gray-400">{cliente.cpf}</div>
                   </td>
                   <td className={`px-8 py-5 text-center font-black ${cliente.totalGeralDevido > 0 ? 'text-red-600' : 'text-elos-verde'}`}>
@@ -894,17 +953,17 @@ export default function Clientes() {
                   </td>
                   <td className="px-8 py-5 text-right">
                     <div className="flex justify-end gap-2">
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          navigate('/admin/nova-venda', { state: { clienteNome: cliente.nome, clienteCpf: cliente.cpf }});
-                        }} 
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/admin/vendas', { state: { clienteNome: cliente.nome, clienteCpf: cliente.cpf } });
+                        }}
                         className="px-4 py-2 bg-[#e6d0a7]/30 text-[#c5a880] rounded-xl font-bold text-xs hover:bg-[#c5a880] hover:text-white transition-colors flex items-center gap-1"
                       >
                         🛒 Nova Venda
                       </button>
-                      
-                      <button onClick={() => setClienteSelecionadoCPF(cliente.cpf)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
+
+                      <button onClick={() => setClienteSelecionadoChave(cliente.cpfChave)} className="px-4 py-2 bg-elos-fundo text-elos-verde rounded-xl font-bold text-xs hover:bg-elos-verde hover:text-white transition-colors">Ver Ficha</button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -912,7 +971,14 @@ export default function Clientes() {
                           const aviso = temVendas
                             ? ` Atenção: este cliente possui ${cliente.historicoVendas.length} venda(s) registrada(s). Remover o cadastro NÃO apaga as vendas, e ele continuará aparecendo na lista.`
                             : '';
-                          abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?${aviso}`, () => excluirClienteMutation.mutate(cliente.cpf));
+                          abrirConfirmacao(`Deseja remover permanentemente o cadastro de ${cliente.nome}?${aviso}`, async () => {
+                            try {
+                              await excluirClienteMutation.mutateAsync(cliente.cpf);
+                              mostrarToast('Cadastro removido com sucesso!', 'sucesso');
+                            } catch (err) {
+                              mostrarToast('Erro ao remover cadastro do cliente.', 'erro');
+                            }
+                          });
                         }}
                         className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl"
                       >🗑️</button>
@@ -930,7 +996,7 @@ export default function Clientes() {
         <div className="fixed inset-0 bg-primary/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={fecharModal}>
           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
             <button onClick={fecharModal} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-elos-fundo rounded-full text-2xl text-gray-400 hover:text-red-500 z-10">&times;</button>
-            
+
             <header className="p-10 bg-elos-fundo/50 border-b border-elos-bege/20 flex flex-col md:flex-row justify-between md:items-center gap-4">
               <div>
                 <h2 className="font-tradicional text-3xl text-elos-verde italic leading-tight">{clienteNoModal.nome}</h2>
@@ -945,18 +1011,18 @@ export default function Clientes() {
                 </span>
               </div>
             </header>
-            
+
             <div className="p-10 overflow-y-auto flex-1 bg-white space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-elos-fundo/30 p-6 rounded-3xl border border-elos-bege/20 h-fit">
-                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || "Não cadastrado"}</p></div>
-                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">E-mail</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.email || "Não cadastrado"}</p></div>
-                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Data de Nascimento</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.dataNascimento ? clienteNoModal.dataNascimento.split('-').reverse().join('/') : "Não informada"}</p></div>
-                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || "Não cadastrado"}</p></div>
-                  
-                  <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Origem do Cliente</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.origem || "Não informada"}</p></div>
+                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Contato</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.telefone || 'Não cadastrado'}</p></div>
+                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">E-mail</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.email || 'Não cadastrado'}</p></div>
+                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Data de Nascimento</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.dataNascimento ? clienteNoModal.dataNascimento.split('T')[0].split('-').reverse().join('/') : 'Não informada'}</p></div>
+                  <div><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Endereço</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.endereco || 'Não cadastrado'}</p></div>
 
-                  <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || "Nenhuma observação."}</p></div>
+                  <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Origem do Cliente</h4><p className="text-sm font-bold text-elos-texto">{clienteNoModal.origem || 'Não informada'}</p></div>
+
+                  <div className="md:col-span-2 border-t border-elos-bege/10 pt-4"><h4 className="text-[10px] font-black text-elos-bege uppercase mb-1">Observações</h4><p className="text-sm italic text-elos-texto whitespace-pre-wrap">{clienteNoModal.observacoes || 'Nenhuma observação.'}</p></div>
                 </div>
 
                 <div className="bg-elos-fundo/30 p-4 rounded-3xl border border-elos-bege/20 flex flex-col items-center justify-center min-h-[200px]">
@@ -975,32 +1041,32 @@ export default function Clientes() {
               </div>
 
               <div className="flex flex-wrap gap-4">
-                <button onClick={() => setEditandoCadastro({...clienteNoModal})} className="flex-1 py-4 bg-white border-2 border-elos-bege/30 text-elos-verde font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Cadastro</button>
-                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(Math.round(clienteNoModal.totalGeralDevido * 100))), produto: "Pagamento de saldo devedor", data: hojeBR(), metodo: "Dinheiro" })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
+                <button onClick={() => setEditandoCadastro({ ...clienteNoModal })} className="flex-1 py-4 bg-white border-2 border-elos-bege/30 text-elos-verde font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-elos-bege hover:text-white transition-all">✏️ Editar Cadastro</button>
+                <button onClick={() => setModalRecibo({ valorFmt: aplicarMascaraMoeda(String(Math.round(clienteNoModal.totalGeralDevido * 100))), produto: 'Pagamento de saldo devedor', data: hojeBR(), metodo: 'Dinheiro' })} className="flex-1 py-4 bg-elos-verde text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg">📄 Gerar Recibo</button>
               </div>
 
               <div className="space-y-6 pt-4">
                 <h3 className="font-tradicional text-2xl text-elos-verde italic border-b border-gray-100 pb-2">Histórico de Pedidos & Acordos</h3>
                 {clienteNoModal.historicoVendas.map((venda, index) => {
-                  const numPed = venda.numeroPedido || "S/N";
-                  const produtosLista = venda.itensCarrinho && venda.itensCarrinho.length > 0 
+                  const numPed = venda.numeroPedido || 'S/N';
+                  const produtosLista = venda.itensCarrinho && venda.itensCarrinho.length > 0
                     ? venda.itensCarrinho.map(item => item.nome)
                     : String(venda.produto || '').split('+').map(p => p.trim());
 
-                  const saldoAbertoDestaVenda = venda.renegociada 
-                    ? 0 
+                  const saldoAbertoDestaVenda = venda.renegociada
+                    ? 0
                     : (venda.listaParcelas || []).filter(p => !p.paga && !p.renegociada).reduce((acc, p) => acc + Number(p.valor || 0), 0);
 
                   const isAcordoRenegociacao = String(venda.produto || '').includes('RENEGOCIAÇÃO');
 
                   return (
-                    <div 
-                      key={venda._id || index} 
+                    <div
+                      key={venda._id || index}
                       className={`p-6 md:p-8 rounded-[32px] border relative shadow-sm mb-6 transition-all ${
-                        venda.renegociada 
-                          ? 'bg-gray-50/80 border-amber-200/80 opacity-75' 
-                          : isAcordoRenegociacao 
-                            ? 'bg-amber-50/20 border-amber-300 ring-1 ring-amber-200/50' 
+                        venda.renegociada
+                          ? 'bg-gray-50/80 border-amber-200/80 opacity-75'
+                          : isAcordoRenegociacao
+                            ? 'bg-amber-50/20 border-amber-300 ring-1 ring-amber-200/50'
                             : 'bg-white border-gray-100'
                       }`}
                     >
@@ -1011,16 +1077,15 @@ export default function Clientes() {
                               {isAcordoRenegociacao ? `ACORDO #${numPed}` : `PEDIDO #${numPed}`}
                             </span>
 
-                            {/* 🟢 SELO DE DÍVIDA RENEGOCIADA */}
                             {venda.renegociada && (
                               <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
                                 🔄 Dívida Renegociada {venda.renegociadaEm ? `em ${venda.renegociadaEm.split('-').reverse().join('/')}` : ''}
                               </span>
                             )}
-                            
+
                             {!venda.renegociada && (
                               <small className="text-gray-400 font-bold uppercase text-[9px] tracking-widest cursor-pointer hover:text-elos-verde" onClick={() => navigate(`/admin/vendas/editar/${venda._id || venda.id}`, { state: { abaAtiva: 'historico' } })}>
-                                {venda.dataVenda?.split('-').reverse().join('/')} ✏️ EDITAR
+                                {venda.dataVenda?.split('T')[0].split('-').reverse().join('/')} ✏️ EDITAR
                               </small>
                             )}
                           </div>
@@ -1045,7 +1110,7 @@ export default function Clientes() {
                               </span>
                             )}
                           </div>
-                          
+
                           {venda.foto && (
                             <div className="mt-4 p-2 bg-elos-fundo rounded-2xl border w-fit relative group">
                               <p className="text-[8px] font-black uppercase text-elos-bege mb-1">Receita Anexada:</p>
@@ -1060,11 +1125,10 @@ export default function Clientes() {
                             </p>
                           )}
                         </div>
-                        
+
                         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-                          {/* 🟢 BOTÃO DE RENEGOCIAR DÍVIDA */}
                           {!venda.renegociada && saldoAbertoDestaVenda > 0.01 && (
-                            <button 
+                            <button
                               onClick={() => abrirModalRenegociar(venda)}
                               className="flex-1 md:flex-none bg-amber-500 text-white hover:bg-amber-600 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5"
                             >
@@ -1073,15 +1137,15 @@ export default function Clientes() {
                           )}
 
                           {!venda.renegociada && (
-                            <button 
-                              onClick={() => navigate(`/admin/nova-os/${numPed}`)} 
+                            <button
+                              onClick={() => navigate(`/admin/nova-os/${numPed}`)}
                               className="flex-1 md:flex-none bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-600 hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
                             >
                               ➕ Nova OS
                             </button>
                           )}
 
-                          <button 
+                          <button
                             onClick={() => {
                               const valorTotalNum = Number(venda.valorTotal || 0);
                               const descontoNum = Number(venda.desconto || 0);
@@ -1092,34 +1156,33 @@ export default function Clientes() {
                                 const fatorProporcional = subtotalBruto / (venda.itensCarrinho.reduce((acc, i) => acc + Number(i.preco || 0), 0) || 1);
                                 itensRecalculados = venda.itensCarrinho.map(item => ({
                                   ...item,
-                                  preco: Number((Number(item.preco || 0) * fatorProporcional).toFixed(2)) 
+                                  preco: Number((Number(item.preco || 0) * fatorProporcional).toFixed(2))
                                 }));
                               } else {
-                                itensRecalculados = [{ nome: venda.produto || "PRODUTO ÓPTICO", preco: subtotalBruto }];
+                                itensRecalculados = [{ nome: venda.produto || 'PRODUTO ÓPTICO', preco: subtotalBruto }];
                               }
 
                               gerarPDFDocumento({
                                 ...venda,
-                                numeroPedido: numPed, 
-                                cliente: clienteNoModal.nome, 
-                                email: clienteNoModal.email, 
-                                endereco: clienteNoModal.endereco, 
+                                numeroPedido: numPed,
+                                cliente: clienteNoModal.nome,
+                                email: clienteNoModal.email,
+                                endereco: clienteNoModal.endereco,
                                 telefone: clienteNoModal.telefone,
                                 valorProduto: subtotalBruto,
                                 desconto: descontoNum,
                                 valorTotal: valorTotalNum,
-                                itensCarrinho: itensRecalculados, 
-                                data: venda.dataVenda ? venda.dataVenda.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }),
+                                itensCarrinho: itensRecalculados,
+                                data: venda.dataVenda ? venda.dataVenda.split('T')[0].split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' })
                               }, 'pedido');
-                            }} 
+                            }}
                             className="flex-1 md:flex-none bg-elos-fundo text-elos-verde border-2 border-elos-bege/20 hover:bg-elos-verde hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all"
                           >
                             📄 Pedido PDF
                           </button>
 
-                          {/* 🟢 BOTÃO GERAR CARNÊ DIRETO (USA A CHAVE PIX SALVA SEM PERGUNTAR TODA VEZ) */}
                           {!venda.renegociada && (venda.metodoPagamento === 'Boleto / Crediário' || (venda.listaParcelas || []).some(p => p.numero > 0 && !p.paga)) && (
-                            <button 
+                            <button
                               onClick={() => handleEmitirCarneDireto(venda)}
                               className="flex-1 md:flex-none bg-orange-50 text-orange-600 border-2 border-orange-100 hover:bg-orange-500 hover:text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
                               title={`Imprimir Carnê (Chave PIX: ${chavePixPadrao})`}
@@ -1128,7 +1191,19 @@ export default function Clientes() {
                             </button>
                           )}
 
-                          <button onClick={() => { abrirConfirmacao("Deseja excluir este contrato permanentemente?", () => excluirVendaMutation.mutate(venda._id || venda.id)); }} className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors">🗑️</button>
+                          <button
+                            onClick={() => {
+                              abrirConfirmacao('Deseja excluir este contrato permanentemente?', async () => {
+                                try {
+                                  await excluirVendaMutation.mutateAsync(venda._id || venda.id);
+                                  mostrarToast('Contrato excluído com sucesso!', 'sucesso');
+                                } catch (err) {
+                                  mostrarToast('Erro ao excluir contrato.', 'erro');
+                                }
+                              });
+                            }}
+                            className="p-2.5 bg-red-50 text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-colors"
+                          >🗑️</button>
                         </div>
                       </div>
 
@@ -1143,11 +1218,11 @@ export default function Clientes() {
                                 </span>
                                 <div className="flex gap-2">
                                   <button
-                                    onClick={() => gerarPDFOrdemServico({ 
-                                      ...os, 
-                                      nomeCliente: clienteNoModal.nome, 
-                                      dataVenda: venda.dataVenda, 
-                                      numeroOS: `${numPed}-${osIdx + 1}` 
+                                    onClick={() => gerarPDFOrdemServico({
+                                      ...os,
+                                      nomeCliente: clienteNoModal.nome,
+                                      dataVenda: venda.dataVenda,
+                                      numeroOS: `${numPed}-${osIdx + 1}`
                                     })}
                                     className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
                                   >
@@ -1174,20 +1249,20 @@ export default function Clientes() {
 
                       <div className="bg-gray-50 rounded-2xl p-4 shadow-inner border border-gray-200/50">
                         {(venda.listaParcelas || []).map((p, idx) => (
-                          <LinhaParcela 
-                            key={`${venda._id || index}-${p.numero ?? idx}`} 
-                            p={p} 
-                            venda={venda} 
+                          <LinhaParcela
+                            key={`${venda._id || index}-${p.numero ?? idx}`}
+                            p={p}
+                            venda={venda}
                             cliente={clienteNoModal}
                             darBaixaParcela={async (vendaId, numeroParcela, dataPagamento, valorPago) => {
                               return await darBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela, dataPagamento, valorPago });
-                            }} 
+                            }}
                             estornarBaixaParcela={async (vendaId, numeroParcela) => {
                               return await estornarBaixaParcelaMutation.mutateAsync({ vendaId, numeroParcela });
                             }}
                             editarParcelaManual={handleEditarParcelaManual}
-                            mostrarToast={mostrarToast} 
-                            abrirConfirmacao={abrirConfirmacao} 
+                            mostrarToast={mostrarToast}
+                            abrirConfirmacao={abrirConfirmacao}
                           />
                         ))}
                       </div>
@@ -1200,7 +1275,7 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* 🟢 MODAL DE RENEGOCIAÇÃO DE DÍVIDA */}
+      {/* MODAL DE RENEGOCIAÇÃO DE DÍVIDA */}
       {modalRenegociacao && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[90] p-4">
           <div className="bg-white w-full max-w-2xl rounded-[32px] p-6 md:p-8 space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto border border-amber-200">
@@ -1219,7 +1294,6 @@ export default function Clientes() {
               <button onClick={() => setModalRenegociacao(null)} className="text-2xl text-gray-400 hover:text-red-500">&times;</button>
             </div>
 
-            {/* RESUMO E PARÂMETROS DO ACORDO */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
               <div>
                 <span className="text-[10px] font-black uppercase text-gray-400 block">Saldo Devedor Original</span>
@@ -1231,7 +1305,7 @@ export default function Clientes() {
                 <label className="text-[10px] font-black uppercase text-amber-800 block mb-1">
                   Novo Valor Total Negociado (Com Juros ou Desconto)
                 </label>
-                <input 
+                <input
                   type="text"
                   className="w-full p-3 bg-white border border-amber-300 rounded-xl font-black text-elos-verde text-base outline-none focus:ring-2 focus:ring-amber-400"
                   value={modalRenegociacao.novoValorTotalFmt}
@@ -1243,7 +1317,7 @@ export default function Clientes() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nova Entrada (Opcional)</label>
-                <input 
+                <input
                   type="text"
                   placeholder="R$ 0,00"
                   className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold text-elos-verde outline-none"
@@ -1253,7 +1327,7 @@ export default function Clientes() {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Data da Entrada</label>
-                <input 
+                <input
                   type="date"
                   className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold outline-none"
                   value={modalRenegociacao.dataEntrada}
@@ -1262,7 +1336,7 @@ export default function Clientes() {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nº de Parcelas</label>
-                <input 
+                <input
                   type="number"
                   min="1"
                   max="36"
@@ -1273,7 +1347,7 @@ export default function Clientes() {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">1º Vencimento</label>
-                <input 
+                <input
                   type="date"
                   className="w-full p-3 bg-elos-fundo rounded-xl text-xs font-bold outline-none"
                   value={modalRenegociacao.dataPrimeiraParcela}
@@ -1282,7 +1356,6 @@ export default function Clientes() {
               </div>
             </div>
 
-            {/* PRÉVIA EDITÁVEL DE CADA PARCELA */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h4 className="text-[10px] font-black uppercase text-elos-verde tracking-widest">
@@ -1297,7 +1370,7 @@ export default function Clientes() {
                     </span>
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <span className="text-[10px] font-bold text-gray-400 uppercase">R$</span>
-                      <input 
+                      <input
                         type="number"
                         step="0.01"
                         className="w-28 p-2 bg-elos-fundo rounded-lg text-xs font-bold text-elos-texto outline-none"
@@ -1307,7 +1380,7 @@ export default function Clientes() {
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <span className="text-[10px] font-bold text-gray-400 uppercase">Venc:</span>
-                      <input 
+                      <input
                         type="date"
                         className="p-2 bg-elos-fundo rounded-lg text-xs font-bold text-elos-texto outline-none"
                         value={parc.dataVencimento}
@@ -1321,7 +1394,7 @@ export default function Clientes() {
 
             <div>
               <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Observações do Acordo</label>
-              <textarea 
+              <textarea
                 rows="2"
                 className="w-full p-3 bg-elos-fundo rounded-xl text-xs outline-none resize-none"
                 value={modalRenegociacao.observacoes}
@@ -1330,14 +1403,14 @@ export default function Clientes() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <button 
+              <button
                 type="button"
-                onClick={() => setModalRenegociacao(null)} 
+                onClick={() => setModalRenegociacao(null)}
                 className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-bold uppercase text-xs tracking-widest"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="button"
                 disabled={processandoRenegociacao}
                 onClick={confirmarRenegociacao}
@@ -1350,7 +1423,7 @@ export default function Clientes() {
         </div>
       )}
 
-      {/* 🟢 MODAL DE CONFIGURAR CHAVE PIX PADRÃO DO CARNÊ (UMA ÚNICA VEZ) */}
+      {/* MODAL DE CONFIGURAR CHAVE PIX PADRÃO DO CARNÊ */}
       {modalConfigPix && (
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[95] p-4">
           <div className="bg-white p-8 rounded-[32px] max-w-sm w-full border border-orange-100 shadow-2xl">
@@ -1365,11 +1438,11 @@ export default function Clientes() {
               <label className="text-[10px] font-black text-orange-600 uppercase tracking-tighter ml-1">
                 Chave PIX da Loja (Celular, CPF, CNPJ ou E-mail)
               </label>
-              <input 
-                type="text" 
-                className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl font-bold text-elos-texto text-sm outline-none focus:ring-2 focus:ring-orange-200" 
-                value={inputNovaChavePix} 
-                onChange={(e) => setInputNovaChavePix(e.target.value)} 
+              <input
+                type="text"
+                className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl font-bold text-elos-texto text-sm outline-none focus:ring-2 focus:ring-orange-200"
+                value={inputNovaChavePix}
+                onChange={(e) => setInputNovaChavePix(e.target.value)}
                 placeholder="Ex: (85) 8550-6571"
               />
               <p className="text-[9px] text-gray-400 italic ml-1 mt-1">
@@ -1377,14 +1450,14 @@ export default function Clientes() {
               </p>
             </div>
             <div className="flex gap-3">
-              <button 
-                onClick={() => { setModalConfigPix(false); setVendaAguardandoCarne(null); }} 
+              <button
+                onClick={() => { setModalConfigPix(false); setVendaAguardandoCarne(null); }}
                 className="flex-1 bg-gray-100 text-gray-400 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest"
               >
                 Cancelar
               </button>
-              <button 
-                onClick={salvarChavePixGlobal} 
+              <button
+                onClick={salvarChavePixGlobal}
                 className="flex-[1.5] bg-orange-500 text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
               >
                 Salvar Padrão
@@ -1399,7 +1472,7 @@ export default function Clientes() {
         <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Perfil</h2>
-            
+
             <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
               <img src={novaFotoCliente || editandoCadastro.foto || 'https://via.placeholder.com/150'} alt="Preview" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md" />
               <div className="relative">
@@ -1411,20 +1484,20 @@ export default function Clientes() {
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({...editandoCadastro, nome: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">CPF</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({...editandoCadastro, cpf: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Data de Nascimento</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none text-gray-500" type="date" value={editandoCadastro.dataNascimento || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, dataNascimento: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({...editandoCadastro, telefone: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">E-mail</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="email" value={editandoCadastro.email || ''} onChange={(e) => setEditandoCadastro({...editandoCadastro, email: e.target.value})} /></div>
-              
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.nome} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, nome: e.target.value })} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">CPF</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.cpf} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, cpf: e.target.value })} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Data de Nascimento</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none text-gray-500" type="date" value={editandoCadastro.dataNascimento || ''} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, dataNascimento: e.target.value })} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.telefone} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, telefone: e.target.value })} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">E-mail</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="email" value={editandoCadastro.email || ''} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, email: e.target.value })} /></div>
+
               <div>
                 <label className="text-[10px] font-black uppercase text-gray-400">Origem (De onde veio?)</label>
-                <input 
-                  list="edit-opcoes-origem" 
-                  className="w-full p-3 bg-elos-fundo rounded-xl outline-none" 
-                  type="text" 
-                  value={editandoCadastro.origem || ''} 
-                  onChange={(e) => setEditandoCadastro({...editandoCadastro, origem: e.target.value})} 
+                <input
+                  list="edit-opcoes-origem"
+                  className="w-full p-3 bg-elos-fundo rounded-xl outline-none"
+                  type="text"
+                  value={editandoCadastro.origem || ''}
+                  onChange={(e) => setEditandoCadastro({ ...editandoCadastro, origem: e.target.value })}
                 />
                 <datalist id="edit-opcoes-origem">
                   <option value="Instagram"></option>
@@ -1436,54 +1509,12 @@ export default function Clientes() {
                 </datalist>
               </div>
 
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({...editandoCadastro, endereco: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({...editandoCadastro, observacoes: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Endereço</label><input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoCadastro.endereco} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, endereco: e.target.value })} /></div>
+              <div><label className="text-[10px] font-black uppercase text-gray-400">Observações</label><textarea rows="3" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none" value={editandoCadastro.observacoes} onChange={(e) => setEditandoCadastro({ ...editandoCadastro, observacoes: e.target.value })} /></div>
             </div>
             <div className="flex gap-4 pt-4">
               <button onClick={salvarEdicaoCadastro} disabled={uploadingImage} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold disabled:bg-gray-400">Salvar</button>
               <button onClick={() => setEditandoCadastro(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE EDIÇÃO DE VENDA */}
-      {editandoVenda && (
-        <div className="fixed inset-0 bg-primary/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white w-full max-w-lg rounded-[32px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="font-tradicional text-2xl text-elos-verde italic text-center">Editar Pedido</h2>
-            
-            <div className="flex flex-col items-center gap-3 bg-elos-fundo/50 p-4 rounded-2xl border border-elos-bege/10">
-              {novaFotoVenda || editandoVenda.foto ? (
-                <img src={novaFotoVenda || editandoVenda.foto} alt="Preview" className="max-h-32 rounded-xl shadow-md border-2 border-white" />
-              ) : (
-                <div className="w-full h-20 bg-gray-100 rounded-xl flex items-center justify-center text-gray-300 italic text-xs">Sem receita anexada</div>
-              )}
-              <div className="relative">
-                <button type="button" disabled={uploadingImage} className="px-4 py-2 bg-elos-bege text-white rounded-full text-xs font-bold disabled:opacity-50">
-                  {uploadingImage ? 'Otimizando... ⏳' : 'Alterar Receita 📸'}
-                </button>
-                <input type="file" accept="image/*" capture="environment" disabled={uploadingImage} onChange={(e) => handleUploadImgBB(e, setNovaFotoVenda)} className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400">Data da Venda</label>
-                <input className="w-full p-3 bg-elos-fundo rounded-xl outline-none font-bold text-center" type="date" value={editandoVenda.dataVenda} onChange={(e) => setEditandoVenda({...editandoVenda, dataVenda: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400">Produto/Serviço</label>
-                <input className="w-full p-3 bg-elos-fundo rounded-xl outline-none" type="text" value={editandoVenda.produto} onChange={(e) => setEditandoVenda({...editandoVenda, produto: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400">Observações Técnicas</label>
-                <textarea rows="4" className="w-full p-3 bg-elos-fundo rounded-xl outline-none resize-none italic" value={editandoVenda.observacoes} onChange={(e) => setEditandoVenda({...editandoVenda, observacoes: e.target.value})} />
-              </div>
-            </div>
-            <div className="flex gap-4 pt-4">
-              <button onClick={salvarEdicaoVenda} disabled={uploadingImage} className="flex-1 bg-elos-verde text-white py-3 rounded-xl font-bold disabled:bg-gray-400">Atualizar</button>
-              <button onClick={() => setEditandoVenda(null)} className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold">Cancelar</button>
             </div>
           </div>
         </div>
@@ -1500,20 +1531,20 @@ export default function Clientes() {
             <div className="space-y-4 mt-4">
               <div>
                 <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Valor do Recebimento</label>
-                <input type="text" className="w-full p-4 bg-elos-fundo/50 border rounded-2xl font-bold text-elos-verde text-lg outline-none" value={modalRecibo.valorFmt} onChange={(e) => setModalRecibo({...modalRecibo, valorFmt: aplicarMascaraMoeda(e.target.value)})} />
+                <input type="text" className="w-full p-4 bg-elos-fundo/50 border rounded-2xl font-bold text-elos-verde text-lg outline-none" value={modalRecibo.valorFmt} onChange={(e) => setModalRecibo({ ...modalRecibo, valorFmt: aplicarMascaraMoeda(e.target.value) })} />
               </div>
               <div>
                 <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Referente a</label>
-                <input type="text" className="w-full p-4 bg-elos-fundo/50 border rounded-2xl text-sm outline-none" placeholder="Ex: Pagamento de parcelas, Entrada..." value={modalRecibo.produto} onChange={(e) => setModalRecibo({...modalRecibo, produto: e.target.value})} />
+                <input type="text" className="w-full p-4 bg-elos-fundo/50 border rounded-2xl text-sm outline-none" placeholder="Ex: Pagamento de parcelas, Entrada..." value={modalRecibo.produto} onChange={(e) => setModalRecibo({ ...modalRecibo, produto: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Data</label>
-                  <input type="date" className="w-full p-3 bg-elos-fundo/50 border rounded-xl text-xs outline-none" value={modalRecibo.data} onChange={(e) => setModalRecibo({...modalRecibo, data: e.target.value})} />
+                  <input type="date" className="w-full p-3 bg-elos-fundo/50 border rounded-xl text-xs outline-none" value={modalRecibo.data} onChange={(e) => setModalRecibo({ ...modalRecibo, data: e.target.value })} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-elos-verde uppercase tracking-tighter">Método</label>
-                  <select className="w-full p-3 bg-elos-fundo/50 border rounded-xl text-xs outline-none" value={modalRecibo.metodo} onChange={(e) => setModalRecibo({...modalRecibo, metodo: e.target.value})}>
+                  <select className="w-full p-3 bg-elos-fundo/50 border rounded-xl text-xs outline-none" value={modalRecibo.metodo} onChange={(e) => setModalRecibo({ ...modalRecibo, metodo: e.target.value })}>
                     <option value="Dinheiro">Dinheiro</option>
                     <option value="Pix">Pix</option>
                     <option value="Cartão">Cartão</option>

@@ -1,15 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 // 🟢 Data de hoje no fuso de Fortaleza (YYYY-MM-DD)
 const hojeBR = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' });
+
+// 🟢 Normaliza o telefone para o WhatsApp (evita 55 duplicado)
+const normalizarFone = (telefone) => {
+  let n = String(telefone || '').replace(/\D/g, '');
+  if (!n) return '';
+  if (n.startsWith('55') && n.length >= 12) n = n.slice(2);
+  return `55${n}`;
+};
 
 // 🟢 Constante para representar uso ilimitado sem quebrar a validação do backend
 const LIMITE_ILIMITADO = 999999;
 
 export default function Operacoes() {
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL;
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  const API_URL = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
+  const naTelaOperacoes = location.pathname.replace(/\/+$/, '') === '/admin/operacoes';
 
   // 🟢 NAVEGAÇÃO INTERNA DO PAINEL
   const [abaAtiva, setAbaAtiva] = useState('PEDIDOS'); // 'PEDIDOS', 'CUPONS', 'PROMOCOES'
@@ -19,45 +32,74 @@ export default function Operacoes() {
   // =====================================
   const [pedidos, setPedidos] = useState([]);
   const [carregandoPedidos, setCarregandoPedidos] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState('TODOS'); 
-  const [mesFiltro, setMesFiltro] = useState(Number(hojeBR().split('-')[1])); 
+  const [atualizandoPedidoId, setAtualizandoPedidoId] = useState(null);
+  const [filtroStatus, setFiltroStatus] = useState('TODOS');
+  const [mesFiltro, setMesFiltro] = useState(Number(hojeBR().split('-')[1]));
   const [anoFiltro, setAnoFiltro] = useState(Number(hojeBR().split('-')[0]));
-  const [expandidos, setExpandidos] = useState([]); 
+  const [expandidos, setExpandidos] = useState([]);
 
-  // 🟢 Anos do filtro gerados a partir do ano atual (não quebra em 2028)
   const anoAtual = Number(hojeBR().split('-')[0]);
   const anosDisponiveis = Array.from(new Set([anoAtual - 1, anoAtual, anoAtual + 1, Number(anoFiltro)])).sort();
 
-  const buscarPedidosOnline = async () => {
+  const buscarPedidosOnline = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/pedidos_online`);
       if (res.ok) setPedidos(await res.json());
-    } catch (error) { console.error(error); } 
-    finally { setCarregandoPedidos(false); }
-  };
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCarregandoPedidos(false);
+    }
+  }, [API_URL]);
 
+  // 🟢 Polling só roda quando o usuário está na tela /admin/operacoes, aba PEDIDOS e guia visível
   useEffect(() => {
+    if (!naTelaOperacoes || abaAtiva !== 'PEDIDOS') return undefined;
+
     buscarPedidosOnline();
-    const intervalo = setInterval(buscarPedidosOnline, 15000);
+    const intervalo = setInterval(() => {
+      if (!document.hidden) buscarPedidosOnline();
+    }, 15000);
+
     return () => clearInterval(intervalo);
-  }, []);
+  }, [naTelaOperacoes, abaAtiva, buscarPedidosOnline]);
 
   const atualizarStatus = async (id, novoStatus) => {
+    if (atualizandoPedidoId === id) return;
+
     if (novoStatus === 'CONCLUIDO') {
-      const confirma = window.confirm("Confirmar o despacho deste pedido? Isso registrará a venda no histórico do cliente.");
+      const confirma = window.confirm('Confirmar o despacho deste pedido? Isso registrará a venda no histórico do cliente.');
       if (!confirma) return;
     }
     if (novoStatus === 'CANCELADO') {
-      const confirma = window.confirm("Cancelar e EXCLUIR este pedido? O uso do cupom (se houver) será devolvido.");
+      const confirma = window.confirm('Cancelar e EXCLUIR este pedido? O uso do cupom (se houver) será devolvido.');
       if (!confirma) return;
     }
+
+    setAtualizandoPedidoId(id);
     try {
       const res = await fetch(`${API_URL}/pedidos_online/${id}/status`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: novoStatus })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: novoStatus })
       });
-      if (res.ok) buscarPedidosOnline(); 
-      else alert("Não foi possível atualizar o pedido.");
-    } catch (error) { alert("Erro ao atualizar status."); }
+
+      if (res.ok) {
+        await buscarPedidosOnline();
+        queryClient.invalidateQueries({ queryKey: ['produtos'] });
+        if (novoStatus === 'CONCLUIDO') {
+          queryClient.invalidateQueries({ queryKey: ['vendas'] });
+          queryClient.invalidateQueries({ queryKey: ['clientes'] });
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Não foi possível atualizar o pedido.');
+      }
+    } catch {
+      alert('Erro ao atualizar status.');
+    } finally {
+      setAtualizandoPedidoId(null);
+    }
   };
 
   const getEstiloStatus = (status) => {
@@ -78,12 +120,11 @@ export default function Operacoes() {
     }
   };
 
-  const toggleExpandir = (id) => setExpandidos(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  const toggleExpandir = (id) => setExpandidos(prev => (prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]));
 
   const pedidosExibidos = pedidos.filter(p => {
     if (filtroStatus !== 'TODOS' && p.status !== filtroStatus) return false;
     if (p.dataPedido) {
-      // 🟢 Mês/ano calculados no fuso de Fortaleza
       const [ano, mes] = new Date(p.dataPedido).toLocaleDateString('sv-SE', { timeZone: 'America/Fortaleza' }).split('-');
       if (Number(mes) !== Number(mesFiltro) || Number(ano) !== Number(anoFiltro)) return false;
     }
@@ -101,13 +142,13 @@ export default function Operacoes() {
   // =====================================
   const [cupons, setCupons] = useState([]);
   const [carregandoCupons, setCarregandoCupons] = useState(false);
-  
-  // 🟢 Adicionado flag 'ilimitado' no estado do formulário
-  const [formCupom, setFormCupom] = useState({ 
-    codigo: '', 
-    tipo: 'PERCENTUAL', 
-    valor: '', 
-    dataFim: '', 
+  const [salvandoCupom, setSalvandoCupom] = useState(false);
+
+  const [formCupom, setFormCupom] = useState({
+    codigo: '',
+    tipo: 'PERCENTUAL',
+    valor: '',
+    dataFim: '',
     limiteUso: 1,
     ilimitado: false
   });
@@ -122,98 +163,129 @@ export default function Operacoes() {
     return new Date(dataFimStr).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' });
   };
 
-  const buscarCupons = async () => {
+  const buscarCupons = useCallback(async () => {
     setCarregandoCupons(true);
     try {
       const res = await fetch(`${API_URL}/cupons`);
       if (res.ok) setCupons(await res.json());
-    } catch (e) {} finally { setCarregandoCupons(false); }
-  };
+    } catch {}
+    finally { setCarregandoCupons(false); }
+  }, [API_URL]);
 
-  useEffect(() => { if (abaAtiva === 'CUPONS') buscarCupons(); }, [abaAtiva]);
+  useEffect(() => {
+    if (naTelaOperacoes && abaAtiva === 'CUPONS') buscarCupons();
+  }, [naTelaOperacoes, abaAtiva, buscarCupons]);
 
   const salvarCupom = async (e) => {
     e.preventDefault();
-    if (!formCupom.codigo || !formCupom.valor || !formCupom.dataFim) return alert("Preencha todos os campos.");
+    if (salvandoCupom) return;
+    if (!formCupom.codigo.trim() || !formCupom.valor || !formCupom.dataFim) {
+      return alert('Preencha todos os campos.');
+    }
 
-    // 🟢 Validações antes de enviar
     const valorNum = Number(formCupom.valor);
-    if (formCupom.tipo === 'PERCENTUAL' && (valorNum <= 0 || valorNum > 100)) {
-      return alert("A porcentagem do cupom deve estar entre 1 e 100.");
+    if (isNaN(valorNum) || valorNum <= 0) {
+      return alert('Informe um valor de desconto maior que zero.');
+    }
+    if (formCupom.tipo === 'PERCENTUAL' && valorNum > 100) {
+      return alert('A porcentagem do cupom deve estar entre 1 e 100.');
     }
     if (formCupom.dataFim < hojeBR()) {
-      return alert("A data de validade não pode estar no passado.");
+      return alert('A data de validade não pode estar no passado.');
     }
-    
-    // 🟢 Se estiver marcado como ilimitado, envia 999999 para o backend nunca esgotar antes da dataFim
-    const limiteNum = formCupom.ilimitado 
-      ? LIMITE_ILIMITADO 
-      : Math.max(1, parseInt(formCupom.limiteUso) || 1);
 
+    const limiteNum = formCupom.ilimitado
+      ? LIMITE_ILIMITADO
+      : Math.max(1, parseInt(formCupom.limiteUso, 10) || 1);
+
+    setSalvandoCupom(true);
     try {
-      const res = await fetch(`${API_URL}/cupons`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+      const res = await fetch(`${API_URL}/cupons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          codigo: formCupom.codigo,
+          codigo: formCupom.codigo.trim().toUpperCase(),
           tipo: formCupom.tipo,
           valor: valorNum,
           dataFim: formCupom.dataFim,
           limiteUso: limiteNum,
           usosAtuais: 0,
           ativo: true
-        }) 
+        })
       });
-      if (res.ok) { 
-        setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '', limiteUso: 1, ilimitado: false }); 
-        buscarCupons(); 
-      } else { 
-        const err = await res.json(); 
-        alert(err.error || "Erro ao salvar o cupom."); 
+      if (res.ok) {
+        setFormCupom({ codigo: '', tipo: 'PERCENTUAL', valor: '', dataFim: '', limiteUso: 1, ilimitado: false });
+        buscarCupons();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erro ao salvar o cupom.');
       }
-    } catch (e) { alert("Erro de conexão."); }
+    } catch {
+      alert('Erro de conexão.');
+    } finally {
+      setSalvandoCupom(false);
+    }
   };
 
   const alternarStatusCupom = async (id, statusAtual) => {
-    try { 
-      await fetch(`${API_URL}/cupons/${id}`, { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ ativo: !statusAtual }) 
-      }); 
-      buscarCupons(); 
-    } catch (e) {}
+    try {
+      const res = await fetch(`${API_URL}/cupons/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: !statusAtual })
+      });
+      if (res.ok) {
+        buscarCupons();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erro ao alterar status do cupom.');
+      }
+    } catch {
+      alert('Erro de conexão ao atualizar cupom.');
+    }
   };
 
-  // 🟢 Permite ajustar o limite de usos (+, - ou alternar Ilimitado) ou zerar a contagem
   const ajustarLimiteCupom = async (cupom, novoLimite, novosUsos = cupom.usosAtuais || 0) => {
     const limiteFinal = Math.max(1, Number(novoLimite) || 1);
     const usosFinais = Math.max(0, Number(novosUsos) || 0);
-    
+
     const estavaEsgotado = (cupom.usosAtuais || 0) >= (cupom.limiteUso ?? 1);
     const deveFicarAtivo = cupom.ativo || (estavaEsgotado && usosFinais < limiteFinal);
 
     try {
-      await fetch(`${API_URL}/cupons/${cupom._id}`, {
+      const res = await fetch(`${API_URL}/cupons/${cupom._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          limiteUso: limiteFinal, 
+        body: JSON.stringify({
+          limiteUso: limiteFinal,
           usosAtuais: usosFinais,
           ativo: deveFicarAtivo,
-          // 🟢 Ao zerar, libera também os CPFs que já tinham usado o cupom
           ...(usosFinais === 0 ? { cpfsUtilizados: [] } : {})
         })
       });
-      buscarCupons();
-    } catch (e) {
-      alert("Erro ao atualizar limite do cupom.");
+      if (res.ok) {
+        buscarCupons();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erro ao atualizar limite do cupom.');
+      }
+    } catch {
+      alert('Erro ao atualizar limite do cupom.');
     }
   };
 
   const deletarCupom = async (id) => {
-    if (!window.confirm("Deseja deletar este cupom permanentemente?")) return;
-    try { await fetch(`${API_URL}/cupons/${id}`, { method: 'DELETE' }); buscarCupons(); } catch (e) {}
+    if (!window.confirm('Deseja deletar este cupom permanentemente?')) return;
+    try {
+      const res = await fetch(`${API_URL}/cupons/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        buscarCupons();
+      } else {
+        alert('Erro ao excluir cupom.');
+      }
+    } catch {
+      alert('Erro de conexão ao excluir cupom.');
+    }
   };
 
   // =====================================
@@ -223,26 +295,30 @@ export default function Operacoes() {
   const [formPromo, setFormPromo] = useState({ categoriaAlvo: 'ÓCULOS DE SOL', tipoDesconto: 'PERCENTUAL', valorDesconto: '' });
   const [salvandoPromo, setSalvandoPromo] = useState(false);
 
-  const buscarRegrasPromocionais = async () => {
+  const buscarRegrasPromocionais = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/produtos`);
       if (res.ok) setProdutosTotais(await res.json());
-    } catch (e) {}
-  };
+    } catch {}
+  }, [API_URL]);
 
   useEffect(() => {
-    if (abaAtiva === 'PROMOCOES') buscarRegrasPromocionais();
-  }, [abaAtiva]);
+    if (naTelaOperacoes && abaAtiva === 'PROMOCOES') buscarRegrasPromocionais();
+  }, [naTelaOperacoes, abaAtiva, buscarRegrasPromocionais]);
 
   const promocoesAtivas = produtosTotais.filter(p => p.categoria === 'PROMO_CATE');
 
   const gerarPromocao = async (e) => {
     e.preventDefault();
-    if (!formPromo.valorDesconto) return alert("Preencha o valor do desconto!");
+    if (salvandoPromo) return;
+    if (!formPromo.valorDesconto) return alert('Preencha o valor do desconto!');
 
     const valorPromoNum = Number(formPromo.valorDesconto);
-    if (formPromo.tipoDesconto === 'PERCENTUAL' && (valorPromoNum <= 0 || valorPromoNum > 100)) {
-      return alert("A porcentagem da promoção deve estar entre 1 e 100.");
+    if (isNaN(valorPromoNum) || valorPromoNum <= 0) {
+      return alert('Informe um valor de desconto maior que zero.');
+    }
+    if (formPromo.tipoDesconto === 'PERCENTUAL' && valorPromoNum > 100) {
+      return alert('A porcentagem da promoção deve estar entre 1 e 100.');
     }
 
     const jaExiste = promocoesAtivas.find(p => p.nome === `PROMOCAO_${formPromo.categoriaAlvo}`);
@@ -258,33 +334,43 @@ export default function Operacoes() {
         preco: valorPromoNum,
         referencia: formPromo.tipoDesconto,
         quantidade: 1,
-        foto: '' 
+        foto: ''
       };
 
       const res = await fetch(`${API_URL}/produtos`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadPromo)
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadPromo)
       });
 
       if (res.ok) {
-        alert("Promoção ativada! Os preços na vitrine serão remarcados imediatamente.");
+        alert('Promoção ativada! Os preços na vitrine serão remarcados imediatamente.');
         setFormPromo({ categoriaAlvo: 'ÓCULOS DE SOL', tipoDesconto: 'PERCENTUAL', valorDesconto: '' });
         buscarRegrasPromocionais();
+        queryClient.invalidateQueries({ queryKey: ['produtos'] });
       } else {
-        alert("Erro ao ativar promoção no servidor.");
+        alert('Erro ao ativar promoção no servidor.');
       }
-    } catch (err) {
-      alert("Erro na conexão.");
+    } catch {
+      alert('Erro na conexão.');
     } finally {
       setSalvandoPromo(false);
     }
   };
 
   const deletarPromocao = async (id) => {
-    if (!window.confirm("Deseja encerrar essa promoção? Os preços voltarão ao normal na loja.")) return;
+    if (!window.confirm('Deseja encerrar essa promoção? Os preços voltarão ao normal na loja.')) return;
     try {
-      await fetch(`${API_URL}/produtos/${id}`, { method: 'DELETE' });
-      buscarRegrasPromocionais();
-    } catch (e) {}
+      const res = await fetch(`${API_URL}/produtos/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        buscarRegrasPromocionais();
+        queryClient.invalidateQueries({ queryKey: ['produtos'] });
+      } else {
+        alert('Erro ao encerrar promoção.');
+      }
+    } catch {
+      alert('Erro de conexão ao encerrar promoção.');
+    }
   };
 
   // =====================================
@@ -293,14 +379,14 @@ export default function Operacoes() {
   return (
     <div className="min-h-screen bg-elos-fundo p-4 md:p-10 font-sans text-elos-texto">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* CABEÇALHO GERAL */}
         <header className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="font-tradicional text-4xl text-elos-verde italic">Motor de Vendas</h1>
             <p className="text-gray-400 text-xs uppercase tracking-widest mt-1 font-black">E-commerce e Promoções</p>
           </div>
-          <button onClick={() => navigate('/')} className="px-6 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors shadow-sm">
+          <button onClick={() => navigate('/admin')} className="px-6 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors shadow-sm">
             ⬅ Voltar ao Painel Geral
           </button>
         </header>
@@ -354,10 +440,13 @@ export default function Operacoes() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                 {pedidosExibidos.map((pedido) => {
                   const expandido = expandidos.includes(pedido._id);
+                  const processandoEste = atualizandoPedidoId === pedido._id;
+                  const foneZap = normalizarFone(pedido.clienteTelefone);
+
                   return (
                     <div key={pedido._id} className={`bg-white rounded-[2rem] shadow-sm border border-gray-100 flex flex-col transition-all duration-300 relative overflow-hidden ${expandido ? 'shadow-xl ring-2 ring-elos-bege/30' : 'hover:shadow-md hover:border-gray-200'}`}>
                       <div className={`absolute left-0 top-0 bottom-0 w-2 transition-all ${pedido.status === 'AGUARDANDO_PAGAMENTO' ? 'bg-yellow-400' : pedido.status === 'PAGO' ? 'bg-blue-500' : pedido.status === 'CONCLUIDO' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      
+
                       <div onClick={() => toggleExpandir(pedido._id)} className="p-5 pl-7 cursor-pointer select-none">
                         <div className="flex justify-between items-start mb-2">
                           <div>
@@ -380,22 +469,28 @@ export default function Operacoes() {
                           <div className="mb-4 space-y-1">
                             <div className="flex justify-between items-center">
                               <p className="text-xs text-gray-400 font-bold tracking-widest">📞 {pedido.clienteTelefone}</p>
-                              {pedido.clienteTelefone && (
-                                <button onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/55${pedido.clienteTelefone.replace(/\D/g, '')}`, '_blank'); }} className="text-[10px] text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold uppercase hover:bg-green-100 transition-colors">💬 WhatsApp</button>
+                              {foneZap.length >= 12 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${foneZap}`, '_blank'); }}
+                                  className="text-[10px] text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold uppercase hover:bg-green-100 transition-colors"
+                                >
+                                  💬 WhatsApp
+                                </button>
                               )}
                             </div>
                             {pedido.clienteCpf && <p className="text-xs text-gray-400 font-bold tracking-widest">📄 CPF: {pedido.clienteCpf}</p>}
                           </div>
                           <div className="mb-4 bg-orange-50/50 p-3 rounded-xl border border-orange-100/50">
                             <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1">📍 Endereço de Entrega</p>
-                            <p className="text-xs text-elos-texto font-medium whitespace-pre-wrap">{pedido.clienteEndereco || "Não informado."}</p>
+                            <p className="text-xs text-elos-texto font-medium whitespace-pre-wrap">{pedido.clienteEndereco || 'Não informado.'}</p>
                           </div>
                           <div className="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
                             <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2 border-b border-gray-200 pb-1">Itens ({pedido.itens?.length || 0})</p>
                             <ul className="space-y-1.5">
                               {(pedido.itens || []).map((item, idx) => (
                                 <li key={idx} className="flex justify-between items-start text-xs">
-                                  <span className="font-bold text-gray-700 line-clamp-1 flex-1 pr-2">1x {item.nome}</span>
+                                  <span className="font-bold text-gray-700 line-clamp-1 flex-1 pr-2">{item.quantidade || 1}x {item.nome}</span>
                                   <span className="text-elos-verde font-black whitespace-nowrap">{Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                 </li>
                               ))}
@@ -421,12 +516,30 @@ export default function Operacoes() {
                           <div className="grid grid-cols-2 gap-2">
                             {pedido.status === 'AGUARDANDO_PAGAMENTO' && (
                               <>
-                                <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'PAGO'); }} className="col-span-2 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md">💰 Marcar como Pago</button>
-                                <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'CANCELADO'); }} className="col-span-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold py-2.5 rounded-xl text-[10px] uppercase tracking-widest">Cancelar Pedido</button>
+                                <button
+                                  disabled={processandoEste}
+                                  onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'PAGO'); }}
+                                  className="col-span-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md"
+                                >
+                                  {processandoEste ? 'Atualizando...' : '💰 Marcar como Pago'}
+                                </button>
+                                <button
+                                  disabled={processandoEste}
+                                  onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'CANCELADO'); }}
+                                  className="col-span-2 bg-gray-50 hover:bg-red-50 disabled:opacity-50 text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 font-bold py-2.5 rounded-xl text-[10px] uppercase tracking-widest"
+                                >
+                                  Cancelar Pedido
+                                </button>
                               </>
                             )}
                             {pedido.status === 'PAGO' && (
-                              <button onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'CONCLUIDO'); }} className="col-span-2 bg-elos-verde hover:bg-[#3a4a3e] text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"><span className="text-lg">📦</span> Confirmar Despacho</button>
+                              <button
+                                disabled={processandoEste}
+                                onClick={(e) => { e.stopPropagation(); atualizarStatus(pedido._id, 'CONCLUIDO'); }}
+                                className="col-span-2 bg-elos-verde hover:bg-[#3a4a3e] disabled:opacity-50 text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                              >
+                                <span className="text-lg">📦</span> {processandoEste ? 'Processando...' : 'Confirmar Despacho'}
+                              </button>
                             )}
                             {(pedido.status === 'CONCLUIDO' || pedido.status === 'CANCELADO') && (
                               <p className="col-span-2 text-center text-[10px] text-gray-400 uppercase tracking-widest font-bold py-2.5 bg-gray-50 rounded-xl border border-gray-100">Pedido Arquivado</p>
@@ -447,21 +560,21 @@ export default function Operacoes() {
         {/* ======================================================== */}
         {abaAtiva === 'PROMOCOES' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            
+
             <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-xl ring-1 ring-red-500/10 sticky top-24 border border-red-50">
               <div className="flex items-center gap-3 mb-1">
                 <span className="text-3xl">🔥</span>
                 <h2 className="font-tradicional text-2xl text-red-600 italic font-bold">Criar Promoção</h2>
               </div>
               <p className="text-[10px] text-red-400 uppercase tracking-widest font-black mb-8 ml-11">Remarcação em Massa</p>
-              
+
               <form onSubmit={gerarPromocao} className="space-y-6">
-                
+
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Aplicar Desconto em:</label>
-                  <select 
-                    value={formPromo.categoriaAlvo} 
-                    onChange={e => setFormPromo({...formPromo, categoriaAlvo: e.target.value})} 
+                  <select
+                    value={formPromo.categoriaAlvo}
+                    onChange={e => setFormPromo({ ...formPromo, categoriaAlvo: e.target.value })}
                     className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 text-sm font-bold text-red-900 cursor-pointer"
                   >
                     <option value="ÓCULOS DE SOL">Todos os Óculos de Sol</option>
@@ -473,9 +586,9 @@ export default function Operacoes() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Tipo de Desconto</label>
-                    <select 
-                      value={formPromo.tipoDesconto} 
-                      onChange={e => setFormPromo({...formPromo, tipoDesconto: e.target.value, valorDesconto: ''})} 
+                    <select
+                      value={formPromo.tipoDesconto}
+                      onChange={e => setFormPromo({ ...formPromo, tipoDesconto: e.target.value, valorDesconto: '' })}
                       className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 text-xs font-bold text-red-900 cursor-pointer"
                     >
                       <option value="PERCENTUAL">% Porcentagem</option>
@@ -484,16 +597,16 @@ export default function Operacoes() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Valor Off</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="1"
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
                       max={formPromo.tipoDesconto === 'PERCENTUAL' ? 100 : undefined}
-                      placeholder={formPromo.tipoDesconto === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} 
-                      value={formPromo.valorDesconto} 
-                      onChange={e => setFormPromo({...formPromo, valorDesconto: e.target.value})} 
-                      required 
-                      className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 font-black text-red-700 text-lg transition-all" 
+                      placeholder={formPromo.tipoDesconto === 'PERCENTUAL' ? 'Ex: 15' : 'Ex: 50.00'}
+                      value={formPromo.valorDesconto}
+                      onChange={e => setFormPromo({ ...formPromo, valorDesconto: e.target.value })}
+                      required
+                      className="w-full bg-red-50/50 p-4 rounded-xl border border-red-100 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/20 font-black text-red-700 text-lg transition-all"
                     />
                   </div>
                 </div>
@@ -504,7 +617,7 @@ export default function Operacoes() {
                   </p>
                 </div>
 
-                <button type="submit" disabled={salvandoPromo} className="w-full bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[11px] py-5 rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all mt-4">
+                <button type="submit" disabled={salvandoPromo} className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black uppercase tracking-widest text-[11px] py-5 rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all mt-4">
                   {salvandoPromo ? 'Ativando...' : 'Ativar Promoção na Loja'}
                 </button>
               </form>
@@ -512,7 +625,7 @@ export default function Operacoes() {
 
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Liquidações Ativas</p>
-              
+
               {promocoesAtivas.length === 0 ? (
                 <div className="bg-white/50 border border-gray-100 border-dashed rounded-[2rem] p-10 text-center">
                   <span className="text-4xl opacity-20 block mb-4">🛒</span>
@@ -524,7 +637,7 @@ export default function Operacoes() {
                   return (
                     <div key={promo._id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-red-100 flex justify-between items-center relative overflow-hidden group">
                       <div className="absolute left-0 top-0 bottom-0 w-2 bg-red-500"></div>
-                      
+
                       <div className="pl-3">
                         <span className="bg-red-100 text-red-600 text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md mb-2 inline-block">Ativa Agora</span>
                         <h3 className="font-bold text-gray-800 mb-1">
@@ -552,30 +665,30 @@ export default function Operacoes() {
         {/* ======================================================== */}
         {abaAtiva === 'CUPONS' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            
+
             <div className="bg-white rounded-[2rem] p-6 lg:p-8 shadow-sm border border-gray-100 sticky top-24">
               <h2 className="font-tradicional text-2xl text-elos-verde italic font-bold mb-1">Novo Cupom</h2>
               <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-6">Regras de Desconto & Limite</p>
-              
+
               <form onSubmit={salvarCupom} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Código Promocional</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: VERAO20" 
-                    value={formCupom.codigo} 
-                    onChange={e => setFormCupom({...formCupom, codigo: e.target.value.toUpperCase()})} 
-                    required 
-                    className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm tracking-widest uppercase transition-all" 
+                  <input
+                    type="text"
+                    placeholder="Ex: VERAO20"
+                    value={formCupom.codigo}
+                    onChange={e => setFormCupom({ ...formCupom, codigo: e.target.value.toUpperCase() })}
+                    required
+                    className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm tracking-widest uppercase transition-all"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Tipo</label>
-                    <select 
-                      value={formCupom.tipo} 
-                      onChange={e => setFormCupom({...formCupom, tipo: e.target.value, valor: ''})} 
+                    <select
+                      value={formCupom.tipo}
+                      onChange={e => setFormCupom({ ...formCupom, tipo: e.target.value, valor: '' })}
                       className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 text-xs font-bold text-gray-600"
                     >
                       <option value="PERCENTUAL">% Porcentagem</option>
@@ -584,21 +697,20 @@ export default function Operacoes() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Valor</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="1" 
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
                       max={formCupom.tipo === 'PERCENTUAL' ? 100 : undefined}
-                      placeholder={formCupom.tipo === 'PERCENTUAL' ? "Ex: 15" : "Ex: 50.00"} 
-                      value={formCupom.valor} 
-                      onChange={e => setFormCupom({...formCupom, valor: e.target.value})} 
-                      required 
-                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-elos-verde text-sm transition-all" 
+                      placeholder={formCupom.tipo === 'PERCENTUAL' ? 'Ex: 15' : 'Ex: 50.00'}
+                      value={formCupom.valor}
+                      onChange={e => setFormCupom({ ...formCupom, valor: e.target.value })}
+                      required
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-elos-verde text-sm transition-all"
                     />
                   </div>
                 </div>
 
-                {/* 🟢 CAMPO DE LIMITE DE USOS + SELETOR DE ILIMITADO */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center px-1">
@@ -607,8 +719,8 @@ export default function Operacoes() {
                         type="button"
                         onClick={() => setFormCupom(prev => ({ ...prev, ilimitado: !prev.ilimitado }))}
                         className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md transition-colors border ${
-                          formCupom.ilimitado 
-                            ? 'bg-elos-verde text-white border-elos-verde' 
+                          formCupom.ilimitado
+                            ? 'bg-elos-verde text-white border-elos-verde'
                             : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
                         }`}
                       >
@@ -621,38 +733,38 @@ export default function Operacoes() {
                         ∞ Sem limite
                       </div>
                     ) : (
-                      <input 
-                        type="number" 
-                        min="1" 
-                        value={formCupom.limiteUso} 
-                        onChange={e => setFormCupom({...formCupom, limiteUso: Math.max(1, parseInt(e.target.value) || 1)})} 
-                        required 
-                        className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm text-center transition-all h-[50px]" 
+                      <input
+                        type="number"
+                        min="1"
+                        value={formCupom.limiteUso}
+                        onChange={e => setFormCupom({ ...formCupom, limiteUso: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                        required
+                        className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-black text-elos-verde text-sm text-center transition-all h-[50px]"
                       />
                     )}
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1 block">Válido até</label>
-                    <input 
-                      type="date" 
+                    <input
+                      type="date"
                       min={hojeBR()}
-                      value={formCupom.dataFim} 
-                      onChange={e => setFormCupom({...formCupom, dataFim: e.target.value})} 
-                      required 
-                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-xs transition-all h-[50px]" 
+                      value={formCupom.dataFim}
+                      onChange={e => setFormCupom({ ...formCupom, dataFim: e.target.value })}
+                      required
+                      className="w-full bg-gray-50 p-3.5 rounded-xl border border-gray-200 outline-none focus:border-[#c5a880] focus:ring-2 focus:ring-[#c5a880]/20 font-bold text-gray-600 text-xs transition-all h-[50px]"
                     />
                   </div>
                 </div>
 
                 <p className="text-[10px] text-gray-400 italic leading-relaxed px-1">
-                  {formCupom.ilimitado 
-                    ? "💡 Modo Ilimitado ativo: o cupom ficará disponível para todos os clientes e só deixará de funcionar após a data de validade."
-                    : "💡 Quando atingir a quantidade máxima de usos na loja ou passar da data de validade, o cupom é bloqueado automaticamente."}
+                  {formCupom.ilimitado
+                    ? '💡 Modo Ilimitado ativo: o cupom ficará disponível para todos os clientes e só deixará de funcionar após a data de validade.'
+                    : '💡 Quando atingir a quantidade máxima de usos na loja ou passar da data de validade, o cupom é bloqueado automaticamente.'}
                 </p>
 
-                <button type="submit" className="w-full bg-[#c5a880] hover:bg-[#b0946d] text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-lg active:scale-95 transition-all">
-                  Gerar Cupom
+                <button type="submit" disabled={salvandoCupom} className="w-full bg-[#c5a880] hover:bg-[#b0946d] disabled:opacity-50 text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-lg active:scale-95 transition-all">
+                  {salvandoCupom ? 'Salvando...' : 'Gerar Cupom'}
                 </button>
               </form>
             </div>
@@ -673,20 +785,20 @@ export default function Operacoes() {
                   const esgotado = !ehIlimitado && usosFeitos >= limiteTotal;
                   const expirado = verificarCupomExpirado(cupom.dataFim);
 
-                  const statusCor = !cupom.ativo 
-                    ? 'bg-red-50 text-red-600 border-red-200' 
-                    : expirado 
-                      ? 'bg-gray-100 text-gray-500 border-gray-200' 
-                      : esgotado 
+                  const statusCor = !cupom.ativo
+                    ? 'bg-red-50 text-red-600 border-red-200'
+                    : expirado
+                      ? 'bg-gray-100 text-gray-500 border-gray-200'
+                      : esgotado
                         ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : 'bg-emerald-50 text-emerald-600 border-emerald-200';
 
-                  const textoStatus = !cupom.ativo 
-                    ? 'Pausado' 
-                    : expirado 
-                      ? 'Expirado' 
-                      : esgotado 
-                        ? 'Limite Atingido' 
+                  const textoStatus = !cupom.ativo
+                    ? 'Pausado'
+                    : expirado
+                      ? 'Expirado'
+                      : esgotado
+                        ? 'Limite Atingido'
                         : 'Ativo';
 
                   return (
@@ -709,13 +821,11 @@ export default function Operacoes() {
                         </div>
                       </div>
 
-                      {/* 🟢 CONTROLE DE USOS E AÇÕES DO CUPOM */}
                       <div className="flex flex-wrap items-center justify-between md:justify-end w-full md:w-auto gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-gray-100">
-                        
-                        {/* Painel para ver e ajustar o limite de usos ou alternar para Ilimitado */}
+
                         <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                           {!ehIlimitado && (
-                            <button 
+                            <button
                               type="button"
                               onClick={() => ajustarLimiteCupom(cupom, limiteTotal - 1)}
                               disabled={limiteTotal <= 1}
@@ -734,7 +844,7 @@ export default function Operacoes() {
                           </div>
 
                           {!ehIlimitado && (
-                            <button 
+                            <button
                               type="button"
                               onClick={() => ajustarLimiteCupom(cupom, limiteTotal + 1)}
                               className="w-6 h-6 rounded-md bg-white border border-gray-200 text-gray-500 font-bold text-xs flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600"
@@ -744,7 +854,6 @@ export default function Operacoes() {
                             </button>
                           )}
 
-                          {/* Botão rápido para alternar entre Ilimitado (∞) e Limitado */}
                           <button
                             type="button"
                             onClick={() => ajustarLimiteCupom(cupom, ehIlimitado ? Math.max(1, usosFeitos + 1) : LIMITE_ILIMITADO)}
@@ -753,7 +862,7 @@ export default function Operacoes() {
                                 ? 'bg-elos-verde text-white border-elos-verde hover:bg-[#3a4a3e]'
                                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'
                             }`}
-                            title={ehIlimitado ? "Voltar para limite fixo de usos" : "Tornar usos ilimitados até a data de expiração"}
+                            title={ehIlimitado ? 'Voltar para limite fixo de usos' : 'Tornar usos ilimitados até a data de expiração'}
                           >
                             ∞
                           </button>
@@ -771,14 +880,14 @@ export default function Operacoes() {
                         </div>
 
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => alternarStatusCupom(cupom._id, cupom.ativo)} 
+                          <button
+                            onClick={() => alternarStatusCupom(cupom._id, cupom.ativo)}
                             className={`px-4 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${cupom.ativo ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
                           >
                             {cupom.ativo ? 'Pausar' : 'Reativar'}
                           </button>
-                          <button 
-                            onClick={() => deletarCupom(cupom._id)} 
+                          <button
+                            onClick={() => deletarCupom(cupom._id)}
                             className="px-4 py-2.5 rounded-lg text-[10px] font-black uppercase text-gray-400 bg-gray-50 hover:bg-red-50 hover:text-red-500 transition-colors"
                           >
                             Excluir

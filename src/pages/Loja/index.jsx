@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProdutos } from '../../hooks/useProdutos';
 
@@ -78,17 +78,17 @@ function ModalDetalhesProduto({ produto, precoPromocional, noCarrinho, adicionar
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md"
       style={{ animation: 'fadeUp 0.3s ease forwards' }}
       onClick={onClose}
     >
-      <div 
+      <div
         className="relative bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] border border-white/20"
         onClick={(e) => e.stopPropagation()}
       >
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
           className="absolute top-4 right-4 z-30 w-10 h-10 bg-white/90 hover:bg-red-500 hover:text-white text-[#1d3026] rounded-full flex items-center justify-center shadow-md text-2xl transition-all"
         >
           &times;
@@ -98,8 +98,8 @@ function ModalDetalhesProduto({ produto, precoPromocional, noCarrinho, adicionar
         <div className="md:w-1/2 bg-gradient-to-br from-[#F4F1EA] to-white flex flex-col justify-between p-6 relative">
           <div className="relative flex-1 min-h-[260px] max-h-[380px] overflow-auto flex items-center justify-center rounded-2xl">
             {fotos[imgIndex] ? (
-              <img 
-                src={getUrlFotoAlta(fotos[imgIndex])} 
+              <img
+                src={getUrlFotoAlta(fotos[imgIndex])}
                 alt={produto.nome}
                 onClick={() => setSuperZoom(!superZoom)}
                 className={`transition-transform duration-300 object-contain ${
@@ -110,7 +110,7 @@ function ModalDetalhesProduto({ produto, precoPromocional, noCarrinho, adicionar
               <span className="text-7xl opacity-10">👓</span>
             )}
 
-            <button 
+            <button
               type="button"
               onClick={() => setSuperZoom(!superZoom)}
               className="absolute bottom-2 right-2 bg-white/85 backdrop-blur-sm text-[#1d3026] px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border border-gray-200 hover:bg-[#1d3026] hover:text-white transition-colors"
@@ -219,15 +219,24 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [imgCarregada, setImgCarregada] = useState(false);
-  
+
   const productId = produto._id || produto.id;
   const fotos = (produto.fotos && produto.fotos.length > 0) ? produto.fotos : (produto.foto ? [produto.foto] : []);
   const fotoAtual = fotos[imgIndex];
 
-  useEffect(() => { setImgCarregada(false); }, [imgIndex]);
+  const nextImg = (e) => {
+    if (e) e.stopPropagation();
+    if (fotos.length <= 1) return;
+    setImgCarregada(false);
+    setImgIndex((prev) => (prev + 1) % fotos.length);
+  };
 
-  const nextImg = (e) => { if (e) e.stopPropagation(); setImgIndex((prev) => (prev + 1) % fotos.length); };
-  const prevImg = (e) => { if (e) e.stopPropagation(); setImgIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1)); };
+  const prevImg = (e) => {
+    if (e) e.stopPropagation();
+    if (fotos.length <= 1) return;
+    setImgCarregada(false);
+    setImgIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1));
+  };
 
   const handleTouchStart = (e) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientX); };
   const handleTouchMove = (e) => { setTouchEnd(e.targetTouches[0].clientX); };
@@ -250,7 +259,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
 
   return (
     <div className="group bg-white rounded-3xl md:rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-200 hover:border-[#c5a880]/40 hover:shadow-[0_20px_40px_rgba(197,168,128,0.15)] hover:-translate-y-1 md:hover:-translate-y-2 transition-all duration-500 flex flex-col relative anim-texto-2">
-      
+
       {precoPromocional && precoPromocional < produto.preco && (
         <div className="absolute top-3 right-3 md:top-5 md:right-5 z-20 bg-red-600/90 backdrop-blur-md text-white border border-red-500 text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 md:px-3 py-1 md:py-1.5 rounded-full shadow-lg pointer-events-none animate-pulse">
           🔥 Promoção!
@@ -262,8 +271,8 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
           Ref: {produto.referencia}
         </div>
       )}
-      
-      <div 
+
+      <div
         onClick={() => abrirDetalhes(produto)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -278,25 +287,24 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
         )}
 
         {fotoAtual ? (
-          <img 
-            src={getUrlFoto(fotoAtual)} 
-            alt={produto.nome} 
-            loading="lazy" 
-            decoding="async" 
+          <img
+            src={getUrlFoto(fotoAtual)}
+            alt={produto.nome}
+            loading="lazy"
+            decoding="async"
             onLoad={() => setImgCarregada(true)}
-            onError={(e) => { 
-              e.target.style.display = 'none'; 
-              e.target.nextSibling.style.display = 'block'; 
+            onError={(e) => {
+              e.target.style.display = 'none';
+              if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
               setImgCarregada(true);
             }}
             className={`w-full h-full object-contain group-hover:scale-110 transition-all duration-1000 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] drop-shadow-xl relative z-10 ${imgCarregada ? 'opacity-100' : 'opacity-0'}`}
           />
         ) : null}
-        
+
         <span className={`text-5xl md:text-7xl opacity-5 absolute pointer-events-none z-0 ${fotoAtual && imgCarregada ? 'hidden' : (!fotoAtual ? 'block' : 'hidden')}`}>👓</span>
         <div className="absolute inset-0 bg-black/0 group-hover:bg-[#1d3026]/[0.03] transition-colors duration-500 pointer-events-none z-10"></div>
 
-        {/* Ícone sutil de Lupa indicando que pode clicar para dar zoom */}
         <div className="absolute bottom-2.5 right-2.5 md:bottom-4 md:right-4 z-20 w-7 h-7 rounded-full bg-white/80 backdrop-blur-sm text-[#1d3026] flex items-center justify-center text-xs opacity-70 md:opacity-0 md:group-hover/galeria:opacity-100 transition-opacity shadow-sm pointer-events-none">
           🔍
         </div>
@@ -313,9 +321,9 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
           </>
         )}
       </div>
-      
+
       <div className="p-4 md:p-6 flex flex-col flex-1 bg-white relative z-20">
-        <h3 
+        <h3
           onClick={() => abrirDetalhes(produto)}
           className="font-sans font-bold text-[#1d3026] text-xs md:text-sm leading-relaxed line-clamp-2 mb-1 group-hover:text-[#c5a880] transition-colors cursor-pointer"
         >
@@ -323,18 +331,18 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
         </h3>
 
         {produto.descricao && (
-          <p 
+          <p
             onClick={() => abrirDetalhes(produto)}
             className="text-[10px] text-gray-400 line-clamp-1 mb-2 cursor-pointer"
           >
             {produto.descricao}
           </p>
         )}
-        
+
         <div className="mt-auto pt-2 flex items-end justify-between gap-2">
           <div className="flex flex-col">
             <span className="text-[8px] md:text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">{produto.categoria}</span>
-            
+
             {precoPromocional && precoPromocional < produto.preco ? (
               <div className="flex flex-col">
                 <span className="text-[10px] md:text-xs text-gray-400 line-through font-bold">
@@ -350,16 +358,16 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
               </span>
             )}
           </div>
-          
-          <button 
+
+          <button
             onClick={() => {
               const produtoParaCarrinho = precoPromocional ? { ...produto, preco: precoPromocional, precoOriginal: produto.preco } : produto;
               adicionarAoCarrinho(produtoParaCarrinho);
             }}
             disabled={noCarrinho}
             className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex-shrink-0 flex items-center justify-center transition-all duration-500 shadow-md ${
-              noCarrinho 
-                ? 'bg-[#F4F1EA] text-gray-400 cursor-not-allowed shadow-none border border-gray-200' 
+              noCarrinho
+                ? 'bg-[#F4F1EA] text-gray-400 cursor-not-allowed shadow-none border border-gray-200'
                 : precoPromocional
                   ? 'bg-red-600 text-white hover:bg-red-700 hover:shadow-red-600/40 hover:-translate-y-1 active:scale-95'
                   : 'bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:shadow-[#c5a880]/40 hover:-translate-y-1 active:scale-95'
@@ -379,7 +387,7 @@ function ProdutoCard({ produto, noCarrinho, adicionarAoCarrinho, abrirDetalhes, 
 function HeroInterativo() {
   return (
     <div className="relative bg-gradient-to-b from-[#1d3026] via-[#243d31] to-[#F4F1EA] overflow-hidden min-h-[60vh] flex items-center justify-center pt-44 pb-16">
-      
+
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes textoSobe {
           0% { opacity: 0; transform: translateY(40px); }
@@ -387,7 +395,7 @@ function HeroInterativo() {
         }
         @keyframes vitrine360 {
           0% { transform: rotateY(0deg) rotateX(5deg); }
-          100% { transform: rotateY(-360deg) rotateX(5deg); } 
+          100% { transform: rotateY(-360deg) rotateX(5deg); }
         }
         @keyframes shadowPulse360 {
           0% { transform: translateX(-50%) scale(1); opacity: 0.4; }
@@ -396,7 +404,7 @@ function HeroInterativo() {
           75% { transform: translateX(-50%) scale(0.7); opacity: 0.2; }
           100% { transform: translateX(-50%) scale(1); opacity: 0.4; }
         }
-        
+
         .anim-texto-1 { animation: textoSobe 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
         .anim-texto-2 { animation: textoSobe 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; animation-delay: 0.3s; }
       `}} />
@@ -404,7 +412,7 @@ function HeroInterativo() {
       <div className="absolute top-[0%] left-[-5%] w-[60%] h-[60%] bg-[#c5a880] rounded-full mix-blend-screen filter blur-[140px] opacity-20 animate-pulse duration-1000"></div>
 
       <div className="max-w-7xl mx-auto px-4 w-full flex flex-col md:flex-row items-center justify-between gap-12 relative z-10">
-        
+
         {/* LADO ESQUERDO: TEXTOS */}
         <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left z-20">
           <span className="anim-texto-1 px-5 py-2 rounded-full border border-[#c5a880]/40 text-[#e6d0a7] bg-black/20 backdrop-blur-md text-[10px] font-black uppercase tracking-[0.2em] mb-6 shadow-sm flex items-center gap-2">
@@ -412,7 +420,7 @@ function HeroInterativo() {
           </span>
 
           <h1 className="anim-texto-2 font-tradicional text-5xl md:text-7xl lg:text-[6rem] italic leading-[1.1] font-light text-white drop-shadow-2xl">
-            O seu novo olhar <br/>
+            O seu novo olhar <br />
             <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#c5a880] to-[#e6d0a7]">
               começa aqui.
             </span>
@@ -421,60 +429,62 @@ function HeroInterativo() {
 
         {/* LADO DIREITO: ÓCULOS 3D (SVG Puro) GIRANDO 360 GRAUS SEM PARAR */}
         <div className="anim-texto-2 flex-1 w-full flex flex-col items-center justify-center relative pt-12 md:pt-0" style={{ animationDelay: '0.6s' }}>
-          
+
           <div className="relative w-[280px] sm:w-[320px] h-[100px]" style={{ perspective: '1000px' }}>
             <div className="w-full h-full relative" style={{ transformStyle: 'preserve-3d', animation: 'vitrine360 12s linear infinite' }}>
-              
+
               {/* Lente Frontal e Aros */}
               <div className="absolute inset-0" style={{ transform: 'translateZ(100px)' }}>
                 <svg viewBox="0 0 300 100" className="w-full h-full drop-shadow-[0_15px_15px_rgba(0,0,0,0.5)]">
                   <defs>
                     <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#222"/>
-                      <stop offset="50%" stopColor="#0a0a0a"/>
-                      <stop offset="100%" stopColor="#111"/>
+                      <stop offset="0%" stopColor="#222" />
+                      <stop offset="50%" stopColor="#0a0a0a" />
+                      <stop offset="100%" stopColor="#111" />
                     </linearGradient>
                     <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#c5a880"/>
-                      <stop offset="50%" stopColor="#f3e0c0"/>
-                      <stop offset="100%" stopColor="#8b7355"/>
+                      <stop offset="0%" stopColor="#c5a880" />
+                      <stop offset="50%" stopColor="#f3e0c0" />
+                      <stop offset="100%" stopColor="#8b7355" />
                     </linearGradient>
                     <linearGradient id="lensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="rgba(255,255,255,0.4)"/>
-                      <stop offset="50%" stopColor="rgba(255,255,255,0)"/>
-                      <stop offset="100%" stopColor="rgba(255,255,255,0.1)"/>
+                      <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+                      <stop offset="50%" stopColor="rgba(255,255,255,0)" />
+                      <stop offset="100%" stopColor="rgba(255,255,255,0.1)" />
                     </linearGradient>
                   </defs>
-                  <rect x="10" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
-                  <rect x="160" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)"/>
-                  <rect x="10" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
-                  <rect x="160" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12"/>
-                  <path d="M 140 30 Q 150 20 160 30" fill="none" stroke="url(#goldGrad)" strokeWidth="8"/>
-                  <rect x="-2" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
-                  <rect x="290" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)"/>
+                  <rect x="10" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)" />
+                  <rect x="160" y="10" width="130" height="80" rx="20" fill="url(#lensGrad)" />
+                  <rect x="10" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12" />
+                  <rect x="160" y="10" width="130" height="80" rx="20" fill="none" stroke="url(#frameGrad)" strokeWidth="12" />
+                  <path d="M 140 30 Q 150 20 160 30" fill="none" stroke="url(#goldGrad)" strokeWidth="8" />
+                  <rect x="-2" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)" />
+                  <rect x="290" y="25" width="12" height="16" rx="4" fill="url(#goldGrad)" />
                 </svg>
               </div>
 
               {/* Haste Lateral Esquerda */}
-              <div className="absolute top-[28px] left-[5px] h-[8px] w-[180px] rounded-l-full"
-                   style={{ 
-                     background: 'linear-gradient(to right, #c5a880 0%, #111 20%, transparent 100%)',
-                     transformOrigin: 'left center',
-                     transform: 'translateZ(100px) rotateY(-85deg)'
-                   }}>
-              </div>
+              <div
+                className="absolute top-[28px] left-[5px] h-[8px] w-[180px] rounded-l-full"
+                style={{
+                  background: 'linear-gradient(to right, #c5a880 0%, #111 20%, transparent 100%)',
+                  transformOrigin: 'left center',
+                  transform: 'translateZ(100px) rotateY(-85deg)'
+                }}
+              />
 
               {/* Haste Lateral Direita */}
-              <div className="absolute top-[28px] right-[5px] h-[8px] w-[180px] rounded-r-full"
-                   style={{ 
-                     background: 'linear-gradient(to left, #c5a880 0%, #111 20%, transparent 100%)',
-                     transformOrigin: 'right center',
-                     transform: 'translateZ(100px) rotateY(85deg)'
-                   }}>
-              </div>
+              <div
+                className="absolute top-[28px] right-[5px] h-[8px] w-[180px] rounded-r-full"
+                style={{
+                  background: 'linear-gradient(to left, #c5a880 0%, #111 20%, transparent 100%)',
+                  transformOrigin: 'right center',
+                  transform: 'translateZ(100px) rotateY(85deg)'
+                }}
+              />
             </div>
           </div>
-          
+
           <div className="absolute -bottom-10 left-1/2 w-[220px] h-5 bg-black/40 blur-xl rounded-full" style={{ animation: 'shadowPulse360 12s linear infinite' }}></div>
         </div>
 
@@ -489,29 +499,32 @@ function HeroInterativo() {
 export default function HomeLoja() {
   const navigate = useNavigate();
   const { data: produtos = [], isLoading: carregando } = useProdutos();
-  
+
   const [busca, setBusca] = useState('');
-  
+
   const infinitePayUser = import.meta.env.VITE_INFINITEPAY_USER || '';
   const apiUrl = import.meta.env.VITE_API_URL || 'https://financeiro-elos.onrender.com/api';
-  
+
   const [categoriaAtiva, setCategoriaAtiva] = useState('TODAS');
   const [isScrolled, setIsScrolled] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
-  
-  const clienteLogado = JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null');
+
+  // 🟢 Estabilizado com useState (evita nova referência a cada render)
+  const [clienteLogado] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('clienteLogadoElos') || 'null'); } catch { return null; }
+  });
+
   const [mostrarTermos, setMostrarTermos] = useState(false);
   const [produtoEmDestaque, setProdutoEmDestaque] = useState(null);
 
   const [carrinho, setCarrinho] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('carrinhoVirtualElos')) || []; } catch (e) { return []; }
+    try { return JSON.parse(localStorage.getItem('carrinhoVirtualElos')) || []; } catch { return []; }
   });
 
   const [cupomDigitado, setCupomDigitado] = useState('');
-  const [cupomAtivo, setCupomAtivo] = useState(null); 
+  const [cupomAtivo, setCupomAtivo] = useState(null);
   const [validandoCupom, setValidandoCupom] = useState(false);
 
-  // 🟢 FRETE: Retirada na Loja já começa visível e pré-selecionada!
   const [cepFrete, setCepFrete] = useState('');
   const [calculandoFrete, setCalculandoFrete] = useState(false);
   const [opcoesFrete, setOpcoesFrete] = useState([OPCAO_RETIRADA_FIXA]);
@@ -541,14 +554,6 @@ export default function HomeLoja() {
   }, [carrinho]);
 
   useEffect(() => {
-    if (temPromocaoNoCarrinho && cupomAtivo) {
-      setCupomAtivo(null);
-      setCupomDigitado('');
-      alert("⚠️ O cupom de desconto foi removido, pois você já possui itens em promoção no carrinho.");
-    }
-  }, [temPromocaoNoCarrinho, cupomAtivo]);
-
-  useEffect(() => {
     localStorage.setItem('carrinhoVirtualElos', JSON.stringify(carrinho));
   }, [carrinho]);
 
@@ -559,34 +564,80 @@ export default function HomeLoja() {
   }, []);
 
   const [mostrarCarrinho, setMostrarCarrinho] = useState(false);
-  const [etapaCheckout, setEtapaCheckout] = useState(0); 
+  const [etapaCheckout, setEtapaCheckout] = useState(0);
   const [processando, setProcessando] = useState(false);
   const [pedidoFinalizado, setPedidoFinalizado] = useState(null);
-  const [abaAtiva, setAbaAtiva] = useState('VITRINE'); 
+  const [abaAtiva, setAbaAtiva] = useState('VITRINE');
   const [meusPedidos, setMeusPedidos] = useState([]);
 
-  const [dadosCliente, setDadosCliente] = useState({ 
-    nome: clienteLogado?.nome || '', 
-    telefone: clienteLogado?.telefone || '', 
+  const [dadosCliente, setDadosCliente] = useState({
+    nome: clienteLogado?.nome || '',
+    telefone: clienteLogado?.telefone || '',
     cpf: clienteLogado?.cpf || '',
     endereco: clienteLogado?.endereco || '',
-    temGrau: null 
+    temGrau: null
   });
 
-  const buscarPedidos = async () => {
-    if (!clienteLogado?.cpf) return; 
-    try {
-      const res = await fetch(`${apiUrl}/pedidos_online`);
-      if (res.ok) {
-        const todosPedidos = await res.json();
-        setMeusPedidos(todosPedidos.filter(p => p.clienteCpf === clienteLogado.cpf));
-      }
-    } catch (err) {}
+  // 🟢 Helpers de autenticação da área do cliente
+  const obterHeadersCliente = (comJson = false) => {
+    const h = {};
+    if (comJson) h['Content-Type'] = 'application/json';
+    if (clienteLogado?.token) h['Authorization'] = `Bearer ${clienteLogado.token}`;
+    return h;
   };
 
+  const tratarSessaoClienteExpirada = useCallback(() => {
+    localStorage.removeItem('clienteLogadoElos');
+    localStorage.setItem('redirect_pos_login', 'loja');
+    alert('Sua sessão expirou. Faça login novamente para ver seus pedidos.');
+    navigate('/login');
+  }, [navigate]);
+
+  const recarregarMeusPedidos = async () => {
+    if (!clienteLogado?.token) {
+      tratarSessaoClienteExpirada();
+      return;
+    }
+    try {
+      const res = await fetch(`${apiUrl}/meus-pedidos`, {
+        headers: obterHeadersCliente()
+      });
+      if (res.status === 401) {
+        tratarSessaoClienteExpirada();
+        return;
+      }
+      if (res.ok) {
+        setMeusPedidos(await res.json());
+      }
+    } catch {}
+  };
+
+  // 🟢 Consulta exclusiva do cliente autenticado (/api/meus-pedidos)
   useEffect(() => {
-    if (abaAtiva === 'MEUS_PEDIDOS' && clienteLogado) buscarPedidos();
-  }, [abaAtiva, clienteLogado]); 
+    if (abaAtiva !== 'MEUS_PEDIDOS' || !clienteLogado) return;
+    if (!clienteLogado.token) {
+      tratarSessaoClienteExpirada();
+      return;
+    }
+
+    let ativo = true;
+    (async () => {
+      try {
+        const res = await fetch(`${apiUrl}/meus-pedidos`, {
+          headers: { Authorization: `Bearer ${clienteLogado.token}` }
+        });
+        if (res.status === 401 && ativo) {
+          tratarSessaoClienteExpirada();
+          return;
+        }
+        if (res.ok && ativo) {
+          setMeusPedidos(await res.json());
+        }
+      } catch {}
+    })();
+
+    return () => { ativo = false; };
+  }, [abaAtiva, clienteLogado, apiUrl, tratarSessaoClienteExpirada]);
 
   const produtoUpsell = useMemo(() => {
     return (produtos || []).find(p => p.categoria === 'UPSELL' && p.quantidade > 0);
@@ -597,11 +648,10 @@ export default function HomeLoja() {
     let descontoCupom = 0;
 
     if (cupomAtivo && !temPromocaoNoCarrinho) {
-      const valorElegivelCupom = carrinho.reduce((total, item) => total + Number(item.preco), 0);
       if (cupomAtivo.tipo === 'PERCENTUAL') {
-        descontoCupom = valorElegivelCupom * (Number(cupomAtivo.valor) / 100);
+        descontoCupom = subtotalBruto * (Number(cupomAtivo.valor) / 100);
       } else {
-        descontoCupom = Math.min(Number(cupomAtivo.valor), valorElegivelCupom); 
+        descontoCupom = Math.min(Number(cupomAtivo.valor), subtotalBruto);
       }
     }
 
@@ -615,23 +665,25 @@ export default function HomeLoja() {
     if (!cupomDigitado.trim()) return;
     setValidandoCupom(true);
     try {
-      const res = await fetch(`${apiUrl}/cupons/validar/${cupomDigitado}`);
+      const cpfConsulta = clienteLogado?.cpf || dadosCliente.cpf || '';
+      const queryCpf = cpfConsulta ? `?cpf=${encodeURIComponent(cpfConsulta)}` : '';
+      const res = await fetch(`${apiUrl}/cupons/validar/${encodeURIComponent(cupomDigitado.trim())}${queryCpf}`);
       const data = await res.json();
       if (data.valido) {
         setCupomAtivo(data.cupom);
       } else {
         setCupomAtivo(null);
-        alert(data.error || "Cupom inválido.");
+        alert(data.error || 'Cupom inválido.');
       }
-    } catch (e) { alert("Erro ao validar cupom."); } 
+    } catch { alert('Erro ao validar cupom.'); }
     finally { setValidandoCupom(false); }
   };
 
   const handleMascaraTel = (v) => {
     let valor = v.replace(/\D/g, '');
     if (valor.length > 11) valor = valor.substring(0, 11);
-    if (valor.length > 2) valor = `(${valor.substring(0,2)}) ${valor.substring(2)}`;
-    if (valor.length > 10) valor = `${valor.substring(0,10)}-${valor.substring(10)}`;
+    if (valor.length > 2) valor = `(${valor.substring(0, 2)}) ${valor.substring(2)}`;
+    if (valor.length > 10) valor = `${valor.substring(0, 10)}-${valor.substring(10)}`;
     return valor;
   };
 
@@ -641,26 +693,27 @@ export default function HomeLoja() {
     return valor.substring(0, 9);
   };
 
+  // 🟢 Consulta o servidor (/api/frete) para manter o preço idêntico ao checkout da InfinitePay
   const calcularFrete = async () => {
-    if (cepFrete.replace(/\D/g, '').length !== 8) return alert("Digite um CEP válido com 8 dígitos.");
+    const cepLimpo = cepFrete.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return alert('Digite um CEP válido com 8 dígitos.');
     setCalculandoFrete(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 700));
-      const cepPrefixo = cepFrete.substring(0, 2);
-      let opcoes = [OPCAO_RETIRADA_FIXA];
-      
-      if (['60','61'].includes(cepPrefixo)) {
-        opcoes.push({ id: 'motoboy', nome: 'Motoboy Fortaleza/Região', valor: 15.00, prazo: '1 dia útil' });
+      const res = await fetch(`${apiUrl}/frete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cepDestino: cepLimpo })
+      });
+      const opcoes = await res.json();
+      if (res.ok && Array.isArray(opcoes) && opcoes.length > 0) {
+        setOpcoesFrete(opcoes);
+        setFreteSelecionado(opcoes[1] || opcoes[0]);
+      } else {
+        alert(opcoes.error || 'Não foi possível calcular o frete para este CEP.');
       }
-      
-      opcoes.push({ id: 'pac', nome: 'Correios PAC', valor: 28.90, prazo: '5 a 8 dias úteis' });
-      opcoes.push({ id: 'sedex', nome: 'Correios Sedex', valor: 45.50, prazo: '2 a 3 dias úteis' });
-      
-      setOpcoesFrete(opcoes);
-      setFreteSelecionado(opcoes[1] || opcoes[0]);
-    } catch (e) {
-      alert("Erro ao calcular frete.");
+    } catch {
+      alert('Erro ao calcular frete.');
     } finally {
       setCalculandoFrete(false);
     }
@@ -677,15 +730,15 @@ export default function HomeLoja() {
   };
 
   const produtosLoja = useMemo(() => {
-    let filtrados = (produtos || []).filter(p => 
+    let filtrados = (produtos || []).filter(p =>
       (p.quantidade > 0 || p.categoria === 'LENTE') &&
-      p.categoria !== 'UPSELL' && 
+      p.categoria !== 'UPSELL' &&
       p.categoria !== 'PROMO_CATE'
     );
     if (busca) {
       const termo = busca.toLowerCase();
-      filtrados = filtrados.filter(p => 
-        (p.nome || '').toLowerCase().includes(termo) || 
+      filtrados = filtrados.filter(p =>
+        (p.nome || '').toLowerCase().includes(termo) ||
         (p.referencia || '').toLowerCase().includes(termo) ||
         (p.descricao || '').toLowerCase().includes(termo)
       );
@@ -703,10 +756,19 @@ export default function HomeLoja() {
   ];
 
   const adicionarAoCarrinho = (produto) => {
-    if (carrinho.find(item => item._id === (produto._id || produto.id))) return;
-    setCarrinho([...carrinho, { ...produto, _id: (produto._id || produto.id) }]);
+    const idProd = produto._id || produto.id;
+    if (carrinho.find(item => item._id === idProd)) return;
+
+    const itemEhPromocional = produto.categoria === 'UPSELL' || Boolean(produto.precoOriginal);
+    if (itemEhPromocional && cupomAtivo) {
+      setCupomAtivo(null);
+      setCupomDigitado('');
+      alert('⚠️ O cupom de desconto foi removido, pois você adicionou um item em promoção no carrinho.');
+    }
+
+    setCarrinho([...carrinho, { ...produto, _id: idProd }]);
     setMostrarCarrinho(true);
-    setEtapaCheckout(0); 
+    setEtapaCheckout(0);
   };
 
   const removerDoCarrinho = (idProduto) => {
@@ -717,7 +779,7 @@ export default function HomeLoja() {
   };
 
   const limparCarrinhoCompleto = () => {
-    if (!window.confirm("Deseja remover todos os itens do carrinho?")) return;
+    if (!window.confirm('Deseja remover todos os itens do carrinho?')) return;
     setCarrinho([]);
     setEtapaCheckout(0);
     setCupomAtivo(null);
@@ -727,70 +789,92 @@ export default function HomeLoja() {
     e.preventDefault();
     const temArmacaoNoCarrinho = carrinho.some(i => i.categoria === 'ARMAÇÃO');
     if (temArmacaoNoCarrinho && dadosCliente.temGrau === null) {
-      alert("Por favor, selecione nas opções abaixo se as suas lentes terão grau ou não.");
+      alert('Por favor, selecione nas opções abaixo se as suas lentes terão grau ou não.');
       return;
     }
 
     setProcessando(true);
 
     const isRetiradaNaLoja = freteSelecionado?.id === 'retirada';
-    let enderecoFinal = isRetiradaNaLoja 
-      ? 'RETIRADA NA LOJA FÍSICA (Rua Viriato Ribeiro, 321A - Bela Vista)' 
+    let enderecoFinal = isRetiradaNaLoja
+      ? 'RETIRADA NA LOJA FÍSICA (Rua Viriato Ribeiro, 321A - Bela Vista)'
       : dadosCliente.endereco;
 
     if (temArmacaoNoCarrinho) {
-      enderecoFinal += dadosCliente.temGrau 
-        ? '\n\n[ÓCULOS COM GRAU - Cliente enviará a Receita]' 
+      enderecoFinal += dadosCliente.temGrau
+        ? '\n\n[ÓCULOS COM GRAU - Cliente enviará a Receita]'
         : '\n\n[ÓCULOS SEM GRAU - Apenas lente de descanso/estética]';
     }
 
     const payload = {
-  clienteNome: dadosCliente.nome,
-  clienteTelefone: dadosCliente.telefone,
-  clienteCpf: dadosCliente.cpf,
-  clienteEndereco: enderecoFinal,
-  itens: carrinho.map(item => ({ id: item._id })),
-  cupomUtilizado: cupomAtivo ? cupomAtivo.codigo : undefined,
-  freteId: freteSelecionado?.id || 'retirada',
-  cep: cepFrete
-};
+      clienteNome: dadosCliente.nome,
+      clienteTelefone: dadosCliente.telefone,
+      clienteCpf: dadosCliente.cpf,
+      clienteEndereco: enderecoFinal,
+      itens: carrinho.map(item => ({ id: item._id })),
+      cupomUtilizado: cupomAtivo ? cupomAtivo.codigo : undefined,
+      freteId: freteSelecionado?.id || 'retirada',
+      cep: cepFrete
+    };
 
-try {
-  const res = await fetch(`${apiUrl}/pedidos_online`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-  });
-  const data = await res.json();
-  if (res.ok) {
-    setPedidoFinalizado(data.pedido);   // já vem com valorTotal, freteValor e freteTipo corretos
-    setCarrinho([]); setCupomAtivo(null); setCupomDigitado('');
-    setFreteSelecionado(OPCAO_RETIRADA_FIXA);
-    setEtapaCheckout(2);
-  } else {
-    alert(data.error || 'Ops! Tivemos um problema.');
-  }
-} catch (err) { alert('Erro ao conectar com o servidor.'); }
-finally { setProcessando(false); }
-}; 
-
-  const cancelarPedido = async (pedidoId) => {
-    if (!window.confirm("Deseja cancelar este pedido?")) return;
     try {
-      const res = await fetch(`${apiUrl}/pedidos_online/${pedidoId}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'CANCELADO' }) });
-      if (res.ok) buscarPedidos(); 
-    } catch (error) {}
+      const res = await fetch(`${apiUrl}/pedidos_online`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPedidoFinalizado(data.pedido);
+        setCarrinho([]);
+        setCupomAtivo(null);
+        setCupomDigitado('');
+        setFreteSelecionado(OPCAO_RETIRADA_FIXA);
+        setEtapaCheckout(2);
+      } else {
+        alert(data.error || 'Ops! Tivemos um problema.');
+      }
+    } catch {
+      alert('Erro ao conectar com o servidor.');
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  // 🟢 Cancelamento exclusivo do cliente (/api/meus-pedidos/:id/cancelar)
+  const cancelarPedido = async (pedidoId) => {
+    if (!window.confirm('Deseja cancelar este pedido?')) return;
+    try {
+      const res = await fetch(`${apiUrl}/meus-pedidos/${pedidoId}/cancelar`, {
+        method: 'PATCH',
+        headers: obterHeadersCliente()
+      });
+      if (res.status === 401) {
+        tratarSessaoClienteExpirada();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        recarregarMeusPedidos();
+      } else {
+        alert(data.error || 'Não foi possível cancelar o pedido.');
+      }
+    } catch {
+      alert('Erro ao conectar com o servidor.');
+    }
   };
 
   const avisarWhatsApp = (pedidoEspecifico = null) => {
     const p = pedidoEspecifico || pedidoFinalizado;
     if (!p) return;
-    
+
     const ehSemGrau = p.clienteEndereco && p.clienteEndereco.includes('SEM GRAU');
-    const txtReceita = ehSemGrau 
-      ? "Meu óculos é *SEM GRAU*, quero a lente apenas para descanso/estética." 
-      : "Estou enviando minha *Receita Médica* para a produção das minhas lentes.";
+    const txtReceita = ehSemGrau
+      ? 'Meu óculos é *SEM GRAU*, quero a lente apenas para descanso/estética.'
+      : 'Estou enviando minha *Receita Médica* para a produção das minhas lentes.';
 
     const texto = `*OLÁ! GOSTARIA DE FALAR SOBRE O MEU PEDIDO!* 📦✨\n\n*Número do Pedido:* #${p.numeroPedidoOnline}\n*Meu Nome:* ${p.clienteNome}\n*Modalidade:* ${p.freteTipo || 'Retirada/Entrega'}\n*Valor:* R$ ${Number(p.valorTotal).toFixed(2).replace('.', ',')}\n\n${txtReceita}\n\nAqui está o comprovante de pagamento.`;
-    
+
     window.open(`https://wa.me/5585985506571?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
@@ -802,8 +886,8 @@ finally { setProcessando(false); }
       if (destino === 'CHECKOUT') setEtapaCheckout(1);
     } else {
       localStorage.setItem('redirect_pos_login', 'loja');
-      setMostrarCarrinho(false); 
-      navigate('/login'); 
+      setMostrarCarrinho(false);
+      navigate('/login');
     }
   };
 
@@ -820,12 +904,12 @@ finally { setProcessando(false); }
 
   return (
     <div className="min-h-screen bg-[#F4F1EA] font-sans relative pb-20">
-      
+
       {mostrarTermos && <ModalTermos onClose={() => setMostrarTermos(false)} />}
 
       {/* MODAL DE ZOOM E DETALHES DO PRODUTO */}
       {produtoEmDestaque && (
-        <ModalDetalhesProduto 
+        <ModalDetalhesProduto
           produto={produtoEmDestaque}
           precoPromocional={obterPrecoPromocional(produtoEmDestaque)}
           noCarrinho={carrinho.some(item => item._id === (produtoEmDestaque._id || produtoEmDestaque.id))}
@@ -865,8 +949,8 @@ finally { setProcessando(false); }
               </div>
 
               <div className="md:hidden flex items-center">
-                <button 
-                  onClick={() => verificarLoginEAvancar(clienteLogado ? 'HISTORICO' : 'VITRINE')} 
+                <button
+                  onClick={() => verificarLoginEAvancar(clienteLogado ? 'HISTORICO' : 'VITRINE')}
                   className={`relative w-10 h-10 flex items-center justify-center rounded-full transition-colors duration-500 shadow-sm ${isScrolled ? 'bg-white text-[#1d3026] border border-gray-200' : 'bg-white/20 text-white backdrop-blur-sm border border-white/30'}`}
                 >
                   <span className="text-sm">👤</span>
@@ -874,9 +958,9 @@ finally { setProcessando(false); }
               </div>
 
               <div className={`hidden md:block h-8 w-px transition-colors duration-500 ${isScrolled ? 'bg-gray-200' : 'bg-white/20'}`}></div>
-              
-              <button 
-                onClick={() => { setMostrarCarrinho(true); if(etapaCheckout === 2) setEtapaCheckout(0); }} 
+
+              <button
+                onClick={() => { setMostrarCarrinho(true); if (etapaCheckout === 2) setEtapaCheckout(0); }}
                 className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:scale-105 shadow-sm ${isScrolled ? 'bg-white text-[#1d3026] hover:bg-[#c5a880] hover:text-white border border-gray-200' : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/30'}`}
               >
                 <span className="text-lg md:text-xl">🛒</span>
@@ -896,19 +980,19 @@ finally { setProcessando(false); }
         <div className={`fixed w-full left-0 z-[50] py-2.5 transition-all duration-500 ${isScrolled ? 'top-[70px] bg-[#F4F1EA]/95 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'top-[80px] bg-transparent border-b border-white/10'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-6">
-              
+
               <div className="flex flex-1 gap-2 overflow-x-auto no-scrollbar pb-0.5">
                 {categorias.map(cat => (
-                  <button 
-                    key={cat.id} 
+                  <button
+                    key={cat.id}
                     onClick={() => {
-                       setCategoriaAtiva(cat.id);
-                       window.scrollTo({ top: window.innerHeight * 0.5, behavior: 'smooth' });
+                      setCategoriaAtiva(cat.id);
+                      window.scrollTo({ top: window.innerHeight * 0.5, behavior: 'smooth' });
                     }}
                     className={`flex-shrink-0 flex items-center px-4 sm:px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${
-                      categoriaAtiva === cat.id 
-                      ? (isScrolled ? 'bg-[#1d3026] text-[#F4F1EA] shadow-md scale-105' : 'bg-[#c5a880] text-white shadow-md scale-105')
-                      : (isScrolled ? 'bg-white text-gray-500 border border-gray-200/60 hover:border-[#c5a880]/50 hover:text-[#1d3026]' : 'bg-white/10 text-white/80 border border-white/20 hover:bg-white/20 hover:text-white')
+                      categoriaAtiva === cat.id
+                        ? (isScrolled ? 'bg-[#1d3026] text-[#F4F1EA] shadow-md scale-105' : 'bg-[#c5a880] text-white shadow-md scale-105')
+                        : (isScrolled ? 'bg-white text-gray-500 border border-gray-200/60 hover:border-[#c5a880]/50 hover:text-[#1d3026]' : 'bg-white/10 text-white/80 border border-white/20 hover:bg-white/20 hover:text-white')
                     }`}
                   >
                     {cat.label}
@@ -917,7 +1001,7 @@ finally { setProcessando(false); }
               </div>
 
               <div className="relative w-full sm:w-64 group">
-                <input 
+                <input
                   type="text" placeholder="Buscar modelo ou ref..." value={busca} onChange={(e) => setBusca(e.target.value)}
                   className={`w-full pl-9 pr-8 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-[#c5a880] text-xs font-bold transition-all shadow-sm ${isScrolled ? 'bg-white border border-gray-200 text-gray-700' : 'bg-white/15 border border-white/20 text-white placeholder-white/60 backdrop-blur-md'}`}
                 />
@@ -954,21 +1038,21 @@ finally { setProcessando(false); }
               <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-gray-200/50 flex flex-col items-center" style={{ animation: 'fadeUp 1s ease forwards', opacity: 0, animationDelay: '0.6s' }}>
                 <span className="text-7xl opacity-10 mb-6 drop-shadow-sm">🛒</span>
                 <p className="text-gray-400 font-medium text-lg">Ainda não temos produtos nesta categoria.</p>
-                <button onClick={() => {setBusca(''); setCategoriaAtiva('TODAS');}} className="mt-6 px-6 py-3 bg-[#F4F1EA] text-[#1d3026] hover:bg-[#c5a880] hover:text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-colors">
+                <button onClick={() => { setBusca(''); setCategoriaAtiva('TODAS'); }} className="mt-6 px-6 py-3 bg-[#F4F1EA] text-[#1d3026] hover:bg-[#c5a880] hover:text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-colors">
                   Ver Todo o Catálogo
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8 px-1 md:px-0">
                 {produtosLoja.map((produto) => (
-                  <ProdutoCard 
-                    key={produto._id || produto.id} 
-                    produto={produto} 
+                  <ProdutoCard
+                    key={produto._id || produto.id}
+                    produto={produto}
                     noCarrinho={carrinho.some(item => item._id === (produto._id || produto.id))}
                     adicionarAoCarrinho={adicionarAoCarrinho}
                     abrirDetalhes={(prod) => setProdutoEmDestaque(prod)}
                     apiUrl={apiUrl}
-                    precoPromocional={obterPrecoPromocional(produto)} 
+                    precoPromocional={obterPrecoPromocional(produto)}
                   />
                 ))}
               </div>
@@ -981,7 +1065,7 @@ finally { setProcessando(false); }
             <h2 className="text-4xl font-tradicional text-[#1d3026] italic">Seus Pedidos</h2>
             <p className="text-xs text-gray-500 uppercase tracking-[0.2em] font-black mt-3 mb-6">Histórico de Compras e Entregas</p>
             <button onClick={handleSair} className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-6 py-2.5 rounded-full transition-colors border border-red-100">
-               Desconectar Minha Conta
+              Desconectar Minha Conta
             </button>
           </div>
 
@@ -1005,14 +1089,14 @@ finally { setProcessando(false); }
                         <span className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.15em] border ${infoStatus.cor}`}>{infoStatus.texto}</span>
                       </div>
                       <p className="text-xs text-gray-500 font-medium">
-                        Realizado em {new Date(pedido.dataPedido).toLocaleDateString('pt-BR')} às {new Date(pedido.dataPedido).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                        Realizado em {new Date(pedido.dataPedido).toLocaleDateString('pt-BR')} às {new Date(pedido.dataPedido).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                       <div className="bg-[#F4F1EA] p-4 rounded-2xl w-full border border-gray-200/50">
                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.2em] mb-2 border-b border-gray-200 pb-2">Itens do Pedido</p>
                         <ul className="space-y-2">
                           {(pedido.itens || []).map((item, idx) => (
                             <li key={idx} className="text-xs text-gray-800 font-bold flex gap-2">
-                              <span className="text-[#c5a880]">1x</span> {item.nome}
+                              <span className="text-[#c5a880]">{item.quantidade || 1}x</span> {item.nome}
                             </li>
                           ))}
                         </ul>
@@ -1047,27 +1131,27 @@ finally { setProcessando(false); }
       {/* CARRINHO LATERAL */}
       {mostrarCarrinho && (
         <div className="fixed inset-0 z-[100] flex justify-end">
-          <div className="absolute inset-0 bg-[#1d3026]/40 backdrop-blur-sm transition-opacity" onClick={() => { if(!processando) setMostrarCarrinho(false) }}></div>
+          <div className="absolute inset-0 bg-[#1d3026]/40 backdrop-blur-sm transition-opacity" onClick={() => { if (!processando) setMostrarCarrinho(false); }}></div>
 
           <div className="relative w-full max-w-[430px] bg-white h-full shadow-2xl flex flex-col rounded-l-[2rem] overflow-hidden" style={{ animation: 'fadeUp 0.4s ease forwards' }}>
-            
+
             <div className="p-6 md:p-8 border-b border-gray-100 flex justify-between items-center bg-[#F4F1EA]">
               <div>
                 <h2 className="text-2xl font-tradicional italic font-bold text-[#1d3026]">
-                  {etapaCheckout === 0 && "Seu Carrinho"}
-                  {etapaCheckout === 1 && "Finalizar Pedido"}
-                  {etapaCheckout === 2 && "Tudo Certo!"}
+                  {etapaCheckout === 0 && 'Seu Carrinho'}
+                  {etapaCheckout === 1 && 'Finalizar Pedido'}
+                  {etapaCheckout === 2 && 'Tudo Certo!'}
                 </h2>
                 <p className="text-[9px] uppercase tracking-widest text-[#c5a880] font-black mt-1">
                   {etapaCheckout === 0 && `${carrinho.length} ${carrinho.length === 1 ? 'item selecionado' : 'itens selecionados'}`}
-                  {etapaCheckout === 1 && "Confirme seus dados"}
-                  {etapaCheckout === 2 && "Reserva concluída"}
+                  {etapaCheckout === 1 && 'Confirme seus dados'}
+                  {etapaCheckout === 2 && 'Reserva concluída'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {etapaCheckout === 0 && carrinho.length > 1 && (
-                  <button 
-                    onClick={limparCarrinhoCompleto} 
+                  <button
+                    onClick={limparCarrinhoCompleto}
                     className="px-3 py-1.5 bg-white border border-gray-200 rounded-full text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
                     title="Esvaziar carrinho"
                   >
@@ -1083,7 +1167,7 @@ finally { setProcessando(false); }
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white custom-scrollbar">
-              
+
               {etapaCheckout === 0 && (
                 <div className="space-y-4">
                   {carrinho.length === 0 ? (
@@ -1091,7 +1175,7 @@ finally { setProcessando(false); }
                       <span className="text-6xl opacity-10 block mb-4">🛒</span>
                       <p className="text-sm font-bold text-[#1d3026] mb-1">Seu carrinho está vazio</p>
                       <p className="text-xs text-gray-400 mb-6">Explore nossa vitrine e escolha sua nova armação.</p>
-                      <button 
+                      <button
                         onClick={() => setMostrarCarrinho(false)}
                         className="px-6 py-3 bg-[#1d3026] text-[#F4F1EA] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors"
                       >
@@ -1106,7 +1190,7 @@ finally { setProcessando(false); }
                           <div key={item._id} className="flex items-center gap-4 bg-[#F4F1EA] p-4 rounded-2xl border border-transparent hover:border-[#c5a880]/30 transition-all group">
                             <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200 p-2 relative shadow-sm">
                               {fotoCapa ? (
-                                <img src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${item._id || item.id}/foto?v=1`} className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; }}/>
+                                <img src={fotoCapa.startsWith('http') ? fotoCapa : `${apiUrl.replace(/\/$/, '')}/produtos/${item._id || item.id}/foto?v=1`} alt={item.nome} className="w-full h-full object-contain" onError={(e) => { e.target.style.display = 'none'; }} />
                               ) : null}
                             </div>
                             <div className="flex-1">
@@ -1141,7 +1225,7 @@ finally { setProcessando(false); }
                               </p>
                             </div>
                           </div>
-                          <button 
+                          <button
                             onClick={() => adicionarAoCarrinho(produtoUpsell)}
                             className="w-full bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl shadow-lg shadow-orange-600/20 transition-all active:scale-95 relative z-10"
                           >
@@ -1150,7 +1234,6 @@ finally { setProcessando(false); }
                         </div>
                       )}
 
-                      {/* 🟢 RETIRADA NA LOJA JÁ SELECIONADA E SEMPRE VISÍVEL */}
                       <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">
                           Como deseja receber?
@@ -1158,19 +1241,19 @@ finally { setProcessando(false); }
 
                         <div className="space-y-2 mb-4">
                           {opcoesFrete.map(opcao => (
-                            <label 
-                              key={opcao.id} 
+                            <label
+                              key={opcao.id}
                               className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
-                                freteSelecionado?.id === opcao.id 
-                                  ? 'border-[#1d3026] bg-[#1d3026]/5 ring-1 ring-[#1d3026]' 
+                                freteSelecionado?.id === opcao.id
+                                  ? 'border-[#1d3026] bg-[#1d3026]/5 ring-1 ring-[#1d3026]'
                                   : 'border-gray-200 bg-white hover:border-[#c5a880]/50'
                               }`}
                             >
                               <div className="flex items-center gap-3">
-                                <input 
-                                  type="radio" 
-                                  name="frete" 
-                                  checked={freteSelecionado?.id === opcao.id} 
+                                <input
+                                  type="radio"
+                                  name="frete"
+                                  checked={freteSelecionado?.id === opcao.id}
                                   onChange={() => setFreteSelecionado(opcao)}
                                   className="w-4 h-4 text-[#1d3026] focus:ring-[#1d3026]"
                                 />
@@ -1195,14 +1278,14 @@ finally { setProcessando(false); }
                             Prefere receber em casa? Calcule o frete por CEP:
                           </span>
                           <div className="flex gap-2">
-                            <input 
-                              type="text" 
-                              placeholder="Digite seu CEP (00000-000)" 
+                            <input
+                              type="text"
+                              placeholder="Digite seu CEP (00000-000)"
                               value={cepFrete}
                               onChange={e => setCepFrete(handleMascaraCep(e.target.value))}
                               className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold tracking-widest text-[#1d3026]"
                             />
-                            <button 
+                            <button
                               onClick={calcularFrete}
                               disabled={calculandoFrete || cepFrete.length < 9}
                               className="px-4 bg-[#1d3026] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-40"
@@ -1215,7 +1298,7 @@ finally { setProcessando(false); }
 
                       <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3 ml-1">Cupom de Desconto</p>
-                        
+
                         {temPromocaoNoCarrinho ? (
                           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
@@ -1224,14 +1307,14 @@ finally { setProcessando(false); }
                           </div>
                         ) : !cupomAtivo ? (
                           <div className="flex gap-2">
-                            <input 
-                              type="text" 
-                              placeholder="Digite o código" 
+                            <input
+                              type="text"
+                              placeholder="Digite o código"
                               value={cupomDigitado}
                               onChange={e => setCupomDigitado(e.target.value.toUpperCase())}
                               className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]/30 text-xs font-bold uppercase tracking-widest text-[#1d3026]"
                             />
-                            <button 
+                            <button
                               onClick={validarCupomServidor}
                               disabled={validandoCupom || !cupomDigitado}
                               className="px-5 bg-[#1d3026] text-[#F4F1EA] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c5a880] transition-colors disabled:opacity-50"
@@ -1270,17 +1353,17 @@ finally { setProcessando(false); }
                     <div className="space-y-3 pt-2 pb-4 border-b border-gray-200">
                       <label className="text-[9px] font-black text-[#c5a880] uppercase tracking-widest ml-2">Sobre suas lentes</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button 
-                          type="button" 
-                          onClick={() => setDadosCliente({...dadosCliente, temGrau: false})} 
+                        <button
+                          type="button"
+                          onClick={() => setDadosCliente({ ...dadosCliente, temGrau: false })}
                           className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === false ? 'bg-[#1d3026] text-[#F4F1EA] border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
                         >
                           <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === false ? 'text-[#c5a880]' : 'text-gray-400'}`}>Sem Grau</span>
                           <span className="text-xs font-bold">Apenas p/ Descanso</span>
                         </button>
-                        <button 
-                          type="button" 
-                          onClick={() => setDadosCliente({...dadosCliente, temGrau: true})} 
+                        <button
+                          type="button"
+                          onClick={() => setDadosCliente({ ...dadosCliente, temGrau: true })}
                           className={`p-4 rounded-xl border transition-all text-left flex flex-col gap-1.5 ${dadosCliente.temGrau === true ? 'bg-[#1d3026] text-[#F4F1EA] border-[#1d3026] shadow-md ring-2 ring-[#1d3026]/20' : 'bg-white text-gray-500 border-gray-200 hover:border-[#1d3026]/40 hover:bg-gray-50'}`}
                         >
                           <span className={`uppercase tracking-wider text-[10px] font-black ${dadosCliente.temGrau === true ? 'text-[#c5a880]' : 'text-gray-400'}`}>Com Grau</span>
@@ -1289,17 +1372,17 @@ finally { setProcessando(false); }
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Nome Completo</label>
-                    <input type="text" required value={dadosCliente.nome} onChange={e => setDadosCliente({...dadosCliente, nome: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
+                    <input type="text" required value={dadosCliente.nome} onChange={e => setDadosCliente({ ...dadosCliente, nome: e.target.value })} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">WhatsApp</label>
-                    <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({...dadosCliente, telefone: handleMascaraTel(e.target.value)})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
+                    <input type="tel" required value={dadosCliente.telefone} onChange={e => setDadosCliente({ ...dadosCliente, telefone: handleMascaraTel(e.target.value) })} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] transition-all" />
                   </div>
-                  
+
                   {freteSelecionado?.id === 'retirada' ? (
                     <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-1">
                       <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 block">
@@ -1315,7 +1398,7 @@ finally { setProcessando(false); }
                   ) : (
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2">Endereço Completo (Entrega)</label>
-                      <textarea required rows="3" placeholder="Rua, Número, Bairro, Complemento e Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({...dadosCliente, endereco: e.target.value})} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
+                      <textarea required rows="3" placeholder="Rua, Número, Bairro, Complemento e Ponto de Referência..." value={dadosCliente.endereco || ''} onChange={e => setDadosCliente({ ...dadosCliente, endereco: e.target.value })} className="w-full px-5 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#c5a880]/30 focus:border-[#c5a880] text-sm font-bold text-[#1d3026] resize-none transition-all" />
                     </div>
                   )}
                 </form>
@@ -1334,18 +1417,21 @@ finally { setProcessando(false); }
                   </div>
 
                   <div className="mt-auto space-y-3">
-                    <button 
+                    <button
                       disabled={gerandoLink}
-                      onClick={async () => { 
+                      onClick={async () => {
                         setGerandoLink(true);
                         try {
-                          const subtotalOriginal = pedidoFinalizado.itens.reduce((acc, item) => acc + Number(item.preco), 0);
+                          const subtotalOriginal = pedidoFinalizado.itens.reduce(
+                            (acc, item) => acc + Number(item.preco) * (item.quantidade || 1),
+                            0
+                          );
                           const valorItensComDesconto = pedidoFinalizado.valorTotal - (pedidoFinalizado.freteValor || 0);
                           const fatorDesconto = subtotalOriginal > 0 ? valorItensComDesconto / subtotalOriginal : 1;
-                          
+
                           const infiniteItems = pedidoFinalizado.itens.map(item => ({
-                            quantity: 1,
-                            price: Math.round((Number(item.preco) * fatorDesconto) * 100), 
+                            quantity: item.quantidade || 1,
+                            price: Math.round((Number(item.preco) * fatorDesconto) * 100),
                             description: item.nome
                           }));
 
@@ -1359,11 +1445,11 @@ finally { setProcessando(false); }
 
                           const telLimpo = String(pedidoFinalizado.clienteTelefone || '').replace(/\D/g, '');
                           const telFormatado = telLimpo.startsWith('55') ? `+${telLimpo}` : `+55${telLimpo}`;
-                          
+
                           const payload = {
-                            handle: String(infinitePayUser).replace(/^[$@]+/, '').trim(), 
+                            handle: String(infinitePayUser).replace(/^[$@]+/, '').trim(),
                             order_nsu: String(pedidoFinalizado.numeroPedidoOnline),
-                            redirect_url: window.location.origin, 
+                            redirect_url: window.location.origin,
                             customer: {
                               name: pedidoFinalizado.clienteNome,
                               phone_number: telFormatado
@@ -1373,40 +1459,38 @@ finally { setProcessando(false); }
 
                           const tokenInfinite = import.meta.env.VITE_INFINITEPAY_TOKEN;
 
-                          // 🟢 CORRIGIDO: Usando apiUrl (minúsculo) que é a variável declarada no componente
                           const res = await fetch(`${apiUrl}/infinitepay/checkout`, {
-                            method: "POST",
-                            headers: { 
-                              "Content-Type": "application/json",
-                              ...(tokenInfinite ? { "Authorization": `Bearer ${tokenInfinite}` } : {})
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...(tokenInfinite ? { Authorization: `Bearer ${tokenInfinite}` } : {})
                             },
                             body: JSON.stringify(payload)
                           });
-                          
+
                           const data = await res.json();
                           const linkCheckout = data.url || data.link || data?.data?.url;
 
                           if (res.ok && linkCheckout) {
-                            const novaJanela = window.open(linkCheckout, "_blank");
-                            // Se o celular bloquear o pop-up, abre na mesma aba
+                            const novaJanela = window.open(linkCheckout, '_blank');
                             if (!novaJanela) window.location.href = linkCheckout;
                           } else {
-                            console.error("Retorno erro InfinitePay:", data);
-                            alert(data.error || "Ops! Falha ao gerar o link de pagamento na InfinitePay.");
+                            console.error('Retorno erro InfinitePay:', data);
+                            alert(data.error || 'Ops! Falha ao gerar o link de pagamento na InfinitePay.');
                           }
                         } catch (e) {
-                          console.error("Erro na requisição de checkout:", e);
-                          alert("Erro ao conectar com a InfinitePay.");
+                          console.error('Erro na requisição de checkout:', e);
+                          alert('Erro ao conectar com a InfinitePay.');
                         } finally {
                           setGerandoLink(false);
                         }
-                      }} 
+                      }}
                       className="w-full bg-[#1d3026] hover:bg-[#c5a880] text-[#F4F1EA] font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 disabled:opacity-50"
                     >
                       {gerandoLink ? <span className="animate-spin text-lg">⏳</span> : <><span className="text-xl">💳</span> Pagar na InfinitePay</>}
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => avisarWhatsApp(pedidoFinalizado)}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2"
                     >
@@ -1422,7 +1506,7 @@ finally { setProcessando(false); }
             {/* RODAPÉ DO CARRINHO */}
             {etapaCheckout < 2 && carrinho.length > 0 && (
               <div className="p-6 md:p-8 border-t border-gray-200 bg-white space-y-4 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] relative z-20">
-                
+
                 {calculosCarrinho.descontoCupom > 0 && (
                   <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
                     <div className="flex flex-col">
@@ -1443,20 +1527,20 @@ finally { setProcessando(false); }
                   <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Final</span>
                   <div className="text-right">
                     {calculosCarrinho.descontoCupom > 0 && (
-                       <p className="text-xs text-gray-400 line-through mb-1">{calculosCarrinho.subtotalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      <p className="text-xs text-gray-400 line-through mb-1">{calculosCarrinho.subtotalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     )}
                     <span className="text-3xl font-tradicional italic font-bold text-[#1d3026]">
                       {calculosCarrinho.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
                   </div>
                 </div>
-                
+
                 {etapaCheckout === 0 ? (
-                  <button 
+                  <button
                     onClick={() => {
-                      if (!freteSelecionado) return alert("Por favor, selecione uma opção de retirada ou entrega.");
+                      if (!freteSelecionado) return alert('Por favor, selecione uma opção de retirada ou entrega.');
                       verificarLoginEAvancar('CHECKOUT');
-                    }} 
+                    }}
                     className="w-full bg-[#1d3026] text-[#F4F1EA] hover:bg-[#c5a880] hover:text-white font-bold py-5 rounded-2xl shadow-xl hover:shadow-[#c5a880]/30 transition-all active:scale-[0.98] text-[10px] uppercase tracking-[0.2em] mt-4"
                   >
                     Avançar Pagamento
@@ -1484,7 +1568,7 @@ finally { setProcessando(false); }
             <p className="text-xs text-gray-600 font-medium">Rua Viriato Ribeiro, 321A - Bela Vista, Fortaleza-CE</p>
             <p className="text-[10px] text-gray-400 mt-2 font-bold tracking-wider">CNPJ: 52.294.947/0001-56</p>
           </div>
-          
+
           <div className="flex flex-col items-center md:items-end">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Links Úteis & Atendimento</p>
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
